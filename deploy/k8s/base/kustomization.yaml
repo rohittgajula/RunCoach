@@ -1,9 +1,10 @@
 # RunCoach on k3s. Render with: kubectl kustomize deploy/k8s/overlays/prod
 #
-# Secrets are NOT here and never will be (the repo is public). Two must exist in
-# the namespace before the app starts; deploy/scripts/push-secrets.sh creates them:
+# Secrets are NOT here and never will be. Three must exist in the namespace before
+# the app starts; deploy/scripts/push-secrets.sh creates them:
 #   runcoach-secrets     every key from deploy/secrets/prod.env
 #   runcoach-origin-tls  Cloudflare Origin Certificate (tls.crt / tls.key)
+#   ghcr-pull            registry login for the private images (deploy/secrets/ghcr.env)
 # Optional: runcoach-r2 (R2_* keys) turns on off-site backup upload.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -16,6 +17,7 @@ labels:
 
 resources:
   - namespace.yaml
+  - serviceaccount.yaml
   - config.yaml
   - storage.yaml
   - postgres.yaml

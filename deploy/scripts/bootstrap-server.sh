@@ -15,7 +15,7 @@
 # authorized_keys, where Hostinger puts the key you registered). They are merged,
 # never replaced. Root login is only disabled once `deploy` has at least one key.
 #
-# Env overrides: DEPLOY_USER (deploy), SWAP_SIZE (2G), K3S_VERSION (pin, e.g.
+# Env overrides: DEPLOY_USER (deploy), SWAP_SIZE (2G), NODE_NAME (short hostname), K3S_VERSION (pin, e.g.
 # v1.33.4+k3s1; default: stable channel), AUTHORIZED_KEYS_FILE.
 set -euo pipefail
 
@@ -196,6 +196,14 @@ echo "filtering 80/443 on $PUBIF"
 
 # --- 7. k3s ----------------------------------------------------------------------
 log "k3s"
+# Node name: the hostname by default, and Kubernetes copies it into a label (max 63
+# chars). Google Cloud hostnames like runcoach.asia-south1-a.c.<project-id>.internal
+# exceed that, so the node silently never registers ("node ... not found").
+NODE_NAME="${NODE_NAME:-$(hostname -s)}"
+install -d -m 755 /etc/rancher/k3s
+if ! grep -q '^node-name:' /etc/rancher/k3s/config.yaml 2>/dev/null; then
+  echo "node-name: $NODE_NAME" >>/etc/rancher/k3s/config.yaml
+fi
 if ! command -v k3s >/dev/null 2>&1; then
   # Traefik and servicelb stay on (k3s defaults). The API server is not opened in
   # ufw: kubectl runs on this box, over SSH.

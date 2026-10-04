@@ -9,6 +9,8 @@
 #   prod.env     -> Secret runcoach-secrets   (template: prod.env.example)
 #   origin.pem   -> Secret runcoach-origin-tls (Cloudflare Origin Certificate)
 #   origin.key      ...and its private key
+#   ghcr.env     -> Secret ghcr-pull (GHCR_USERNAME, GHCR_TOKEN: a GitHub token with
+#                   only read:packages; required because the images are private)
 #   r2.env       -> Secret runcoach-r2 (optional; enables off-site backups)
 # --restart rolls the app Deployments so they pick up the new values.
 set -euo pipefail
@@ -41,6 +43,9 @@ if grep -qE "^[A-Z_]+=[\"']" "$DIR/prod.env"; then
   die "prod.env values must not be quoted (kubectl keeps quotes literally)"
 fi
 openssl x509 -in "$DIR/origin.pem" -noout 2>/dev/null || die "origin.pem is not a certificate"
+[ -f "$DIR/ghcr.env" ] || die "missing $DIR/ghcr.env (copy ghcr.env.example; the images are private)"
+gval() { grep -E "^$1=" "$DIR/ghcr.env" | tail -n1 | cut -d= -f2-; }
+[ -n "$(gval GHCR_USERNAME)" ] && [ -n "$(gval GHCR_TOKEN)" ] || die "GHCR_USERNAME/GHCR_TOKEN missing in ghcr.env"
 
 render() { kubectl create --dry-run=client -o yaml -n "$NS" "$@"; }
 apply_remote() { "${SSH[@]}" "$RK apply -f -"; }
@@ -49,6 +54,14 @@ apply_remote() { "${SSH[@]}" "$RK apply -f -"; }
 
 render secret generic runcoach-secrets --from-env-file="$DIR/prod.env" | apply_remote
 render secret tls runcoach-origin-tls --cert="$DIR/origin.pem" --key="$DIR/origin.key" | apply_remote
+# Registry login, built as a file so the token never appears in a process list.
+DCJ="$(umask 077; mktemp)"; trap 'rm -f "$DCJ"' EXIT
+GHCR_AUTH="$(printf '%s:%s' "$(gval GHCR_USERNAME)" "$(gval GHCR_TOKEN)" | base64 | tr -d '\n')"
+printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' "$GHCR_AUTH" >"$DCJ"; unset GHCR_AUTH
+render secret generic ghcr-pull --type=kubernetes.io/dockerconfigjson \
+  --from-file=.dockerconfigjson="$DCJ" | apply_remote
+rm -f "$DCJ"
+
 if [ -f "$DIR/r2.env" ]; then
   render secret generic runcoach-r2 --from-env-file="$DIR/r2.env" | apply_remote
 fi
