@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Django
+*.sqlite3
+/backend/media/
+/backend/staticfiles/
+
+# Node
+node_modules/
+/frontend/dist/
+/frontend/.vite/
+/frontend/dev-dist/
+/frontend/dev-dist/
+# tsc -b incremental cache — machine-specific, churns on every build
+*.tsbuildinfo
+
+# Secrets — never commit
+.env
+.env.local
+*.pem
+garmin_tokens.json
+oauth1_token.json
+oauth2_token.json
+# Garmin session tokens (per-athlete directories)
+.garmin/
+# kubeconfig files grant full control of a cluster
+kubeconfig*
+*.kubeconfig
+# Server credentials
+deploy/secrets/
+# Garmin session tokens (per-athlete directories)
+.garmin/
+# kubeconfig files grant full control of a cluster
+kubeconfig*
+*.kubeconfig
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
