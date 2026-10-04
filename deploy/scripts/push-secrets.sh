@@ -45,7 +45,9 @@ fi
 openssl x509 -in "$DIR/origin.pem" -noout 2>/dev/null || die "origin.pem is not a certificate"
 [ -f "$DIR/ghcr.env" ] || die "missing $DIR/ghcr.env (copy ghcr.env.example; the images are private)"
 gval() { grep -E "^$1=" "$DIR/ghcr.env" | tail -n1 | cut -d= -f2-; }
-[ -n "$(gval GHCR_USERNAME)" ] && [ -n "$(gval GHCR_TOKEN)" ] || die "GHCR_USERNAME/GHCR_TOKEN missing in ghcr.env"
+if [ -z "$(gval GHCR_USERNAME)" ] || [ -z "$(gval GHCR_TOKEN)" ]; then
+  die "GHCR_USERNAME/GHCR_TOKEN missing in ghcr.env"
+fi
 
 render() { kubectl create --dry-run=client -o yaml -n "$NS" "$@"; }
 apply_remote() { "${SSH[@]}" "$RK apply -f -"; }
