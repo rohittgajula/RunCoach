@@ -25,6 +25,7 @@ node_modules/
 .env
 .env.local
 *.pem
+*.key
 garmin_tokens.json
 oauth1_token.json
 oauth2_token.json
@@ -34,12 +35,8 @@ oauth2_token.json
 kubeconfig*
 *.kubeconfig
 # Server credentials
-deploy/secrets/
-# Garmin session tokens (per-athlete directories)
-.garmin/
-# kubeconfig files grant full control of a cluster
-kubeconfig*
-*.kubeconfig
+deploy/secrets/*
+!deploy/secrets/*.example
 
 # OS / editor
 .DS_Store

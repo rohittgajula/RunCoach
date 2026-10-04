@@ -1,0 +1,23 @@
+# Traefik in kind, standing in for the one k3s bundles. Binds host ports 80/443
+# on the control-plane node, which deploy/kind/cluster.yaml maps to the laptop.
+ports:
+  web:
+    hostPort: 80
+  websecure:
+    hostPort: 443
+service:
+  type: ClusterIP
+nodeSelector:
+  ingress-ready: "true"
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+providers:
+  kubernetesCRD:
+    enabled: true
+  kubernetesIngress:
+    enabled: false
+ingressRoute:
+  dashboard:
+    enabled: false

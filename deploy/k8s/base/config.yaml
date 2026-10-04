@@ -1,0 +1,14 @@
+# In-cluster wiring only. Everything app-level (hosts, keys, modes, models) comes
+# from the runcoach-secrets Secret, which is loaded AFTER this ConfigMap, so a key
+# set in deploy/secrets/prod.env always wins.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: runcoach-config
+data:
+  DJANGO_DEBUG: "0"
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT_INTERNAL: "5432"
+  REDIS_URL: redis://redis:6379/0
+  MEDIA_ROOT: /app/media
+  GARMIN_TOKEN_DIR: /app/.garmin

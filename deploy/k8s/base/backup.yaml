@@ -1,0 +1,105 @@
+# Nightly pg_dump at 03:00 IST to the `backups` PVC, 14 days kept. If the optional
+# Secret runcoach-r2 exists (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
+# R2_BUCKET), the dump is also copied to Cloudflare R2. Restore: docs/DEPLOY.md
+# "Runbook".
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+spec:
+  schedule: "0 3 * * *"
+  timeZone: Asia/Kolkata
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: postgres-backup
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: dump
+              image: postgres:16-alpine
+              env:
+                - {name: PGHOST, value: postgres}
+                - name: PGDATABASE
+                  valueFrom: {secretKeyRef: {name: runcoach-secrets, key: POSTGRES_DB}}
+                - name: PGUSER
+                  valueFrom: {secretKeyRef: {name: runcoach-secrets, key: POSTGRES_USER}}
+                - name: PGPASSWORD
+                  valueFrom: {secretKeyRef: {name: runcoach-secrets, key: POSTGRES_PASSWORD}}
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu -o pipefail
+                  f="/backups/runcoach-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+                  pg_dump --no-owner --no-privileges | gzip -9 > "$f.part"
+                  mv "$f.part" "$f"
+                  echo "wrote $f ($(du -h "$f" | cut -f1))"
+                  find /backups -name 'runcoach-*.sql.gz' -mtime +13 -print -delete
+                  find /backups -name '*.part' -mmin +60 -delete
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {memory: 256Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: backups, mountPath: /backups}
+          containers:
+            - name: upload
+              image: rclone/rclone:1.68
+              env:
+                - {name: HOME, value: /tmp}
+                - name: R2_ACCOUNT_ID
+                  valueFrom: {secretKeyRef: {name: runcoach-r2, key: R2_ACCOUNT_ID, optional: true}}
+                - name: R2_BUCKET
+                  valueFrom: {secretKeyRef: {name: runcoach-r2, key: R2_BUCKET, optional: true}}
+                - name: RCLONE_CONFIG_R2_ACCESS_KEY_ID
+                  valueFrom: {secretKeyRef: {name: runcoach-r2, key: R2_ACCESS_KEY_ID, optional: true}}
+                - name: RCLONE_CONFIG_R2_SECRET_ACCESS_KEY
+                  valueFrom: {secretKeyRef: {name: runcoach-r2, key: R2_SECRET_ACCESS_KEY, optional: true}}
+                - {name: RCLONE_CONFIG_R2_TYPE, value: s3}
+                - {name: RCLONE_CONFIG_R2_PROVIDER, value: Cloudflare}
+                - {name: RCLONE_CONFIG_R2_NO_CHECK_BUCKET, value: "true"}
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  if [ -z "${R2_BUCKET:-}" ] || [ -z "${R2_ACCOUNT_ID:-}" ]; then
+                    echo "runcoach-r2 not configured; local backup only"; exit 0
+                  fi
+                  export RCLONE_CONFIG_R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+                  latest="$(ls -1t /backups/runcoach-*.sql.gz | head -n1)"
+                  rclone copyto "$latest" "r2:${R2_BUCKET}/$(basename "$latest")"
+                  echo "uploaded $(basename "$latest")"
+              resources:
+                requests: {cpu: 20m, memory: 32Mi}
+                limits: {memory: 128Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: backups, mountPath: /backups, readOnly: true}
+                - {name: tmp, mountPath: /tmp}
+          volumes:
+            - name: backups
+              persistentVolumeClaim: {claimName: backups}
+            - name: tmp
+              emptyDir: {}

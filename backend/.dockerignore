@@ -1,0 +1,26 @@
+# Never bake user data or credentials into an image (the repo is public and so
+# are the GHCR packages).
+media/
+.garmin/
+.env
+.env.*
+*.pem
+*.key
+staticfiles/
+
+# Caches and tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+.venv/
+venv/
+.coverage
+htmlcov/
+
+# Not needed at runtime
+Dockerfile
+Dockerfile.prod
+.dockerignore
+tests/

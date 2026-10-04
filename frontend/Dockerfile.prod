@@ -1,0 +1,25 @@
+# Production image for the PWA: static files served by unprivileged nginx on :8080.
+# Development keeps using ./Dockerfile via docker-compose.
+#
+#   docker buildx build --platform linux/amd64 -f frontend/Dockerfile.prod frontend
+
+# The output is plain static files, so the build stage runs natively on the build
+# machine ($BUILDPLATFORM) instead of under emulation.
+FROM --platform=$BUILDPLATFORM node:20-slim AS build
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY . .
+# No `|| true` here: a type error must fail the image, not ship an empty site.
+RUN npm run build
+
+# --- runtime ---------------------------------------------------------------------
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# nginx-unprivileged already runs as uid 101 and listens on 8080.
+EXPOSE 8080

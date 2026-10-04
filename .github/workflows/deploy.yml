@@ -1,0 +1,188 @@
+# Production deploy: push to `production` -> CI -> build + push images tagged with
+# the commit sha -> render Kustomize with those tags -> kubectl apply on the VPS
+# over SSH -> wait for every rollout. A failed rollout leaves the old Pods serving.
+#
+# Rollback: run this workflow by hand ("Run workflow") with `sha` = an earlier
+# deployed commit. That skips CI and the build and redeploys the images already
+# in GHCR for that sha. See docs/DEPLOY.md "Runbook".
+#
+# Repo secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS.
+name: Deploy
+
+on:
+  push:
+    branches: [production]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Redeploy this earlier commit (full 40-char sha). Empty = build and deploy the branch head."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# Never two deploys at once; a queued one waits rather than cancelling a rollout.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/rohittgajula/runcoach
+  KUSTOMIZE_VERSION: v5.8.2
+
+jobs:
+  ci:
+    if: inputs.sha == ''
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    if: inputs.sha == ''
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        component: [backend, frontend]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.component }}
+          file: ${{ matrix.component }}/Dockerfile.prod
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.component }}:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.component }}:production
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          provenance: false
+
+  deploy:
+    needs: [ci, build]
+    # Runs after a successful build, or straight away for a rollback (sha given).
+    if: >-
+      always() &&
+      ((inputs.sha == '' && needs.build.result == 'success') ||
+       (inputs.sha != '' && needs.build.result == 'skipped'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://runcoach.rohitgajula.in
+    permissions:
+      contents: read
+      packages: read
+    env:
+      SHA: ${{ inputs.sha || github.sha }}
+    steps:
+      - name: Check sha
+        run: |
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::sha must be a full 40-char commit sha"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SHA }}
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Images exist for this sha
+        run: |
+          for c in backend frontend; do
+            docker buildx imagetools inspect "$IMAGE_PREFIX-$c:$SHA" >/dev/null \
+              || { echo "::error::$IMAGE_PREFIX-$c:$SHA not found in GHCR"; exit 1; }
+          done
+      - name: Install kustomize
+        run: |
+          curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin kustomize
+      - name: Render manifests
+        working-directory: deploy/k8s/overlays/prod
+        run: |
+          kustomize edit set image \
+            "$IMAGE_PREFIX-backend=$IMAGE_PREFIX-backend:$SHA" \
+            "$IMAGE_PREFIX-frontend=$IMAGE_PREFIX-frontend:$SHA"
+          kustomize build . > "$RUNNER_TEMP/runcoach.yaml"
+          if grep -nE "image: .*runcoach-(backend|frontend)(:latest)?$" "$RUNNER_TEMP/runcoach.yaml"; then
+            echo "::error::an app image is not pinned to $SHA"; exit 1
+          fi
+          grep -E "image: .*runcoach-" "$RUNNER_TEMP/runcoach.yaml" | sort | uniq -c
+      - name: SSH setup
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts && chmod 644 ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<CFG
+          Host vps
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            BatchMode yes
+            ServerAliveInterval 30
+          CFG
+          chmod 600 ~/.ssh/config
+          ssh vps true
+      - name: Apply
+        run: |
+          scp -q "$RUNNER_TEMP/runcoach.yaml" "vps:runcoach/runcoach-$SHA.yaml"
+          ssh vps bash -s -- "$SHA" <<'REMOTE'
+          set -euo pipefail
+          export KUBECONFIG="$HOME/.kube/config"
+          cd "$HOME/runcoach"
+          kubectl -n runcoach get secret runcoach-secrets runcoach-origin-tls >/dev/null \
+            || { echo "missing Secrets: run deploy/scripts/push-secrets.sh first"; exit 1; }
+          kubectl apply -f "runcoach-$1.yaml"
+          ln -sfn "runcoach-$1.yaml" current.yaml
+          ls -1t runcoach-*.yaml | tail -n +11 | xargs -r rm -f
+          REMOTE
+      - name: Wait for rollouts
+        run: |
+          ssh vps bash -s <<'REMOTE'
+          set -euo pipefail
+          export KUBECONFIG="$HOME/.kube/config"
+          kubectl -n runcoach rollout status statefulset/postgres --timeout=5m
+          for d in redis backend worker garmin-worker frontend; do
+            kubectl -n runcoach rollout status "deployment/$d" --timeout=5m
+          done
+          kubectl -n runcoach get pods -o wide
+          REMOTE
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          ssh vps bash -s <<'REMOTE' || true
+          export KUBECONFIG="$HOME/.kube/config"
+          kubectl -n runcoach get pods -o wide
+          kubectl -n runcoach get events --sort-by=.lastTimestamp | tail -n 40
+          kubectl -n runcoach logs deployment/backend -c migrate --tail=50 || true
+          kubectl -n runcoach logs deployment/backend --tail=50 || true
+          REMOTE
+      - name: Smoke test through Cloudflare
+        run: |
+          for _ in 1 2 3 4 5 6; do
+            curl -fsS --max-time 10 https://runcoach.rohitgajula.in/api/health/ && exit 0
+            sleep 10
+          done
+          echo "::error::https://runcoach.rohitgajula.in/api/health/ not healthy"; exit 1

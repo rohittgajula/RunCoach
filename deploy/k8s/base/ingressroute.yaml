@@ -1,0 +1,57 @@
+# TLS terminates here with the Cloudflare Origin Certificate (Cloudflare SSL mode
+# "Full (strict)"). Overlays change the host by patching the `match` strings.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: runcoach
+spec:
+  entryPoints: [websecure]
+  tls:
+    secretName: runcoach-origin-tls
+  routes:
+    # 0: auth endpoints, strictest limit
+    - kind: Rule
+      match: Host(`runcoach.rohitgajula.in`) && PathPrefix(`/api/auth/`)
+      priority: 300
+      middlewares:
+        - name: ratelimit-auth
+        - name: security-headers
+      services:
+        - name: backend
+          port: 8000
+    # 1: rest of the API, admin, Django static (WhiteNoise)
+    - kind: Rule
+      match: Host(`runcoach.rohitgajula.in`) && (PathPrefix(`/api`) || PathPrefix(`/admin`) || PathPrefix(`/static`))
+      priority: 200
+      middlewares:
+        - name: ratelimit-api
+        - name: security-headers
+      services:
+        - name: backend
+          port: 8000
+    # 2: the PWA
+    - kind: Rule
+      match: Host(`runcoach.rohitgajula.in`)
+      priority: 100
+      middlewares:
+        - name: security-headers
+        - name: csp-frontend
+      services:
+        - name: frontend
+          port: 8080
+---
+# Plain HTTP only ever redirects.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: runcoach-http
+spec:
+  entryPoints: [web]
+  routes:
+    - kind: Rule
+      match: Host(`runcoach.rohitgajula.in`)
+      middlewares:
+        - name: redirect-https
+      services:
+        - name: frontend
+          port: 8080

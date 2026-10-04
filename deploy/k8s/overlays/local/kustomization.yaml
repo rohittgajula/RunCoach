@@ -1,0 +1,64 @@
+# Local smoke test on the kind cluster `kind-runcoach` (deploy/kind/cluster.yaml).
+# Same manifests as prod, plus: locally built images, host runcoach.localhost,
+# throwaway secrets. Run ./up.sh from this directory; ./down.sh removes it.
+#
+# The values below are dummies for a laptop cluster and are NOT secrets.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: runcoach
+
+resources:
+  - ../../base
+
+images:
+  - name: ghcr.io/rohittgajula/runcoach-backend
+    newName: runcoach-backend
+    newTag: local
+  - name: ghcr.io/rohittgajula/runcoach-frontend
+    newName: runcoach-frontend
+    newTag: local
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+secretGenerator:
+  - name: runcoach-secrets
+    literals:
+      - DJANGO_SECRET_KEY=local-kind-only-0f3b9c2e7a1d4f6b8e5c2a9d7f1b3e6c4a8d2f5b9e1c7a3d
+      # The second host is what the kubelet probes send (see base/backend.yaml).
+      - DJANGO_ALLOWED_HOSTS=runcoach.localhost,runcoach.rohitgajula.in
+      - DJANGO_CSRF_TRUSTED_ORIGINS=https://runcoach.localhost
+      - DJANGO_SECURE=1
+      - TRUST_CF_CONNECTING_IP=1
+      - REGISTRATION_MODE=invite
+      - POSTGRES_DB=runcoach
+      - POSTGRES_USER=runcoach
+      - POSTGRES_PASSWORD=local-kind-only
+      - AI_PROVIDER=openai
+      - OPENAI_API_KEY=
+      - AI_MONTHLY_CALL_BUDGET=50
+
+patches:
+  - target:
+      group: traefik.io
+      kind: IngressRoute
+      name: runcoach
+    patch: |-
+      - op: replace
+        path: /spec/routes/0/match
+        value: Host(`runcoach.localhost`) && PathPrefix(`/api/auth/`)
+      - op: replace
+        path: /spec/routes/1/match
+        value: Host(`runcoach.localhost`) && (PathPrefix(`/api`) || PathPrefix(`/admin`) || PathPrefix(`/static`))
+      - op: replace
+        path: /spec/routes/2/match
+        value: Host(`runcoach.localhost`)
+  - target:
+      group: traefik.io
+      kind: IngressRoute
+      name: runcoach-http
+    patch: |-
+      - op: replace
+        path: /spec/routes/0/match
+        value: Host(`runcoach.localhost`)

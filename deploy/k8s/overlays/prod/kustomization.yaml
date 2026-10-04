@@ -1,0 +1,17 @@
+# Production: runcoach.rohitgajula.in on the single k3s VPS.
+# The deploy workflow pins the image tags to the commit sha before rendering:
+#   kustomize edit set image ghcr.io/rohittgajula/runcoach-backend=ghcr.io/rohittgajula/runcoach-backend:<sha>
+# "latest" below is a placeholder and is never deployed by CI.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: runcoach
+
+resources:
+  - ../../base
+
+images:
+  - name: ghcr.io/rohittgajula/runcoach-backend
+    newTag: latest
+  - name: ghcr.io/rohittgajula/runcoach-frontend
+    newTag: latest

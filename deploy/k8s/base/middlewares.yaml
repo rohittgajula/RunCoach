@@ -1,0 +1,68 @@
+# Traefik middlewares (traefik.io/v1alpha1, the API group of the Traefik v3 that
+# k3s ships). Every request arrives from a Cloudflare edge, so rate limits key on
+# the CF-Connecting-IP header; ufw only lets Cloudflare reach :80/:443, so the
+# header cannot be forged by going around Cloudflare.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ratelimit-api
+spec:
+  rateLimit:
+    average: 20
+    period: 1s
+    burst: 50
+    sourceCriterion:
+      requestHeaderName: CF-Connecting-IP
+---
+# Login / register / refresh. Django throttles these too; this stops a flood
+# before it reaches gunicorn.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ratelimit-auth
+spec:
+  rateLimit:
+    average: 10
+    period: 1m
+    burst: 10
+    sourceCriterion:
+      requestHeaderName: CF-Connecting-IP
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-headers
+spec:
+  headers:
+    stsSeconds: 31536000
+    stsIncludeSubdomains: false
+    stsPreload: false
+    frameDeny: true
+    contentTypeNosniff: true
+    referrerPolicy: same-origin
+    permissionsPolicy: "camera=(self), microphone=(), geolocation=(), payment=(), usb=()"
+    customResponseHeaders:
+      Server: ""
+      X-Powered-By: ""
+---
+# Only for the PWA routes; the Django admin keeps its own defaults.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: csp-frontend
+spec:
+  headers:
+    contentSecurityPolicy: >-
+      default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+      img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self';
+      worker-src 'self'; manifest-src 'self'; object-src 'none';
+      base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true

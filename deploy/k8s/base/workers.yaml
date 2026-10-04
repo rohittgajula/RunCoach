@@ -1,0 +1,150 @@
+# Celery. Both use Recreate: `worker` embeds beat (-B), and two beats overlapping
+# during a rollout would fire every schedule twice; `garmin-worker` must never run
+# two at once because Garmin rate-limits per IP.
+# The wait-for-migrations initContainer keeps them from crash-looping on a fresh
+# database while the backend's migrate initContainer is still running.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: worker
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-migrations
+          image: ghcr.io/rohittgajula/runcoach-backend
+          command: ["sh", "-c", "until python manage.py migrate --check >/dev/null; do echo waiting for migrations; sleep 5; done"]
+          envFrom:
+            - configMapRef: {name: runcoach-config}
+            - secretRef: {name: runcoach-secrets}
+          resources:
+            requests: {cpu: 20m, memory: 128Mi}
+            limits: {memory: 384Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      containers:
+        - name: worker
+          image: ghcr.io/rohittgajula/runcoach-backend
+          command:
+            - celery
+            - -A
+            - config
+            - worker
+            - -B
+            - -l
+            - info
+            - -Q
+            - celery,metrics,ai,planning
+            - --concurrency=2
+            - --scheduler
+            - django_celery_beat.schedulers:DatabaseScheduler
+            # -B writes its pid/schedule state here; the root filesystem is read-only.
+            - --schedule=/tmp/celerybeat-schedule
+          envFrom:
+            - configMapRef: {name: runcoach-config}
+            - secretRef: {name: runcoach-secrets}
+          resources:
+            requests: {cpu: 100m, memory: 300Mi}
+            limits: {memory: 800Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: media, mountPath: /app/media}
+            - {name: garmin-tokens, mountPath: /app/.garmin}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: media
+          persistentVolumeClaim: {claimName: media}
+        - name: garmin-tokens
+          persistentVolumeClaim: {claimName: garmin-tokens}
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: garmin-worker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: garmin-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: garmin-worker
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-migrations
+          image: ghcr.io/rohittgajula/runcoach-backend
+          command: ["sh", "-c", "until python manage.py migrate --check >/dev/null; do echo waiting for migrations; sleep 5; done"]
+          envFrom:
+            - configMapRef: {name: runcoach-config}
+            - secretRef: {name: runcoach-secrets}
+          resources:
+            requests: {cpu: 20m, memory: 128Mi}
+            limits: {memory: 384Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      containers:
+        - name: garmin-worker
+          image: ghcr.io/rohittgajula/runcoach-backend
+          command: ["celery", "-A", "config", "worker", "-l", "info", "-Q", "garmin", "--concurrency=1"]
+          envFrom:
+            - configMapRef: {name: runcoach-config}
+            - secretRef: {name: runcoach-secrets}
+          resources:
+            requests: {cpu: 50m, memory: 200Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: media, mountPath: /app/media}
+            - {name: garmin-tokens, mountPath: /app/.garmin}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: media
+          persistentVolumeClaim: {claimName: media}
+        - name: garmin-tokens
+          persistentVolumeClaim: {claimName: garmin-tokens}
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
