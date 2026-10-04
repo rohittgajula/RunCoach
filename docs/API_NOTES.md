@@ -61,9 +61,10 @@ the places where the spec was silent or where the backend had to choose.
 - **Fueling** for planned workouts has no time of day, so `before` gives the normal
   option *and* the early-morning one. `carbs_g_during_per_h` is the lower bound of the
   band (30 or 45).
-- **Meal photo URLs** are `/api/media/meals/<athlete>/<uuid>.<ext>` — under `/api/` so the
-  Vite dev proxy (which forwards only `/api`) reaches them. Served by Django in DEBUG only
-  and **without auth** (random filenames). Production needs a real file server.
+- **Meal photo URLs** are signed and expire after 1 h:
+  `/api/media/signed/meals/<athlete>/<uuid>.<ext>?exp=<unix>&sig=<hmac>` (no auth header,
+  so they work in `<img src>`). Tampered, expired or traversing paths → 404. Clients must
+  not cache `photo_url` past the hour; refetch the meal. Raw `/api/media/` is DEBUG-only.
 - **Meal create** accepts JSON as well as multipart. `items` may be a JSON string
   (multipart) or a list (JSON). Totals are always recomputed from items; client-sent
   totals are ignored. `eaten_at` defaults to now.
@@ -72,8 +73,11 @@ the places where the spec was silent or where the backend had to choose.
 - **Chat** never returns 500 on model failure: the assistant message is stored with
   `status: "error"` and readable text, response 200. Tool side effects that already
   happened (a proposal, a logged meal) keep their attachments even then.
-- **Throttles**: chat POSTs, Guide/Review and meal estimates share a `chat` scope of
-  150/day per user. The monthly 200-call AI budget (every model call, tool iterations
+- **Throttles** (all 429 `{detail}`): login 10/min, register 5/hour, refresh 60/min,
+  Garmin connect 5/hour — per client IP (`CF-Connecting-IP` when
+  `TRUST_CF_CONNECTING_IP=1`; `X-Forwarded-For` is ignored). Chat POSTs, Guide/Review and
+  meal estimates share a `chat` scope of 150/day per user (this scope was inert on
+  function views until 2026-10-04). The monthly 200-call AI budget (every model call, tool iterations
   included) is the real limit.
 
 ## Planning with no running history
@@ -319,3 +323,17 @@ the left (e.g. run/walk ×3 + a final run). The custom-bpm HR target (type 4 wit
 targetValueOne/Two and no zoneNumber) is Garmin's documented-by-usage format; it has
 not been exercised against the live API — the first real upload (Rohit, from the UI) is
 the test.
+
+## Auth additions (docs/DEPLOY.md §2, 2026-10-04)
+
+- `GET /api/auth/registration/` → `{mode}`: `open` · `invite` · `closed`. Public.
+- `POST /api/auth/register/` takes `invite_code` (case-insensitive). `invite` mode: missing,
+  unknown, used-up or expired → 400 `{invite_code: [...]}`; a failed registration does not
+  use the code. `closed` → 403 `{detail}`.
+- `DELETE /api/auth/me/ {password}` → 204 and clears the refresh cookie; wrong password →
+  400 `{detail}`. Deletes the user, every row, FIT files, meal photos and the Garmin token
+  directory, and blacklists all refresh tokens. Throttled like login.
+- `GET /api/health/live/` → `{status: "ok"}`, no dependencies (liveness). `/api/health/`
+  (db + Redis) is readiness. Both answer regardless of the Host header.
+- `InviteCode` lives in admin: "Generate code" on the list page, or the action
+  "Generate a new code like each selected one".

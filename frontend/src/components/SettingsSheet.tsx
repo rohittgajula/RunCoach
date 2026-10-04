@@ -41,6 +41,66 @@ const toDraft = (a: Athlete): Draft => ({
 
 const num = (text: string) => (text.trim() === '' ? null : Number(text))
 
+function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
+  const { deleteAccount } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  if (!open) {
+    return (
+      <>
+        <p className="muted small">
+          Removes your account and everything in it — runs, plans, journal, meals and photos,
+          chats, and your Garmin connection. This cannot be undone.
+        </p>
+        <button type="button" className="btn btn-danger btn-sm" onClick={() => setOpen(true)}>
+          Delete account…
+        </button>
+      </>
+    )
+  }
+
+  async function confirm() {
+    setBusy(true)
+    setError('')
+    try {
+      await deleteAccount(password)
+      onDeleted()
+    } catch (caught) {
+      setError(errorText(caught, 'Could not delete the account.'))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="stack">
+      <Field label="Type DELETE to confirm">
+        <input value={typed} onChange={(e) => setTyped(e.target.value)} autoCapitalize="characters" autoComplete="off" />
+      </Field>
+      <Field label="Your password">
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+      </Field>
+      {error && <p className="field-error">{error}</p>}
+      <div className="row-end">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn btn-danger btn-sm"
+          onClick={confirm}
+          disabled={busy || typed !== 'DELETE' || !password}
+        >
+          {busy ? 'Deleting…' : 'Delete my account'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="card settings-section">
@@ -323,6 +383,16 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               Log out
             </button>
           </div>
+        </Section>
+
+        <Section title="Delete account">
+          <DeleteAccount
+            onDeleted={() => {
+              client.clear()
+              onClose()
+              navigate('/login', { replace: true })
+            }}
+          />
         </Section>
       </div>
     </BottomSheet>

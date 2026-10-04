@@ -23,6 +23,8 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from .deletion import delete_account
+from .invites import registration_mode
 from .models import Athlete
 from .serializers import AthleteSerializer, RegisterSerializer, UserSerializer
 
@@ -61,10 +63,24 @@ class RegisterView(APIView):
     throttle_scope = "register"
 
     def post(self, request):
+        if registration_mode() == "closed":
+            return Response(
+                {"detail": "Registration is closed."}, status=status.HTTP_403_FORBIDDEN
+            )
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         athlete = serializer.save()
         return _issue(athlete, status.HTTP_201_CREATED)
+
+
+class RegistrationModeView(APIView):
+    """`{mode}` so the register form knows whether to ask for an invite code."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return Response({"mode": registration_mode()})
 
 
 class LoginView(APIView):
@@ -158,6 +174,28 @@ class LogoutView(APIView):
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def get_throttles(self):
+        # Deletion asks for the password, so it gets the login ceiling. Reading /me
+        # stays unthrottled — the app calls it on every load.
+        if self.request.method == "DELETE":
+            self.throttle_scope = "login"
+            return super().get_throttles()
+        return []
+
+    def delete(self, request):
+        """Delete the account, everything it owns, its files, and its sessions."""
+        password = request.data.get("password") or ""
+        if not password or not request.user.check_password(password):
+            return Response(
+                {"detail": "Incorrect password."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        delete_account(request.user)
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        response.delete_cookie(
+            settings.REFRESH_COOKIE_NAME, path=settings.REFRESH_COOKIE_PATH
+        )
+        return response
 
     def get(self, request):
         athlete = Athlete.objects.filter(user=request.user).first()

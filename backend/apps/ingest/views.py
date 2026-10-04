@@ -6,7 +6,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from apps.coaching.throttles import FixedScopeThrottle
 
 from apps.athletes.mixins import AthleteScopedMixin
 from rest_framework import generics
@@ -19,8 +19,18 @@ from .garmin_connect import MFARequired, connect, disconnect
 logger = logging.getLogger(__name__)
 
 
-class GarminThrottle(ScopedRateThrottle):
+class GarminThrottle(FixedScopeThrottle):
     scope = "garmin"
+
+
+class GarminConnectThrottle(FixedScopeThrottle):
+    """Per client IP, not per user: each attempt is a real Garmin login, and one
+    person cycling through accounts should not get a fresh bucket per account."""
+
+    scope = "garmin_connect"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
 
 @api_view(["GET"])
@@ -33,7 +43,7 @@ def garmin_status(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@throttle_classes([GarminThrottle])
+@throttle_classes([GarminConnectThrottle])
 def garmin_connect_view(request):
     email = (request.data.get("email") or "").strip()
     password = request.data.get("password") or ""

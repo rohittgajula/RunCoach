@@ -92,13 +92,16 @@ def targets_for(athlete: Athlete, day: dt.date) -> Targets:
 
 
 def meal_json(meal: Meal) -> dict:
+    from .media import signed_url
+
     return {
         "id": meal.pk,
         "eaten_at": meal.eaten_at,
         "local_date": meal.local_date,
         "meal_type": meal.meal_type,
         "description": meal.description,
-        "photo_url": meal.photo.url if meal.photo else None,
+        # Signed and expiring: works in <img src> without an auth header (media.py).
+        "photo_url": signed_url(meal.photo.name) if meal.photo else None,
         "items": meal.items or [],
         "kcal": meal.kcal,
         "carbs_g": meal.carbs_g,

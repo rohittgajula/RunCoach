@@ -151,6 +151,8 @@ export type Athlete = {
 
 export type Session = { user: User; athlete: Athlete; access?: string }
 
+export type RegistrationMode = 'open' | 'invite' | 'closed'
+
 
 export type ActivityMetrics = {
   run_distance_m: number

@@ -133,6 +133,10 @@ class RegisterSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, style={"input_type": "password"})
     display_name = serializers.CharField(max_length=120, required=False, allow_blank=True)
     timezone = serializers.CharField(max_length=64, required=False, default="UTC")
+    # Required only when REGISTRATION_MODE=invite; ignored otherwise.
+    invite_code = serializers.CharField(
+        max_length=32, required=False, allow_blank=True, write_only=True
+    )
 
     def validate_username(self, value):
         if User.objects.filter(username__iexact=value).exists():
@@ -152,7 +156,16 @@ class RegisterSerializer(serializers.Serializer):
     @transaction.atomic
     def create(self, validated):
         # Atomic on purpose: a User with no Athlete authenticates fine and then 500s
-        # on every request that touches request.user.athlete.
+        # on every request that touches request.user.athlete. It also means a
+        # registration that fails after this point gives the invite slot back.
+        from .invites import consume_invite, registration_mode
+
+        if registration_mode() == "invite" and not consume_invite(
+            validated.get("invite_code", "")
+        ):
+            raise serializers.ValidationError(
+                {"invite_code": ["That invite code is not valid, used up, or expired."]}
+            )
         user = User.objects.create_user(
             username=validated["username"],
             email=validated.get("email", ""),

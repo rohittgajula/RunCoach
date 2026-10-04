@@ -43,3 +43,9 @@ def health(request):
             k: v for k, v in (("db", db_error), ("redis", redis_error)) if v
         }
     return JsonResponse(payload, status=200 if ok else 503, json_dumps_params={"indent": None})
+
+
+def live(request):
+    """Liveness: the process answers. No database, no Redis — a dependency outage
+    must fail readiness (stop sending traffic), not liveness (restart the pod)."""
+    return JsonResponse({"status": "ok"})

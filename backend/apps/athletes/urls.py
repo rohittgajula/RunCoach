@@ -3,10 +3,12 @@ from django.urls import path
 from .profile_views import entries_view, entry_delete, fitness_view, profile_summary
 from .views import (
     AthleteDetailView, LoginView, LogoutView, MeView, RefreshView, RegisterView,
+    RegistrationModeView,
 )
 
 urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="register"),
+    path("auth/registration/", RegistrationModeView.as_view(), name="registration-mode"),
     path("auth/login/", LoginView.as_view(), name="login"),
     path("auth/refresh/", RefreshView.as_view(), name="refresh"),
     path("auth/logout/", LogoutView.as_view(), name="logout"),

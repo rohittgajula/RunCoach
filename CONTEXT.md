@@ -46,7 +46,16 @@ read it before touching Garmin, dates, or the AI client.
 Login → onboarding → chat "build a plan for 10k" → proposal card → accept → calendar
 fills with workouts → Guide opens a chat with the workout attached and a step-by-step
 answer incl. fueling. Weight entry + history sheet. Diet targets for a rest day.
-Backend suite: 564 passing (R6 + R7 backend included).
+Backend suite: 627 passing (R6 + R7 backend + deploy hardening included).
+
+## Deploy hardening (2026-10-04, docs/DEPLOY.md §1–2)
+
+Env contract + startup guard (`config/security.py`), WhiteNoise, `REGISTRATION_MODE`
+with `InviteCode` (admin "Generate code"), per-IP throttles via `CF-Connecting-IP`
+(`config/middleware.py`; XFF ignored), signed 1 h meal photo URLs (`apps/diet/media.py`),
+`DELETE /api/auth/me/` (`apps/athletes/deletion.py`), `/api/health/live/`. Found on the
+way: `ChatThrottle`/`GarminThrottle`/`AIThrottle` on function views had never throttled
+anything — fixed with `FixedScopeThrottle`.
 
 ## Known follow-ups
 

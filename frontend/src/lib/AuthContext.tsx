@@ -11,6 +11,7 @@ type AuthValue = {
   login: (username: string, password: string) => Promise<void>
   register: (input: RegisterInput) => Promise<void>
   logout: () => Promise<void>
+  deleteAccount: (password: string) => Promise<void>
   updateAthlete: (patch: Partial<Athlete>) => Promise<Athlete>
 }
 
@@ -20,6 +21,7 @@ export type RegisterInput = {
   email?: string
   display_name?: string
   timezone?: string
+  invite_code?: string
 }
 
 const AuthContext = createContext<AuthValue | null>(null)
@@ -76,6 +78,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAthlete(null)
           setUsername(null)
         }
+      },
+      async deleteAccount(password) {
+        await api('/auth/me/', { method: 'DELETE', ...json({ password }) })
+        // The server deleted the user, blacklisted its refresh tokens and cleared the
+        // cookie; drop the in-memory session the same way logout does.
+        setAccessToken(null)
+        setAthlete(null)
+        setUsername(null)
       },
       async updateAthlete(patch) {
         const updated = await api<Athlete>('/athlete/', { method: 'PATCH', ...json(patch) })

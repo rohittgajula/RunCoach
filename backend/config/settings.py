@@ -16,9 +16,47 @@ def env_bool(name: str, default: bool = False) -> bool:
     return os.environ.get(name, str(int(default))).lower() in {"1", "true", "yes", "on"}
 
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-insecure-key-change-me")
+def env_list(name: str, default: str = "") -> list[str]:
+    return [v.strip() for v in os.environ.get(name, default).split(",") if v.strip()]
+
+
+from .security import (  # noqa: E402
+    DEV_SECRET_KEY, check_production_settings, resolve_registration_mode,
+)
+
 DEBUG = env_bool("DJANGO_DEBUG", True)
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
+# The dev default only ever applies with DEBUG on: check_production_settings refuses
+# to start a DEBUG=0 process with it, a short key, or ALLOWED_HOSTS="*".
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", DEV_SECRET_KEY if DEBUG else "")
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "*")
+check_production_settings(DEBUG, SECRET_KEY, ALLOWED_HOSTS)
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+
+# --- HTTPS behind Cloudflare + Traefik (docs/DEPLOY.md §1) --------------------
+# No SECURE_SSL_REDIRECT: Cloudflare and Traefik already redirect, and a third
+# redirect behind a TLS-terminating proxy is how you get a loop.
+SECURE = env_bool("DJANGO_SECURE", False)
+if SECURE:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31_536_000      # one year, no preload
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
+    # Deliberate per docs/DEPLOY.md §1, so `check --deploy` stays readable:
+    # redirect is done by Cloudflare/Traefik (W008); no subdomains/preload (W005/W021).
+    SILENCED_SYSTEM_CHECKS = ["security.W005", "security.W008", "security.W021"]
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "same-origin"
+
+# Throttles key on REMOTE_ADDR. Behind Cloudflare that is a Cloudflare edge, so
+# config.middleware.RealClientIPMiddleware swaps in CF-Connecting-IP — only when
+# this is on, because anywhere else the header is attacker-controlled.
+TRUST_CF_CONNECTING_IP = env_bool("TRUST_CF_CONNECTING_IP", False)
+
+# open · invite · closed. See apps/athletes/invites.py.
+REGISTRATION_MODE = resolve_registration_mode(os.environ.get("REGISTRATION_MODE"), DEBUG)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -46,8 +84,13 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # First: everything after it (throttles included) should see the real client.
+    "config.middleware.RealClientIPMiddleware",
+    # Answers the probes before ALLOWED_HOSTS is enforced: kubelet sends Host=<pod IP>.
+    "config.middleware.HealthProbeMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -108,10 +151,23 @@ STATIC_URL = "static/"
 # Set from day one. Without it the admin loses its CSS the moment DEBUG=0, and you
 # find that out during a deploy rather than now.
 STATIC_ROOT = BASE_DIR / "staticfiles"
-# Under /api/ so the frontend's dev proxy (which forwards only /api) reaches it. Served
-# by Django in DEBUG only; production needs a real file server or object storage.
+# Served by WhiteNoise from STATIC_ROOT (collectstatic runs at image build). Hashed
+# names in production; plain ones in DEBUG so nothing needs collectstatic locally.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage.CompressedStaticFilesStorage" if DEBUG
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        ),
+    },
+}
+# Under /api/ so the frontend's dev proxy (which forwards only /api) reaches it.
+# Public serving of MEDIA_URL happens in DEBUG only. Meal photos are handed out as
+# signed, expiring URLs (apps/diet/media.py) that work with or without DEBUG.
 MEDIA_URL = "/api/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT") or BASE_DIR / "media")
+SIGNED_MEDIA_TTL_SEC = int(os.environ.get("SIGNED_MEDIA_TTL_SEC", "3600"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -123,13 +179,18 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
+    # 0 = ignore X-Forwarded-For and key on REMOTE_ADDR. DRF's default (None) uses
+    # the whole client-supplied XFF header, so anyone could reset their own counter.
+    # The real client IP comes from RealClientIPMiddleware instead.
+    "NUM_PROXIES": 0,
     # AllowAny does not mean unthrottled. These three are the public endpoints, and
     # an unthrottled login on a public host is found by scanners within days.
     "DEFAULT_THROTTLE_RATES": {
         "register": "5/hour",   # per IP
-        "login": "10/hour",     # per IP — brute-force ceiling
-        "refresh": "60/hour",   # per IP — generous; a 15-min access token refreshes often
-        "garmin": "10/hour",    # per user — Garmin rate-limits by IP, see docs/HOSTING.md
+        "login": "10/min",      # per IP — brute-force ceiling (also: account deletion)
+        "refresh": "60/min",    # per IP — generous; a 15-min access token refreshes often
+        "garmin_connect": "5/hour",  # per IP — each attempt is a real Garmin login
+        "garmin": "10/hour",    # per user — sync; Garmin rate-limits by IP, see docs/HOSTING.md
         "ai": "30/day",         # per user — this one is money, see docs/COST.md
         # Chat turns and meal estimates. Higher than "ai" because a conversation is
         # many short turns; the monthly call budget in coaching/services.py is still
@@ -280,6 +341,9 @@ AI_MODEL_TIERS = {
     # R7: the one-line morning check-in "why".
     "checkin_explain": "lite",
 }
+
+# Per athlete per month, every model call counted. Read by coaching/services.py.
+AI_MONTHLY_CALL_BUDGET = int(os.environ.get("AI_MONTHLY_CALL_BUDGET", "200"))
 
 AI_TIMEOUT_SEC = int(os.environ.get("AI_TIMEOUT_SEC", "60"))
 AI_MAX_RETRIES = int(os.environ.get("AI_MAX_RETRIES", "2"))

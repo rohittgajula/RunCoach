@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 
 # Per-athlete monthly ceiling. Not a rate limit — a money limit. Every registered
 # athlete spends the same prepaid balance, so this is what stops one person's
-# enthusiasm emptying it for everyone. See docs/HOSTING.md.
-MONTHLY_CALL_BUDGET = 200
+# enthusiasm emptying it for everyone. See docs/HOSTING.md. AI_MONTHLY_CALL_BUDGET in env.
+MONTHLY_CALL_BUDGET = settings.AI_MONTHLY_CALL_BUDGET
 
 
 class BudgetExceeded(AIUnavailable):

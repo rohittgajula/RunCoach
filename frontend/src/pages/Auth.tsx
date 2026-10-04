@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Field } from '../components/Field'
 import { useAuth } from '../lib/AuthContext'
+import { ApiError, api, type RegistrationMode } from '../lib/auth'
 import { errorText } from '../lib/queries'
 
 function Logo() {
@@ -51,24 +52,53 @@ export function Login() {
   )
 }
 
+function PrivacyNote() {
+  return (
+    <p className="muted small auth-privacy">
+      RunCoach stores your profile, runs synced from Garmin, journal, meals and chats. Coaching
+      text is sent to OpenAI to generate replies — API data is not used to train their models.
+      Accounts are invite-only, and you can delete yours, with everything in it, from Settings
+      at any time.
+    </p>
+  )
+}
+
 export function Register() {
   const { register } = useAuth()
-  const [form, setForm] = useState({ display_name: '', username: '', email: '', password: '' })
+  const [form, setForm] = useState({ display_name: '', username: '', email: '', password: '', invite_code: '' })
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+  const [mode, setMode] = useState<RegistrationMode | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    api<{ mode: RegistrationMode }>('/auth/registration/')
+      .then((r) => !cancelled && setMode(r.mode))
+      // Unknown: show the field anyway; the server decides.
+      .catch(() => !cancelled && setMode('invite'))
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const set = (key: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [key]: e.target.value })
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     setBusy(true)
     setError(null)
+    setFieldErrors({})
     try {
+      const { invite_code, ...rest } = form
       await register({
-        ...form,
+        ...rest,
+        ...(mode === 'invite' ? { invite_code: invite_code.trim() } : {}),
         username: form.username.trim(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       })
     } catch (err) {
+      if (err instanceof ApiError && err.status === 403) setMode('closed')
+      if (err instanceof ApiError) setFieldErrors(err.fieldErrors())
       setError(errorText(err))
     } finally {
       setBusy(false)
@@ -78,8 +108,27 @@ export function Register() {
   return (
     <div className="page auth-page">
       <Logo />
+      {mode === 'closed' ? (
+        <div className="card stack">
+          <p>Registration is closed right now.</p>
+          <p className="muted small">RunCoach is invite-only. Ask Rohit for an invite.</p>
+        </div>
+      ) : (
+      <>
       <p className="muted auth-tagline">Create your account. Your timezone is set from this device.</p>
       <form className="card stack" onSubmit={submit}>
+        {mode === 'invite' && (
+          <Field label="Invite code" hint="RunCoach is invite-only" error={fieldErrors.invite_code}>
+            <input
+              value={form.invite_code}
+              onChange={set('invite_code')}
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
+              required
+            />
+          </Field>
+        )}
         <Field label="Your name">
           <input value={form.display_name} onChange={set('display_name')} autoComplete="name" required />
         </Field>
@@ -93,8 +142,11 @@ export function Register() {
           <input type="password" value={form.password} onChange={set('password')} autoComplete="new-password" minLength={8} required />
         </Field>
         {error && <p className="field-error">{error}</p>}
-        <button className="btn btn-primary btn-block" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
+        <button className="btn btn-primary btn-block" disabled={busy || mode === null}>{busy ? 'Creating…' : 'Create account'}</button>
+        <PrivacyNote />
       </form>
+      </>
+      )}
       <p className="muted auth-switch">Already have one? <Link to="/login">Sign in</Link></p>
     </div>
   )

@@ -275,3 +275,46 @@ def mirror(athlete: Athlete, kind: str) -> None:
     if getattr(athlete, field) != value:
         setattr(athlete, field, value)
         athlete.save(update_fields=[field, "updated_at"])
+
+
+def generate_invite_code() -> str:
+    """12 characters from an alphabet without look-alikes (no 0/O, 1/I/L)."""
+    import secrets
+
+    alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(12))
+
+
+class InviteCode(models.Model):
+    """Registration ticket for REGISTRATION_MODE=invite (docs/DEPLOY.md §2.2).
+
+    Not tenant data: it belongs to the operator, and survives the athlete who used it.
+    Consumption is a single conditional UPDATE (see apps/athletes/invites.py), so two
+    people racing for the last use cannot both win.
+    """
+
+    code = models.CharField(max_length=32, unique=True, default=generate_invite_code)
+    note = models.CharField(max_length=200, blank=True, help_text="Who it is for.")
+    max_uses = models.PositiveIntegerField(default=1)
+    uses = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.code} ({self.uses}/{self.max_uses})"
+
+    def save(self, *args, **kwargs):
+        # Stored upper-case so matching is exact; people type codes in any case.
+        self.code = (self.code or "").strip().upper()
+        super().save(*args, **kwargs)
+
+    @property
+    def is_usable(self) -> bool:
+        from django.utils import timezone
+
+        return self.uses < self.max_uses and (
+            self.expires_at is None or self.expires_at > timezone.now()
+        )

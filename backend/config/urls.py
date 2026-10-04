@@ -3,11 +3,12 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
-from .health import health
+from .health import health, live
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health/", health, name="health"),
+    path("api/health/live/", live, name="health-live"),
     path("api/", include("apps.athletes.urls")),
     path("api/", include("apps.ingest.urls")),
     path("api/", include("apps.activities.urls")),
@@ -17,6 +18,6 @@ urlpatterns = [
     path("api/", include("apps.diet.urls")),
 ]
 
-# Meal photos in development. `static()` is a no-op when DEBUG is off — production
-# needs a real file server or object storage in front of MEDIA_ROOT.
+# Raw MEDIA_URL in development only. `static()` is a no-op when DEBUG is off; meal
+# photos then go out as signed URLs (apps/diet/media.py) and nothing else is public.
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
