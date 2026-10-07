@@ -4,6 +4,7 @@ import { errorText } from '../../lib/queries'
 import { useDeletePain, useInjury, type InjuryRisk, type InjuryWatch } from '../../lib/r13'
 import { BandageIcon, TrashIcon } from '../Icons'
 import { CardHead, Pill } from '../Kit'
+import { SeeDetails } from '../Disclose'
 import { InfoButton } from '../health/InfoButton'
 import type { GlossaryKey } from '../health/glossary'
 import { painText, SEVERITY_LABEL } from './BodyMap'
@@ -23,7 +24,7 @@ export function RiskPill({ risk }: { risk: InjuryRisk }) {
  * R13 §3 injury watch: risk, the flags behind it, recent pain, guidance (never a
  * diagnosis) and "Anything hurting?". `whenNotLow` hides it on a low-risk day (Today).
  */
-export function InjuryCard({ whenNotLow = false }: { whenNotLow?: boolean }) {
+export function InjuryCard({ whenNotLow = false, compact = false }: { whenNotLow?: boolean; compact?: boolean }) {
   const q = useInjury()
   const [open, setOpen] = useState(false)
   const d = q.data
@@ -35,10 +36,24 @@ export function InjuryCard({ whenNotLow = false }: { whenNotLow?: boolean }) {
         title={<span className="injury-title"><BandageIcon size={18} /> Injury watch <InfoButton k="injury_risk">{d.note && <p className="muted small">{d.note}</p>}</InfoButton></span>}
         aside={<RiskPill risk={d.risk} />}
       />
-      <InjuryBody d={d} />
-      <button type="button" className="btn btn-secondary btn-block injury-btn" onClick={() => setOpen(true)}>
-        Anything hurting?
-      </button>
+      {compact ? (
+        <>
+          {d.flags[0] && <p className="small">{d.flags[0].text}</p>}
+          <div className="row-wrap" style={{ justifyContent: 'space-between' }}>
+            <SeeDetails title="Injury watch">
+              <section className="card"><InjuryBody d={d} /></section>
+            </SeeDetails>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen(true)}>Anything hurting?</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <InjuryBody d={d} />
+          <button type="button" className="btn btn-secondary btn-block injury-btn" onClick={() => setOpen(true)}>
+            Anything hurting?
+          </button>
+        </>
+      )}
       <PainSheet open={open} onClose={() => setOpen(false)} />
     </section>
   )

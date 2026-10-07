@@ -31,6 +31,8 @@ export type ShareCard =
   | { kind: 'badge'; label: string; description: string; date?: string | null }
   | { kind: 'race'; name: string; date: string; distance_km: number; target_s: number | null; pace_s_per_km: number | null; strategy: string }
   | { kind: 'smoke_free'; days: number; saved?: string | null }
+  /** R14 §7: the server's share text (never names the private habit). */
+  | { kind: 'experiment'; title: string; lines: string[] }
 
 const W = 1080
 const H = 1350
@@ -42,6 +44,7 @@ const PALETTE = {
   badge: ['#f2a516', '#f26b3a'],
   smoke_free: ['#0e9f9a', '#2f6bff'],
   race: ['#101418', '#2f6bff'],
+  experiment: ['#7a5af8', '#0e9f9a'],
 } as const
 
 function fmtDur(s: number | null | undefined): string {
@@ -363,6 +366,23 @@ function drawRace(ctx: CanvasRenderingContext2D, c: Extract<ShareCard, { kind: '
   brand(ctx)
 }
 
+function drawExperiment(ctx: CanvasRenderingContext2D, c: Extract<ShareCard, { kind: 'experiment' }>) {
+  background(ctx, PALETTE.experiment)
+  label(ctx, 'My experiment', W / 2, 160, 'center')
+  const size = fitText(ctx, c.title, W - 160, 84)
+  big(ctx, c.title, W / 2, 380, size, 'center')
+  ctx.textAlign = 'center'
+  c.lines.slice(0, 5).forEach((line, i) => {
+    ctx.fillStyle = i === 0 ? '#ffffff' : 'rgba(255,255,255,0.9)'
+    ctx.font = `${i === 0 ? 800 : 700} ${i === 0 ? 64 : 52}px ${FONT}`
+    ctx.fillText(line, W / 2, 600 + i * 110, W - 160)
+  })
+  ctx.fillStyle = 'rgba(255,255,255,0.75)'
+  ctx.font = `600 32px ${FONT}`
+  wrap(ctx, 'Before vs during — not proof of cause.', W / 2, 1180, W - 200, 44)
+  brand(ctx)
+}
+
 /** Draw a card and return it as a PNG blob. */
 export async function renderShareCard(card: ShareCard): Promise<Blob> {
   try {
@@ -379,6 +399,7 @@ export async function renderShareCard(card: ShareCard): Promise<Blob> {
   else if (card.kind === 'week') drawWeek(ctx, card)
   else if (card.kind === 'badge') drawBadge(ctx, card)
   else if (card.kind === 'race') drawRace(ctx, card)
+  else if (card.kind === 'experiment') drawExperiment(ctx, card)
   else drawSmokeFree(ctx, card)
   return new Promise((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not draw the image.'))), 'image/png'),

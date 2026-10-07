@@ -1,17 +1,15 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, MoreHIcon } from '../components/Icons'
-import { PlanTimeline } from '../components/PlanTimeline'
+import { ActivityIcon, ChevronRight, FlagIcon, MoreHIcon, PlanIcon, SparkIcon } from '../components/Icons'
+import { Row, RowGroup } from '../components/Disclose'
 import { useShell } from '../components/Shell'
-import { Sparkline } from '../components/Sparkline'
 import { ErrorState, Skeleton } from '../components/States'
 import { FitnessSheet, STATUS_LABEL, type FitnessView } from '../components/profile/FitnessSheet'
 import { MemorySheet } from '../components/profile/MemorySheet'
 import { MetricSheet } from '../components/profile/MetricSheet'
 import { PlanDetailSheet } from '../components/profile/PlanDetailSheet'
-import { RacesCard } from '../components/profile/RacesCard'
 import { dur, pace } from '../lib/format'
-import { errorText, useProfileSummary } from '../lib/queries'
+import { errorText, useProfileSummary, useRaces } from '../lib/queries'
 import type { MetricKind } from '../lib/types'
 import { BUILD_PLAN_PROMPT } from '../lib/prompts'
 
@@ -46,6 +44,7 @@ export function ProfileCards() {
   const [planId, setPlanId] = useState<number | null>(null)
   const [memoryOpen, setMemoryOpen] = useState(false)
   const [menu, setMenu] = useState(false)
+  const [more, setMore] = useState(false)
   const s = summary.data
 
   return (
@@ -54,10 +53,7 @@ export function ProfileCards() {
       {summary.isPending && (
         <>
           <section className="card"><Skeleton lines={4} /></section>
-          <div className="grid-2-cards">
-            <section className="card"><Skeleton lines={3} /></section>
-            <section className="card"><Skeleton lines={3} /></section>
-          </div>
+          <section className="card"><Skeleton lines={3} /></section>
         </>
       )}
       {summary.isError && !s && (
@@ -99,7 +95,7 @@ export function ProfileCards() {
                 value={s.athlete.easy_pace_min && s.athlete.easy_pace_max ? `${pace(s.athlete.easy_pace_min)}–${pace(s.athlete.easy_pace_max)}` : '--'}
               />
             </div>
-            <div className="metric-grid metric-grid-sep">
+            {more && <div className="metric-grid metric-grid-sep">
               <Metric label="HRV" value={s.wellness?.hrv_ms != null ? String(Math.round(s.wellness.hrv_ms)) : '--'} unit="ms" />
               <Metric
                 label="RHR"
@@ -108,54 +104,42 @@ export function ProfileCards() {
                 onClick={() => setMetric('resting_hr')}
               />
               <Metric label="Sleep" value={s.wellness?.sleep_s ? dur(s.wellness.sleep_s) : '--'} />
-            </div>
+            </div>}
+            <button type="button" className="see-details" aria-expanded={more} onClick={() => setMore(!more)}>
+              {more ? 'Fewer numbers' : 'HRV, resting HR, sleep'} <ChevronRight size={16} />
+            </button>
           </section>
 
-          <div className="grid-2-cards">
-            <button type="button" className="card mini-card" onClick={() => setFitnessView('status')}>
-              <span className="mini-card-label">Training Status</span>
-              <span className="mini-card-value">{STATUS_LABEL[s.fitness.status] ?? s.fitness.status}</span>
-              <Sparkline values={s.status_spark} color="var(--faint)" />
-            </button>
-            <button type="button" className="card mini-card" onClick={() => setFitnessView('fitness')}>
-              <span className="mini-card-label">Fitness</span>
-              <span className="mini-card-value">{s.fitness.value != null ? Math.round(s.fitness.value) : '--'}</span>
-              <Sparkline values={s.fitness.spark} area />
-            </button>
-          </div>
-
-          {s.active_plan ? (
-            <section className="card is-tappable" onClick={() => setPlanId(s.active_plan!.id)} role="button" tabIndex={0}>
-              <div className="card-head">
-                <div>
-                  <h2 className="card-title card-title-lg">{s.active_plan.name}</h2>
-                  <p className="muted">{s.active_plan.phase_count} phases</p>
-                </div>
-                <ChevronRight className="muted" />
-              </div>
-              <PlanTimeline phases={s.active_plan.phases} currentPhaseId={s.active_plan.current_phase_id} variant="compact" />
-            </section>
-          ) : (
-            <section className="card banner">
-              <p className="banner-title">No active plan</p>
-              <p className="muted small">Ask the coach to build one around your race or goal.</p>
-              <button type="button" className="btn btn-primary" onClick={() => navigate('/chat/new', { state: { prompt: BUILD_PLAN_PROMPT } })}>
-                Ask the coach
-              </button>
-            </section>
-          )}
-
-          <RacesCard />
-
-          <button type="button" className="card link-card" onClick={() => setMemoryOpen(true)}>
-            <span>
-              <span className="card-title card-title-lg block">Memory</span>
-              <span className="muted">
-                {s.memory_count ? `${s.memory_count} fact${s.memory_count === 1 ? '' : 's'} remembered from your chats` : 'Facts remembered from your chats'}
-              </span>
-            </span>
-            <ChevronRight className="muted" />
-          </button>
+          <RowGroup title="Training">
+            {s.active_plan ? (
+              <Row
+                icon={<PlanIcon size={20} />}
+                title={s.active_plan.name}
+                sub={`${s.active_plan.phase_count} phases · tap for the timeline`}
+                onClick={() => setPlanId(s.active_plan!.id)}
+              />
+            ) : (
+              <Row
+                icon={<PlanIcon size={20} />}
+                title="No active plan"
+                sub="Ask the coach to build one around your race or goal"
+                onClick={() => navigate('/chat/new', { state: { prompt: BUILD_PLAN_PROMPT } })}
+              />
+            )}
+            <RacesRow />
+            <Row
+              icon={<ActivityIcon size={20} />}
+              title="Training status & fitness"
+              sub={`${STATUS_LABEL[s.fitness.status] ?? s.fitness.status ?? '—'} · fitness ${s.fitness.value != null ? Math.round(s.fitness.value) : '--'}`}
+              onClick={() => setFitnessView('status')}
+            />
+            <Row
+              icon={<SparkIcon size={20} />}
+              title="Memory"
+              sub={s.memory_count ? `${s.memory_count} fact${s.memory_count === 1 ? '' : 's'} remembered from your chats` : 'Facts remembered from your chats'}
+              onClick={() => setMemoryOpen(true)}
+            />
+          </RowGroup>
         </>
       )}
 
@@ -165,4 +149,15 @@ export function ProfileCards() {
       <MemorySheet open={memoryOpen} onClose={() => setMemoryOpen(false)} />
     </>
   )
+}
+
+/** Me → Races row: the next race (or a prompt to add one). Full list on /me/races. */
+function RacesRow() {
+  const races = useRaces()
+  const today = new Date().toISOString().slice(0, 10)
+  const next = (races.data ?? []).filter((r) => r.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0]
+  const sub = next
+    ? `${next.name} · ${new Date(next.date + 'T00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · ${next.distance_km} km`
+    : 'Add a race — the plan builds towards it'
+  return <Row to="/me/races" icon={<FlagIcon size={20} />} title="Races & race plans" sub={sub} />
 }

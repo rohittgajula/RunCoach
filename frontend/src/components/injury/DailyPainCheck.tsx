@@ -20,7 +20,7 @@ export function TodayInjury() {
   const [asked, setAsked] = useState(askedToday)
   const [open, setOpen] = useState(false)
   const d = injury.data
-  if (d && d.risk !== 'low') return <InjuryCard />
+  if (d && d.risk !== 'low') return <InjuryCard compact />
   if (!athlete?.pain_daily_check || asked || !d) return null
   if (d.pains.some((p) => p.date === todayISO())) return null
   const no = () => {

@@ -5,7 +5,7 @@ import { useActivePlan } from '../../lib/queries'
 import type { ActivityCard, CalDay, Step, Workout } from '../../lib/types'
 import { ActivityCardView } from '../Cards'
 import { ActivitySheet, WorkoutSheet } from '../DetailSheets'
-import { CheckIcon } from '../Icons'
+import { CheckIcon, ChevronRight } from '../Icons'
 import { Skeleton } from '../States'
 import { clock, groupSteps } from '../StepsList'
 import { useCoachLaunch } from '../useCoachLaunch'
@@ -77,7 +77,7 @@ function useWeekOfPlan(date: string): string {
 }
 
 /** Today's workout hero (Running blue), rest-day card, or today's runs. */
-export function TodayWorkout({ day, loading }: { day: CalDay | undefined; loading: boolean }) {
+export function TodayWorkout({ day, loading, embedded = false }: { day: CalDay | undefined; loading: boolean; embedded?: boolean }) {
   const navigate = useNavigate()
   const launch = useCoachLaunch()
   const plan = useActivePlan()
@@ -85,7 +85,8 @@ export function TodayWorkout({ day, loading }: { day: CalDay | undefined; loadin
   const [openActivity, setOpenActivity] = useState<ActivityCard | null>(null)
   const weekText = useWeekOfPlan(day?.date ?? '')
 
-  if (loading && !day) return <section className="card"><Skeleton height={150} /></section>
+  if (loading && !day) return embedded ? <Skeleton height={150} /> : <section className="card"><Skeleton height={150} /></section>
+  const cardCls = embedded ? '' : 'card '
 
   const workouts = (day?.items ?? []).flatMap((i) => (i.type === 'workout' ? [i.workout] : []))
   const activities = (day?.items ?? []).flatMap((i) => (i.type === 'activity' ? [i.activity] : []))
@@ -95,7 +96,7 @@ export function TodayWorkout({ day, loading }: { day: CalDay | undefined; loadin
   return (
     <>
       {plan.data === null && (
-        <section className="card banner">
+        <section className={`${cardCls}banner`}>
           <p className="banner-title">No plan yet — ask the coach to build one</p>
           <p className="muted small">Tell it your race or goal. It asks only what it can't work out from your Garmin data.</p>
           <button type="button" className="btn btn-primary" onClick={() => navigate('/chat/new', { state: { prompt: BUILD_PLAN_PROMPT } })}>
@@ -108,7 +109,7 @@ export function TodayWorkout({ day, loading }: { day: CalDay | undefined; loadin
         const done = w.status === 'completed'
         const hr = hrText(w)
         return (
-          <section key={w.id} className={`card hero-card ${w.status === 'skipped' ? 'is-skipped' : ''}`} aria-label="Today's workout">
+          <section key={w.id} className={`${cardCls}hero-card ${embedded ? 'is-embedded ' : ''}${w.status === 'skipped' ? 'is-skipped' : ''}`} aria-label="Today's workout">
             <button type="button" className="hero-top" onClick={() => setOpenWorkout(w)}>
               <span className="hero-eyebrow">
                 Today's run{weekText ? ` · ${weekText}` : w.phase ? ` · ${w.phase.name}` : ''}
@@ -146,14 +147,23 @@ export function TodayWorkout({ day, loading }: { day: CalDay | undefined; loadin
       {strength.map((s) => <StrengthCard key={s.id} session={s} />)}
 
       {day && !workouts.length && !activities.length && !strength.length && plan.data && (
-        <section className="card rest-card">
+        <section className={`${cardCls}rest-card`}>
           <span className="lbl">Today</span>
           <p className="rest-title">{day.rest ?? 'Rest'}</p>
           <p className="muted small">Nothing planned — an easy 20-minute walk keeps you moving.</p>
         </section>
       )}
 
-      {activities.filter((a) => !linked.has(a.id)).map((a) => (
+      {activities.filter((a) => !linked.has(a.id)).map((a) => embedded ? (
+        <button key={a.id} type="button" className="today-hero-done" onClick={() => setOpenActivity(a)}>
+          <span className="garmin-check"><CheckIcon size={14} /></span>
+          <span className="grow">
+            <b className="block">{a.name || a.sport}</b>
+            <span className="muted small">{[a.distance_m ? km(a.distance_m) : null, dur(a.duration_s)].filter(Boolean).join(' · ')} · done</span>
+          </span>
+          <ChevronRight size={18} className="muted" />
+        </button>
+      ) : (
         <ActivityCardView key={a.id} activity={a} onOpen={() => setOpenActivity(a)} onReview={() => launch.review(a)} />
       ))}
 

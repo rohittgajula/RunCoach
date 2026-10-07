@@ -133,7 +133,7 @@ export async function restoreSession(): Promise<boolean> {
 
 // --- types -------------------------------------------------------------------
 
-export type User = { id: number; username: string; email: string }
+export type User = { id: number; username: string; email: string; is_staff?: boolean }
 
 export type Athlete = {
   id: number
@@ -199,6 +199,10 @@ export type Athlete = {
   pain_daily_check?: boolean
   savings_goal_name?: string
   savings_goal_amount?: number | null
+  // R14 — Customise Today (enabled optional cards, in order; null = defaults) and
+  // weather swaps applied without asking.
+  today_layout?: string[] | null
+  weather_auto_apply?: boolean
   // Only on a PATCH that changed strength_per_week.
   strength_reflow?: { created: number; removed: number }
   // Only on a PATCH response: what changing the training days did to the active plan.
@@ -215,7 +219,7 @@ export type PlanReflow = {
   notes?: string[]
 }
 
-export type Session = { user: User; athlete: Athlete; access?: string }
+export type Session = { user: User; athlete: Athlete; access?: string; is_staff?: boolean }
 
 export type RegistrationMode = 'open' | 'invite' | 'closed'
 

@@ -9,7 +9,7 @@ import { ENERGY_WORDS, Face, FaceRow, MOOD_WORDS } from './FaceRow'
  * R13 §10 mood & energy: two rows of five faces. On Today when today's entry is missing;
  * once saved it collapses to one line with "Change". Saves as soon as both are picked.
  */
-export function MoodCard({ embedded = false }: { embedded?: boolean }) {
+export function MoodCard({ embedded = false, untilAnswered = false }: { embedded?: boolean; untilAnswered?: boolean }) {
   const q = useMoodToday()
   const save = useSaveMood()
   const entry = q.data?.entry ?? null
@@ -32,6 +32,7 @@ export function MoodCard({ embedded = false }: { embedded?: boolean }) {
     if (m && e) save.mutate({ mood: m, energy: e }, { onSuccess: () => setEditing(false) })
   }
 
+  if (entry && !editing && untilAnswered) return null
   if (entry && !editing) {
     return (
       <section className={`${embedded ? 'mood-embedded' : 'card'} mood-done`} aria-label="Mood and energy today">

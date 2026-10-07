@@ -14,7 +14,7 @@ import { TodayExplanation } from './TodayExplanation'
 import { MoodCard } from '../mood/MoodCard'
 
 /** Readiness 0–100: Garmin's / the computed one from Insights, else the check-in's signal. */
-function useReadinessScore(data: TodayCheckin | undefined): number | null {
+export function useReadinessScore(data: TodayCheckin | undefined): number | null {
   const insights = useInsights('4w')
   const fromInsights = insights.data?.readiness?.score
   if (fromInsights != null) return fromInsights
@@ -23,7 +23,7 @@ function useReadinessScore(data: TodayCheckin | undefined): number | null {
 }
 
 /** Today: readiness ring + the morning check-in ("Rest or train?"). */
-export function TodayCard({ compact = false }: { compact?: boolean }) {
+export function TodayCard({ compact = false, details = false }: { compact?: boolean; details?: boolean }) {
   const today = useToday()
   if (today.isPending) return compact ? null : <section className="card today-card"><Skeleton lines={3} /></section>
   // Endpoint not there yet / no athlete data: Today works without this card.
@@ -31,20 +31,19 @@ export function TodayCard({ compact = false }: { compact?: boolean }) {
     if (compact || (today.error instanceof ApiError && today.error.status === 404)) return null
     return <p className="muted small centered-text">{errorText(today.error, 'Morning check-in unavailable.')}</p>
   }
-  return compact ? <CompactToday data={today.data} /> : <FullToday data={today.data} />
+  return compact ? <CompactToday data={today.data} /> : <FullToday data={today.data} details={details} />
 }
 
-function FullToday({ data }: { data: TodayCheckin }) {
-  const apply = useApplyToday()
+/**
+ * R14: the full check-in card. `details` = inside Today's "See details" sheet, where the
+ * decision lives on the hero instead (CheckinDecision) and mood has its own card.
+ */
+function FullToday({ data, details = false }: { data: TodayCheckin; details?: boolean }) {
   const score = useReadinessScore(data)
-  const [kept, setKept] = useState(() => keptPlan(data.date))
-  const changes = !!data.adjusted && data.verdict !== 'go' && data.verdict !== 'no_plan'
-  const decided = data.applied || kept
-
   return (
-    <section className={`card today-card ${decided ? 'is-decided' : ''}`} aria-label="Readiness and morning check-in">
+    <section className="card today-card" aria-label="Readiness and morning check-in">
       <div className="readiness-row">
-        <TopicRing value={score} topic="recovery" size={96} label="Readiness" />
+        <TopicRing value={score} topic="recovery" size={details ? 72 : 96} label="Readiness" />
         <div className="grow">
           <div className="today-head">
             <span className="lbl">Readiness</span>
@@ -60,8 +59,22 @@ function FullToday({ data }: { data: TodayCheckin }) {
       {data.verdict === 'no_plan' && (
         <p className="today-note">{data.note || 'Nothing planned — an easy 20-min walk keeps you moving.'}</p>
       )}
+      {!details && <CheckinDecision data={data} />}
+      <MoodCard embedded />
+    </section>
+  )
+}
 
-      {changes && !decided && data.adjusted && (
+/** "Instead: easier version · Keep plan / Use this" — only while the check-in suggests a change. */
+export function CheckinDecision({ data }: { data: TodayCheckin }) {
+  const apply = useApplyToday()
+  const [kept, setKept] = useState(() => keptPlan(data.date))
+  const changes = !!data.adjusted && data.verdict !== 'go' && data.verdict !== 'no_plan'
+  const decided = data.applied || kept
+  if (!changes) return null
+  return (
+    <div className="stack-sm">
+      {!decided && data.adjusted && (
         <div className="today-suggest">
           <p className="today-suggest-label">
             Instead: <b>{data.adjusted.title}</b> · {dur(data.adjusted.duration_s)}
@@ -69,17 +82,16 @@ function FullToday({ data }: { data: TodayCheckin }) {
           <WorkoutBar steps={data.adjusted.steps} height={40} compact />
         </div>
       )}
-
-      {changes && data.applied && (
+      {data.applied && (
         <p className="today-done"><CheckIcon size={16} /> Adjusted — today’s workout now shows the easier version.</p>
       )}
-      {changes && !data.applied && kept && (
+      {!data.applied && kept && (
         <p className="today-done today-done-muted">
           Keeping the plan.
           <button type="button" className="link-btn" onClick={() => { unmarkKept(data.date); setKept(false) }}>Change</button>
         </p>
       )}
-      {changes && !decided && (
+      {!decided && (
         <div className="today-actions">
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => { markKept(data.date); setKept(true) }}>
             Keep plan
@@ -90,8 +102,7 @@ function FullToday({ data }: { data: TodayCheckin }) {
         </div>
       )}
       {apply.isError && <p className="bad small">{errorText(apply.error, 'Could not adjust today’s workout.')}</p>}
-      <MoodCard embedded />
-    </section>
+    </div>
   )
 }
 

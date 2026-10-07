@@ -4,6 +4,8 @@ import { ActivityCardView, WorkoutCard } from '../components/Cards'
 import { ChipButton } from '../components/ChipButton'
 import { MonthView } from '../components/calendar/MonthView'
 import { ActivitySheet, WorkoutSheet } from '../components/DetailSheets'
+import { UpcomingAdjustments } from '../components/adjust/UpcomingAdjustments'
+import { WeatherSwapChips } from '../components/weather/WeatherSwapChip'
 import { WeekGarminMenu } from '../components/workout/WeekGarminMenu'
 import { StrengthCard } from '../components/strength/StrengthCard'
 import { CalendarIcon, ChevronDown, ChevronRight, RefreshIcon } from '../components/Icons'
@@ -243,6 +245,12 @@ export default function Calendar() {
                     canSend={!!activePlan.data && week.end >= today && week.start <= addDays(today, 7)}
                   />
                 )}
+                {day.date === today && (
+                  <div data-anchor="today" className="stack-sm cal-today-extras">
+                    <WeatherSwapChips />
+                    <UpcomingAdjustments />
+                  </div>
+                )}
                 {!hidden && (
                   <DayRow
                     day={day}
@@ -337,13 +345,16 @@ function DayRow({
         <span className="cal-dom">{parseDate(day.date).getDate()}</span>
       </div>
       <div className="cal-items">
-        {day.items.length === 0 && <div className="card cal-card cal-rest">{day.rest ?? 'Rest'}</div>}
+        {day.items.length === 0 && (isToday
+          ? <div className="card cal-card cal-rest">{day.rest ?? 'Rest'}</div>
+          : <div className="cal-rest-line">{day.rest ?? 'Rest'}</div>)}
         {day.items.map((item) =>
           item.type === 'workout' ? (
             <WorkoutCard
               key={`w${item.workout.id}`}
               workout={item.workout}
               adjusted={item.workout.id === adjustedId}
+              compact={!isToday}
               onOpen={() => onWorkout(item.workout)}
               onGuide={() => onGuide(item.workout)}
             />
@@ -353,6 +364,7 @@ function DayRow({
             <ActivityCardView
               key={`a${item.activity.id}`}
               activity={item.activity}
+              compact={!isToday}
               onOpen={() => onActivity(item.activity)}
               onReview={() => onReview(item.activity)}
             />

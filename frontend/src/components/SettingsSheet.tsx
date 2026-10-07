@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { ApiError } from '../lib/auth'
@@ -7,8 +7,10 @@ import { errorText, invalidatePlanData } from '../lib/queries'
 import { installState, promptInstall, type InstallState } from '../lib/install'
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme'
 import { BottomSheet } from './BottomSheet'
+import { ChevronDown } from './Icons'
 import { DayPicker } from './DayPicker'
 import { Field } from './Field'
+import { WeatherSwapSetting } from './weather/WeatherSwapChip'
 import { GarminConnect } from './GarminConnect'
 import { HabitSettings } from './settings/HabitSettings'
 import { LocationSettings } from './settings/LocationSettings'
@@ -109,11 +111,26 @@ function MapPrivacy() {
   )
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+/**
+ * R14 §1: each settings group is collapsed to one row (title + what's inside) until
+ * tapped; all open while there are errors to show.
+ */
+// R14: only loads when the group is opened.
+const CustomiseToday = lazy(() => import('./settings/CustomiseToday').then((m) => ({ default: m.CustomiseToday })))
+
+function Section({ title, sub, children, forceOpen = false }: { title: string; sub?: string; children: ReactNode; forceOpen?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const shown = open || forceOpen
   return (
-    <section className="card settings-section">
-      <h3 className="card-title">{title}</h3>
-      {children}
+    <section className={`card settings-section settings-collapsible ${shown ? 'is-open' : ''}`}>
+      <button type="button" className="settings-section-head" aria-expanded={shown} onClick={() => setOpen(!open)}>
+        <span className="grow">
+          <span className="card-title block">{title}</span>
+          {sub && !shown && <span className="muted small block">{sub}</span>}
+        </span>
+        <ChevronDown size={20} className="disclosure-chev" />
+      </button>
+      {shown && <div className="settings-section-body">{children}</div>}
     </section>
   )
 }
@@ -150,6 +167,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
 
   if (!draft) return null
 
+  const hasErrors = Object.keys(errors).length > 0
   const dirty = !!athlete && JSON.stringify(draft) !== JSON.stringify(toDraft(athlete))
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
@@ -221,11 +239,11 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
       }
     >
       <div className="stack-lg">
-        <Section title="Garmin">
+        <Section title="Garmin" sub={athlete?.garmin_connected ? "Connected" : "Not connected"} forceOpen={hasErrors}>
           <GarminConnect />
         </Section>
 
-        <Section title="You">
+        <Section title="You" sub="Name, sex, birth date, height, timezone, heart rate" forceOpen={hasErrors}>
           <Field label="Name" error={errors.display_name}>
             <input value={draft.display_name} onChange={(e) => set('display_name', e.target.value)} />
           </Field>
@@ -256,7 +274,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           <p className="muted small">Weight and threshold pace live in Profile, with their history.</p>
         </Section>
 
-        <Section title="Training days">
+        <Section title="Training days" sub="Run days, long-run day, runs and strength per week" forceOpen={hasErrors}>
           <DayPicker
             value={draft.available_days}
             onChange={(next) => set('available_days', next)}
@@ -273,7 +291,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           <TrainingExtras draft={draft} set={set} suggested={athlete?.strength_per_week_suggested ?? 2} errors={errors} />
         </Section>
 
-        <Section title="Diet goal">
+        <Section title="Diet goal" sub="Lose, maintain or gain — and how fast" forceOpen={hasErrors}>
           <div className="segmented segmented-full" role="radiogroup" aria-label="Diet goal">
             {(['lose', 'maintain', 'gain'] as const).map((goal) => (
               <button
@@ -306,11 +324,11 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           )}
         </Section>
 
-        <Section title="Habits">
+        <Section title="Habits" sub="Smoking, alcohol, sugar, caffeine, private habit" forceOpen={hasErrors}>
           <HabitSettings draft={draft} set={set} errors={errors} />
         </Section>
 
-        <Section title="Location">
+        <Section title="Location" sub="For weather and the best time to run" forceOpen={hasErrors}>
           {athlete && <LocationSettings draft={draft} set={set} athlete={athlete} errors={errors} />}
         </Section>
 
@@ -319,11 +337,19 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           {busy ? 'Saving…' : saved ? 'Saved' : 'Save profile'}
         </button>
 
-        <Section title="Maps">
+        <Section title="Customise Today" sub="Choose and order the cards under the top card">
+          <Suspense fallback={null}><CustomiseToday /></Suspense>
+        </Section>
+
+        <Section title="Weather" sub="Weather-smart rescheduling">
+          <WeatherSwapSetting />
+        </Section>
+
+        <Section title="Maps" sub="Run map privacy" forceOpen={hasErrors}>
           <MapPrivacy />
         </Section>
 
-        <Section title="Appearance">
+        <Section title="Appearance" sub="System, light or dark" forceOpen={hasErrors}>
           <div className="segmented segmented-full" role="radiogroup" aria-label="Theme">
             {(['system', 'light', 'dark'] as const).map((pref) => (
               <button
@@ -340,7 +366,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           </div>
         </Section>
 
-        <Section title="App">
+        <Section title="App" sub="Install, log out" forceOpen={hasErrors}>
           {install.kind === 'installed' && <p className="muted small">Installed on this device.</p>}
           {install.kind === 'prompt-ready' && (
             <button
@@ -380,7 +406,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           </div>
         </Section>
 
-        <Section title="Delete account">
+        <Section title="Delete account" sub="Permanently remove your data" forceOpen={hasErrors}>
           <DeleteAccount
             onDeleted={() => {
               client.clear()

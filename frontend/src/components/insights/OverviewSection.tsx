@@ -10,7 +10,9 @@ import { TrainingStatusCard } from '../health/TrainingStatusCard'
 import { InjuryCard } from '../injury/InjuryCard'
 import { InfoButton } from '../health/InfoButton'
 import type { GlossaryKey } from '../health/glossary'
-import { ChevronRight, ReportIcon, ScatterIcon } from '../Icons'
+import { ActivityIcon, BandageIcon, ChevronRight, CoachIcon, HealthIcon, ReportIcon, RunIcon, ScatterIcon, SmokeIcon, SparkIcon, SunIcon } from '../Icons'
+import { Disclosure, Row, RowGroup, SheetRow } from '../Disclose'
+import { GoalChip } from '../goals/GoalChip'
 import { Arrow, Delta, MetricTile, TopicRing } from '../Kit'
 import { FitnessSheet } from '../profile/FitnessSheet'
 import { Sparkline } from '../Sparkline'
@@ -54,18 +56,37 @@ export function OverviewSection() {
       {data && (
         <div className={`stack ${insights.isPlaceholderData ? 'is-stale' : ''}`}>
           <SummaryHero data={data} freq={period.freq} />
+          <GoalChip />
           <Tiles data={data} freq={period.freq} onChart={setChart} />
-          <TrainingStatusCard period={chosen} />
           <WhatChanged data={data} period={period} />
-          <ForecastCard detailed />
-          <InjuryCard />
-          <FocusCard focus={data.focus ?? []} hasRuns={(data.running?.runs ?? 0) > 0} />
-          <LoadCard load={data.load} onOpen={() => setFitnessOpen(true)} />
-          <SummaryCard summary={data.summary} range={range} />
-          <ProgressTeaser />
-          <HabitsTeaser />
-          <LinkRow to="/health/reports" icon={<ReportIcon />} title="Weekly reports" text="Every Monday: last week’s runs, recovery and habits in one card" />
-          <LinkRow to="/health/compare" icon={<ScatterIcon />} title="Compare any two" text="Sleep vs easy-run HR, drinks vs HRV — does one move with the other?" />
+          {/* R14 §1: everything else one tap away — same cards, in sheets or their sections. */}
+          <RowGroup title="More for this period">
+            <SheetRow icon={<ActivityIcon size={20} />} title="Training status" sub="Productive, maintaining or overreaching — and why">
+              <TrainingStatusCard period={chosen} />
+            </SheetRow>
+            <SheetRow icon={<SunIcon size={20} />} title="Tomorrow’s readiness" sub="An estimate, and what could raise it">
+              <ForecastCard detailed />
+            </SheetRow>
+            <SheetRow icon={<SparkIcon size={20} />} title="Focus next" sub={data.focus?.[0]?.title ?? 'The one thing to work on'}>
+              <FocusCard focus={data.focus ?? []} hasRuns={(data.running?.runs ?? 0) > 0} />
+            </SheetRow>
+            <SheetRow icon={<RunIcon size={20} />} title="Training load" sub={data.load?.status ? data.load.status.replace(/_/g, ' ') : 'Fitness, fatigue and form'}>
+              <LoadCard load={data.load} onOpen={() => setFitnessOpen(true)} />
+            </SheetRow>
+            <SheetRow icon={<BandageIcon size={20} />} title="Injury watch" sub="Load ramp, pain and form flags">
+              <InjuryCard />
+            </SheetRow>
+            <SheetRow icon={<CoachIcon size={20} />} title="Are you running well?" sub="The coach’s overview in plain words">
+              <SummaryCard summary={data.summary} range={range} />
+            </SheetRow>
+          </RowGroup>
+          <RowGroup title="Sections">
+            <ProgressTeaser row icon={<RunIcon size={20} />} />
+            <HabitsTeaser row icon={<SmokeIcon size={20} />} />
+            <Row to="/health/heart" icon={<HealthIcon size={20} />} title="Heart" sub="How your heart is adapting, day by day" />
+            <Row to="/health/reports" icon={<ReportIcon size={20} />} title="Weekly reports" sub="Every Monday: runs, recovery and habits" />
+            <Row to="/health/compare" icon={<ScatterIcon size={20} />} title="Compare any two" sub="Does one move with the other?" />
+          </RowGroup>
         </div>
       )}
 
@@ -160,36 +181,45 @@ function Tiles({ data, freq, onChart }: { data: Insights; freq: Freq; onChart: (
   ]
   const shown = defs.filter((d) => d.value != null)
   if (!shown.length) return null
+  const tile = (d: Def) => {
+    const cfg = CHARTS[d.key]
+    const vals = values(data, d.key, freq)
+    const t = trendOf(vals, cfg.better)
+    const color = `var(--${cfg.topic ?? 'run'})`
+    const gk: GlossaryKey = d.key === 'respiration' ? 'breathing_rate' : d.key
+    const band = cfg.band?.(data)
+    const normal = d.key === 'hrv' && band ? `${cfg.format(band.low)}–${cfg.format(band.high)} ms (your baseline)`
+      : t ? `${cfg.format(t.avg)}${d.unit && d.unit !== 'avg' ? ` ${d.unit}` : ''} on average this period` : undefined
+    return (
+      <MetricTile
+        key={d.key}
+        label={d.label}
+        value={d.value}
+        unit={d.unit}
+        info={<InfoButton k={gk} normal={normal} />}
+        onClick={() => onChart(d.key)}
+        chip={t ? <Delta value={t.tone === 'flat' ? 0 : t.delta} better={cfg.better} format={cfg.delta ?? cfg.format} steadyText="0" /> : undefined}
+      >
+        {d.bars && vals.length >= 2 ? (
+          <MiniBars values={vals.slice(-7)} color={color} />
+        ) : vals.length >= 2 ? (
+          <Sparkline values={cfg.reversed ? vals.map((x) => -x) : vals} height={36} color={color} />
+        ) : null}
+      </MetricTile>
+    )
+  }
+  // R14 §1: four key tiles; the rest behind "All metrics".
+  const key = shown.slice(0, 4)
+  const rest = shown.slice(4)
   return (
-    <div className="mt-grid">
-      {shown.map((d) => {
-        const cfg = CHARTS[d.key]
-        const vals = values(data, d.key, freq)
-        const t = trendOf(vals, cfg.better)
-        const color = `var(--${cfg.topic ?? 'run'})`
-        const gk: GlossaryKey = d.key === 'respiration' ? 'breathing_rate' : d.key
-        const band = cfg.band?.(data)
-        const normal = d.key === 'hrv' && band ? `${cfg.format(band.low)}–${cfg.format(band.high)} ms (your baseline)`
-          : t ? `${cfg.format(t.avg)}${d.unit && d.unit !== 'avg' ? ` ${d.unit}` : ''} on average this period` : undefined
-        return (
-          <MetricTile
-            key={d.key}
-            label={d.label}
-            value={d.value}
-            unit={d.unit}
-            info={<InfoButton k={gk} normal={normal} />}
-            onClick={() => onChart(d.key)}
-            chip={t ? <Delta value={t.tone === 'flat' ? 0 : t.delta} better={cfg.better} format={cfg.delta ?? cfg.format} steadyText="0" /> : undefined}
-          >
-            {d.bars && vals.length >= 2 ? (
-              <MiniBars values={vals.slice(-7)} color={color} />
-            ) : vals.length >= 2 ? (
-              <Sparkline values={cfg.reversed ? vals.map((x) => -x) : vals} height={36} color={color} />
-            ) : null}
-          </MetricTile>
-        )
-      })}
-    </div>
+    <>
+      <div className="mt-grid">{key.map(tile)}</div>
+      {rest.length > 0 && (
+        <Disclosure id="overview-metrics" title="All metrics" sub={rest.map((d) => d.label).join(' · ')}>
+          <div className="mt-grid">{rest.map(tile)}</div>
+        </Disclosure>
+      )}
+    </>
   )
 }
 
@@ -207,6 +237,7 @@ export function MiniBars({ values, color }: { values: number[]; color: string })
 
 /** "HRV averaged 45 ms, up from 41 ms" — the later half of the range vs the earlier half. */
 function WhatChanged({ data, period }: { data: Insights; period: Period }) {
+  const [all, setAll] = useState(false)
   const rows: Array<{ tone: string; text: string }> = []
   const add = (key: ChartKey, name: string, fmt: (v: number) => string, unit: string, flat: number) => {
     const h = halves(values(data, key))
@@ -231,7 +262,12 @@ function WhatChanged({ data, period }: { data: Insights; period: Period }) {
   return (
     <section className="card">
       <h2 className="kit-title" style={{ marginBottom: 10 }}>What changed in this period</h2>
-      <Bullets items={rows} />
+      <Bullets items={all ? rows : rows.slice(0, 3)} />
+      {rows.length > 3 && (
+        <button type="button" className="see-details" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? 'Show fewer' : `${rows.length - 3} more`} <ChevronRight size={16} />
+        </button>
+      )}
       <p className="chart-caption" style={{ marginTop: 8 }}>{periodCaption(period, { compare: false, freq: false })} · second half vs first half.</p>
     </section>
   )

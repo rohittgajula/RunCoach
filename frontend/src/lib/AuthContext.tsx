@@ -7,6 +7,10 @@ import { api, json, restoreSession, setAccessToken, type Athlete, type Session }
 type AuthValue = {
   athlete: Athlete | null
   username: string | null
+  /** R14 §14: staff see the admin panel. Read from the session; false when absent. */
+  isStaff: boolean
+  /** True while a staff check is still running (old session payloads only). */
+  staffPending: boolean
   loading: boolean
   login: (username: string, password: string) => Promise<void>
   register: (input: RegisterInput) => Promise<void>
@@ -29,12 +33,21 @@ const AuthContext = createContext<AuthValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [athlete, setAthlete] = useState<Athlete | null>(null)
   const [username, setUsername] = useState<string | null>(null)
+  const [staff, setIsStaff] = useState<boolean | null>(false)
   const [loading, setLoading] = useState(true)
 
   const adopt = useCallback((session: Session) => {
     if (session.access) setAccessToken(session.access)
     setAthlete(session.athlete)
     setUsername(session.user.username)
+    const flag = session.user.is_staff ?? session.is_staff
+    if (flag !== undefined) {
+      setIsStaff(!!flag)
+      return
+    }
+    // Older session payloads don't say: one staff-only read decides (403 → not staff).
+    setIsStaff(null)
+    api('/admin/ai/providers/').then(() => setIsStaff(true), () => setIsStaff(false))
   }, [])
 
   // The access token does not survive a reload; the refresh cookie does. Trade it
@@ -61,6 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       athlete,
       username,
+      isStaff: staff === true,
+      staffPending: staff === null,
       loading,
       async login(user, password) {
         adopt(await api<Session>('/auth/login/', { method: 'POST', ...json({ username: user, password }) }))
@@ -77,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAccessToken(null)
           setAthlete(null)
           setUsername(null)
+          setIsStaff(false)
         }
       },
       async deleteAccount(password) {
@@ -86,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAccessToken(null)
         setAthlete(null)
         setUsername(null)
+        setIsStaff(false)
       },
       async updateAthlete(patch) {
         const updated = await api<Athlete>('/athlete/', { method: 'PATCH', ...json(patch) })
@@ -93,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return updated
       },
     }),
-    [athlete, username, loading, adopt],
+    [athlete, username, staff, loading, adopt],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

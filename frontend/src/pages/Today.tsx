@@ -1,23 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { EveningWakeCard } from '../components/alarm/AlarmCards'
 import { UpcomingAdjustments } from '../components/adjust/UpcomingAdjustments'
-import { BriefingCard } from '../components/briefing/BriefingCard'
 import { TodayInjury } from '../components/injury/DailyPainCheck'
 import { RecentReviewCard } from '../components/review/RunReview'
 import { PendingCheckins } from '../components/checkin/PendingCheckins'
-import { TodayCard } from '../components/checkin/TodayCard'
 import { QuickLogRow } from '../components/habits/QuickLogRow'
 import { ChipButton } from '../components/ChipButton'
+import { ExperimentChip } from '../components/experiments/ExperimentChip'
 import { RefreshIcon } from '../components/Icons'
 import { AvatarButton } from '../components/Kit'
+import { MoodCard } from '../components/mood/MoodCard'
 import { ErrorState } from '../components/States'
 import { ForecastCard } from '../components/today/ForecastCard'
 import { FuelToday } from '../components/today/FuelToday'
+import { TodayHero } from '../components/today/TodayHero'
+import { resolveLayout, type TodayCardKey } from '../components/today/todayLayout'
 import { TodaySoFar } from '../components/today/TodaySoFar'
 import { ThisWeek } from '../components/today/ThisWeek'
-import { TodayWorkout } from '../components/today/TodayWorkout'
-import { WeatherCard } from '../components/today/WeatherCard'
+import { WeatherTile } from '../components/today/WeatherCard'
 import { WeeklyReportCard } from '../components/today/WeeklyReportCard'
+import { WeatherSwapChips } from '../components/weather/WeatherSwapChip'
 import { useAuth } from '../lib/AuthContext'
 import { parseDate, todayISO } from '../lib/format'
 import { preloadTabs } from '../lib/preload'
@@ -39,7 +41,12 @@ function SmokeFree() {
   return <>{days} {days === 1 ? 'day' : 'days'} smoke-free</>
 }
 
-/** Today: greeting, readiness + check-in, today's run, weather, log, fuel, week, tomorrow. */
+/**
+ * R14 §1 Today: one hero card (readiness + today's session + focus), then the cards the
+ * athlete chose in Me → Settings → Customise Today (`today_layout`), in their order.
+ * Contextual cards (check-ins, review, mood, injury, weather swap, experiment) render
+ * only when there is something to act on.
+ */
 export default function Today() {
   const { athlete } = useAuth()
   const today = todayISO()
@@ -49,6 +56,7 @@ export default function Today() {
   const day = week.data?.days.find((d) => d.date === today)
   const name = (athlete?.display_name || '').split(' ')[0]
   const dateLabel = parseDate(today).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
+  const layout = resolveLayout(athlete?.today_layout)
 
   useEffect(() => { preloadTabs() }, [])
 
@@ -64,6 +72,28 @@ export default function Today() {
       onError: (e) => setToast(errorText(e, 'Sync failed')),
     })
 
+  const cards: Record<TodayCardKey, ReactNode> = {
+    weather_swap: <WeatherSwapChips />,
+    experiment: <ExperimentChip />,
+    checkins: <PendingCheckins />,
+    injury: <TodayInjury />,
+    review: <RecentReviewCard />,
+    mood: <MoodCard untilAnswered />,
+    weather: <WeatherTile />,
+    log: (
+      <section className="card">
+        <QuickLogRow label="Log now" aside={<SmokeFree />} />
+      </section>
+    ),
+    fuel: <FuelToday />,
+    wake: <EveningWakeCard />,
+    so_far: <TodaySoFar />,
+    this_week: <ThisWeek week={week.data} />,
+    tomorrow: <ForecastCard />,
+    adjustments: <UpcomingAdjustments />,
+    weekly_report: <WeeklyReportCard />,
+  }
+
   return (
     <div className="page today-page">
       <header className="today-header">
@@ -78,26 +108,16 @@ export default function Today() {
       </header>
       {toast && <div className="toast" role="status">{toast}</div>}
 
-      <BriefingCard />
-      <PendingCheckins />
-      <RecentReviewCard />
-      <WeeklyReportCard />
-      <TodayCard />
-      <TodayInjury />
       {week.isError && !week.data && (
         <ErrorState message={errorText(week.error, 'Today’s plan did not load.')} onRetry={() => week.refetch()} />
       )}
-      <TodayWorkout day={day} loading={week.isPending} />
-      <UpcomingAdjustments />
-      <EveningWakeCard />
-      <TodaySoFar />
-      <WeatherCard />
-      <section className="card">
-        <QuickLogRow label="Log now" aside={<SmokeFree />} />
-      </section>
-      <FuelToday />
-      <ThisWeek week={week.data} />
-      <ForecastCard />
+      <TodayHero day={day} loading={week.isPending} />
+      {layout.map((key) => <TodaySlot key={key}>{cards[key]}</TodaySlot>)}
     </div>
   )
+}
+
+/** Keeps keys stable while each card decides for itself whether to render. */
+function TodaySlot({ children }: { children: ReactNode }) {
+  return <>{children}</>
 }

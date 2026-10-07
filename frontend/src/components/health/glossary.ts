@@ -267,6 +267,49 @@ export const GLOSSARY = {
     why: 'A big drift means the run got harder than planned — heat, dehydration or starting too fast.',
     better: 'Lower is better. Under 5 % is a well-paced easy run.',
   },
+  // R14 §9 heart adaptation
+  heart_ref_pace: {
+    title: 'Heart rate at your easy pace',
+    what: 'Your heart rate on the steady running parts of a run, when you were close to your usual easy pace (warm-up left out).',
+    why: 'As your heart gets fitter it pumps more blood per beat, so the same pace needs fewer beats.',
+    better: 'Lower is better. A drop of a few bpm over weeks is real progress.',
+  },
+  heart_ref_hr: {
+    title: 'Pace at your reference heart rate',
+    what: 'How fast you run when your heart rate sits around your reference number (for example 150 bpm ±3).',
+    why: 'The same effort taking you further shows your aerobic engine growing.',
+    better: 'Faster (fewer minutes per km) is better.',
+  },
+  heart_under_cap: {
+    title: 'Longest run under your cap',
+    what: 'The longest stretch you kept running without your heart rate going over your cap (for example 150 bpm).',
+    why: 'It shows how long you can run easy before needing a walk — the thing run/walk plans build.',
+    better: 'Longer is better.',
+  },
+  heart_recovery: {
+    title: 'Heart-rate recovery',
+    what: 'How many beats your heart rate drops in the 60 seconds after a run block ends and you walk.',
+    why: 'A fitter heart settles faster after effort.',
+    better: 'A bigger drop is better.',
+  },
+  heart_decoupling: {
+    title: 'Aerobic decoupling (HR drift)',
+    what: 'How much your heart rate rises in the second half of a steady run compared with the first half, at the same pace.',
+    why: 'Little drift means your aerobic base can hold that pace comfortably.',
+    better: 'Lower is better. Under 5 % is a good aerobic base.',
+  },
+  heart_efficiency: {
+    title: 'Efficiency',
+    what: 'Speed divided by heart rate on steady running — metres per minute for each heartbeat per minute.',
+    why: 'One number that rises when you run faster for the same heart rate, or the same pace with a lower one.',
+    better: 'Higher is better.',
+  },
+  heart_hot: {
+    title: 'Hot runs',
+    what: 'Runs where it felt like 28 °C or more at the time you ran (from the weather history).',
+    why: 'Heat alone pushes heart rate up 5–10 bpm, so hot runs can hide real progress.',
+    better: 'Hide them to see the trend underneath; compare them over weeks to see heat adaptation.',
+  },
 } satisfies Record<string, GlossaryEntry>
 
 export type GlossaryKey = keyof typeof GLOSSARY

@@ -23,8 +23,33 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 /** Planned workout card (calendar). */
 export function WorkoutCard({
-  workout, onOpen, onGuide, adjusted = false,
-}: { workout: Workout; onOpen: () => void; onGuide: () => void; adjusted?: boolean }) {
+  workout, onOpen, onGuide, adjusted = false, compact = false,
+}: { workout: Workout; onOpen: () => void; onGuide: () => void; adjusted?: boolean; compact?: boolean }) {
+  const isAdjusted = (adjusted || workout.adjusted_by === 'checkin' || workout.adjusted_by === 'auto') && workout.status === 'planned'
+  // R14 §1: every day but today is one row + a slim step bar; Guide, load and the
+  // adjustment reason are in the sheet (tap).
+  if (compact) {
+    return (
+      <article
+        className={`card cal-card is-compact is-tappable ${workout.status === 'skipped' ? 'is-skipped' : ''}`}
+        onClick={onOpen}
+        role="button"
+        tabIndex={0}
+        aria-label={`${workout.title}, ${dur(workout.duration_s)}${workout.status === 'completed' ? ', done' : workout.status === 'skipped' ? ', skipped' : ''}`}
+        onKeyDown={(e) => e.key === 'Enter' && onOpen()}
+      >
+        <div className="cal-compact-row">
+          <RunIcon size={18} />
+          <span className="cal-compact-title">{workout.title}</span>
+          {workout.status === 'completed' && <span className="tag tag-ok"><CheckIcon size={14} /> Done</span>}
+          {workout.status === 'skipped' && <span className="tag">Skipped</span>}
+          {isAdjusted && <span className="tag tag-adjusted">Adjusted</span>}
+          <span className="cal-compact-meta">{dur(workout.duration_s)}</span>
+        </div>
+        <WorkoutBar steps={workout.steps} height={16} compact />
+      </article>
+    )
+  }
   return (
     <article
       className={`card cal-card is-tappable ${workout.status === 'skipped' ? 'is-skipped' : ''}`}
@@ -42,7 +67,7 @@ export function WorkoutCard({
           </span>
         )}
         {workout.status === 'skipped' && <span className="tag">Skipped</span>}
-        {(adjusted || workout.adjusted_by === 'checkin' || workout.adjusted_by === 'auto') && workout.status === 'planned' && <span className="tag tag-adjusted">Adjusted</span>}
+        {isAdjusted && <span className="tag tag-adjusted">Adjusted</span>}
       </header>
       <WorkoutBar steps={workout.steps} />
       <p className="cal-card-title">{workout.title}</p>
@@ -68,8 +93,20 @@ export function WorkoutCard({
 
 /** Synced activity card (calendar). */
 export function ActivityCardView({
-  activity, onOpen, onReview,
-}: { activity: ActivityCard; onOpen: () => void; onReview: () => void }) {
+  activity, onOpen, onReview, compact = false,
+}: { activity: ActivityCard; onOpen: () => void; onReview: () => void; compact?: boolean }) {
+  if (compact) {
+    return (
+      <article className="card cal-card is-compact is-tappable" onClick={onOpen} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
+        <div className="cal-compact-row">
+          <SportIcon sport={activity.sport} size={18} />
+          <span className="cal-compact-title">{activity.name || activity.sport}</span>
+          {activity.unplanned && <span className="tag tag-extra" title="Not in the plan — still counts">Extra</span>}
+          <span className="cal-compact-meta">{[activity.distance_m ? km(activity.distance_m) : null, dur(activity.duration_s)].filter(Boolean).join(' · ')}</span>
+        </div>
+      </article>
+    )
+  }
   return (
     <article className="card cal-card is-tappable" onClick={onOpen} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
       <header className="cal-card-head">

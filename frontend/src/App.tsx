@@ -13,6 +13,9 @@ const ChatIndex = lazy(() => import('./pages/Chat').then((m) => ({ default: m.Ch
 const Diet = lazy(() => import('./pages/Diet'))
 const Health = lazy(() => import('./pages/Insights'))
 const Me = lazy(() => import('./pages/Me'))
+// R14: weather report and the staff-only admin panel, each its own chunk.
+const Weather = lazy(() => import('./pages/Weather'))
+const AdminPanel = lazy(() => import('./pages/AdminPanel'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Login = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Login })))
 const Register = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Register })))
@@ -33,6 +36,14 @@ function RequireAuth({ children }: { children: ReactNode }) {
   if (!athlete.onboarding_complete && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />
   }
+  return <>{children}</>
+}
+
+/** R14 §14: the admin panel exists only for staff; everyone else lands on Today. */
+function StaffOnly({ children }: { children: ReactNode }) {
+  const { isStaff, staffPending } = useAuth()
+  if (staffPending) return pageFallback
+  if (!isStaff) return <Navigate to="/today" replace />
   return <>{children}</>
 }
 
@@ -64,6 +75,8 @@ export default function App() {
                 <Route path="/diet" element={<Diet />} />
                 <Route path="/health/*" element={<Health />} />
                 <Route path="/me/*" element={<Me />} />
+                <Route path="/weather" element={<Weather />} />
+                <Route path="/admin-panel/*" element={<StaffOnly><AdminPanel /></StaffOnly>} />
                 {/* Pre-R10 routes. */}
                 <Route path="/calendar" element={<Navigate to="/plan" replace />} />
                 <Route path="/insights" element={<OldInsights />} />

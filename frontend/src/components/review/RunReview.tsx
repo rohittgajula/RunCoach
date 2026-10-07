@@ -133,7 +133,7 @@ export function RecentReviewCard() {
           {r.next_time[0] && <p className="small"><b>Next time:</b> {r.next_time[0]}</p>}
         </>
       )}
-      <button type="button" className="btn btn-secondary btn-block" onClick={() => setOpen(!open)}>
+      <button type="button" className="see-details" aria-expanded={open} onClick={() => setOpen(!open)}>
         {open ? 'Show less' : 'See the full review'}
       </button>
     </section>

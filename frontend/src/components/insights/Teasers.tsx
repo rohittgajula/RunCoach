@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { Row } from '../Disclose'
 import { ApiError } from '../../lib/auth'
 import { useHabitSummary, useHabitsToday, useProgress } from '../../lib/queries'
 import type { ProgressMetric } from '../../lib/types'
@@ -7,7 +9,8 @@ import { ChevronRight } from '../Icons'
 
 const notDeployed = (error: unknown) => error instanceof ApiError && error.status === 404
 
-function Teaser({ to, title, text }: { to: string; title: string; text: string }) {
+function Teaser({ to, title, text, row, icon }: { to: string; title: string; text: string; row?: boolean; icon?: ReactNode }) {
+  if (row) return <Row to={to} title={title} sub={text} icon={icon} />
   return (
     <Link to={to} className="card teaser">
       <div className="grow">
@@ -30,7 +33,7 @@ const hrChange = (m: ProgressMetric | undefined) => {
 }
 
 /** "Last 5 runs: pace 6 s/km faster · HR −3 bpm ›" */
-export function ProgressTeaser() {
+export function ProgressTeaser({ row = false, icon }: { row?: boolean; icon?: ReactNode }) {
   const progress = useProgress({ window: 5 })
   if (progress.isError && notDeployed(progress.error)) return null
   const metrics = progress.data?.metrics ?? []
@@ -44,11 +47,11 @@ export function ProgressTeaser() {
       : runs
         ? 'Last 5 runs: about the same as the 5 before'
         : 'Compare your recent runs with the ones before'
-  return <Teaser to="/health/progress" title="Progress" text={text} />
+  return <Teaser to="/health/progress" title="Progress" text={text} row={row} icon={icon} />
 }
 
 /** Smoke-free streak or today's counts (never 🌙). */
-export function HabitsTeaser() {
+export function HabitsTeaser({ row = false, icon }: { row?: boolean; icon?: ReactNode }) {
   const today = useHabitsToday()
   const summary = useHabitSummary('4w')
   if (today.isError && notDeployed(today.error)) return null
@@ -61,5 +64,5 @@ export function HabitsTeaser() {
   }
   if (logged.length) parts.push(`Today ${logged.map((h) => `${h.emoji} ${counts?.[h.kind]}`).join(' · ')}`)
   const text = parts.length ? parts.join(' · ') : 'Health report, trends and how habits affect your runs'
-  return <Teaser to="/health/habits" title="Habits" text={text} />
+  return <Teaser to="/health/habits" title="Habits" text={text} row={row} icon={icon} />
 }

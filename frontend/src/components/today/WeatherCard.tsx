@@ -1,4 +1,6 @@
+import { Link } from 'react-router-dom'
 import { useWeatherToday } from '../../lib/queries'
+import { ChevronRight } from '../Icons'
 import type { WeatherHour } from '../../lib/types'
 import { SunIcon } from '../Icons'
 import { Pill } from '../Kit'
@@ -94,5 +96,33 @@ export function WeatherCard() {
       {warn.map((a, i) => <p key={i} className={`weather-advice is-${levelTone(a.level)}`}>{a.text}</p>)}
       {h?.after_note && !warn.length && <p className="muted small">{h.after_note}</p>}
     </section>
+  )
+}
+
+/**
+ * R14 §1/§3: the compact weather tile on Today — temperature, AQI and the best time to
+ * run. Tap → the full Weather page (hourly lanes, 7 days, hydration, advice).
+ */
+export function WeatherTile() {
+  const weather = useWeatherToday()
+  const w = weather.data
+  if (!w || !w.now) return null
+  const aqi = aqiTone(w.now.aqi)
+  const heat = w.heat && w.heat !== 'none' ? w.heat.replace(/_/g, ' ') : null
+  const bestEnd = w.best_window ? hourOf(w.best_window.end) : null
+  const passed = bestEnd != null && bestEnd <= new Date().getHours()
+  return (
+    <Link to="/weather" className="card weather-tile" aria-label="Weather — open the full forecast">
+      <SunIcon size={28} className="weather-icon" />
+      <span className="grow">
+        <span className="weather-temp block">{deg(w.now.temp)} <small>feels {deg(w.now.feels_like)}</small></span>
+        <span className="lbl block">
+          {[w.location_name, w.now.aqi != null ? `AQI ${Math.round(w.now.aqi)}${aqi.tone === 'ok' ? '' : ` · ${aqi.word}`}` : null].filter(Boolean).join(' · ')}
+        </span>
+        {w.best_window && !passed && <span className="weather-tile-best block">Best to run {clock(w.best_window.start)}–{clock(w.best_window.end)}</span>}
+      </span>
+      {heat && <Pill topic="fuel">{heat[0].toUpperCase() + heat.slice(1)}</Pill>}
+      <ChevronRight size={18} className="muted" />
+    </Link>
   )
 }

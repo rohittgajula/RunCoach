@@ -39,6 +39,23 @@ export function BriefingCard() {
   )
 }
 
+/** R14: the briefing's full content, inside Today's "See details" sheet. */
+export function BriefingDetails() {
+  const q = useBriefing()
+  const b = q.data
+  if (!b || !b.ready) return null
+  return (
+    <section className="card briefing" aria-label="Morning briefing">
+      <span className="lbl">Morning briefing{b.wake_time ? ` · ${b.wake_time}` : ''}</span>
+      <BriefingBody b={b} />
+      <BriefingAi b={b} />
+      <Link to="/me/reminders" className="briefing-remind small">
+        <BellIcon size={16} /> Get this as a notification at wake-up
+      </Link>
+    </section>
+  )
+}
+
 function BriefingBody({ b }: { b: Briefing }) {
   const s = b.session
   const w = b.weather
