@@ -58,7 +58,9 @@ newest=$(sed -n '/^daily:/,/^weekly:/p' "$WORK/listing.txt" | grep '^runcoach-' 
 oldest_daily=$(sed -n '/^daily:/,/^weekly:/p' "$WORK/listing.txt" | grep '^runcoach-' | head -n1)
 echo "daily objects: $daily (want 14), weekly objects: $weekly (want 8)"
 echo "daily window: $oldest_daily .. $newest"
-[ "$daily" -eq 14 ] && [ "$weekly" -eq 8 ] || { cat "$WORK/listing.txt"; exit 1; }
+if [ "$daily" -ne 14 ] || [ "$weekly" -ne 8 ]; then
+  cat "$WORK/listing.txt"; exit 1
+fi
 
 # Every weekly object is a Sunday (UTC) dump.
 # shellcheck disable=SC2013  # object names contain no spaces
