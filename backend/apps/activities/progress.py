@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+from dataclasses import dataclass
 
 from django.core.cache import cache
 
@@ -48,13 +49,15 @@ def _easy_hr(activity, low_pace: float, high_pace: float) -> float | None:
     return sum(s.hr_avg * s.duration_s for s in blocks) / seconds
 
 
-def run_dicts(athlete, sport: str = "running") -> list[dict]:
-    since = athlete.local_today - dt.timedelta(days=HISTORY_DAYS)
+def run_dicts(athlete, sport: str = "running", since: dt.date | None = None,
+              until: dt.date | None = None, limit: int = MAX_RUNS) -> list[dict]:
+    since = since or athlete.local_today - dt.timedelta(days=HISTORY_DAYS)
     word = "run" if sport == "running" else sport
-    acts = list(Activity.objects.filter(athlete=athlete, sport__icontains=word,
-                                        local_date__gte=since)
-                .select_related("metrics").prefetch_related("segments")
-                .order_by("-started_at")[:MAX_RUNS])
+    qs = Activity.objects.filter(athlete=athlete, sport__icontains=word, local_date__gte=since)
+    if until is not None:
+        qs = qs.filter(local_date__lte=until)
+    acts = list(qs.select_related("metrics").prefetch_related("segments")
+                .order_by("-started_at")[:limit])
     acts.reverse()
     low, high = athlete.easy_pace_min - 15, athlete.easy_pace_max + 30
     runs = []
@@ -79,19 +82,63 @@ def run_dicts(athlete, sport: str = "running") -> list[dict]:
     return runs
 
 
-def progress_payload(athlete, window: int, sport: str = "running") -> dict:
+MAX_RUNS_DATES = 600
+MAX_RANGE_DAYS = 730
+
+
+@dataclass(frozen=True)
+class DateRange:
+    """R9 §D: [start, end] against [compare_start, compare_end] (default: the
+    same-length period just before)."""
+    start: dt.date
+    end: dt.date
+    compare_start: dt.date
+    compare_end: dt.date
+
+    @classmethod
+    def build(cls, start, end, compare_start=None, compare_end=None) -> "DateRange":
+        if compare_start is None:
+            length = (end - start).days + 1
+            compare_end = start - dt.timedelta(days=1)
+            compare_start = start - dt.timedelta(days=length)
+        return cls(start, end, compare_start, compare_end)
+
+    @property
+    def key(self) -> str:
+        """The review cache key for this comparison."""
+        return (f"dates:{self.start.isoformat()}:{self.end.isoformat()}:"
+                f"{self.compare_start.isoformat()}:{self.compare_end.isoformat()}")
+
+
+def review_key(window: int | None, dates: DateRange | None):
+    return dates.key if dates is not None else window
+
+
+def progress_payload(athlete, window: int | None, sport: str = "running",
+                     dates: DateRange | None = None) -> dict:
     from .progress_ai import review_state
 
-    body = maths.progress(run_dicts(athlete, sport), window)
+    if dates is None:
+        body = maths.progress(run_dicts(athlete, sport), window)
+    else:
+        # Reach back a year before the earlier side too, so "new best" means a best
+        # against the history before the period, as in window mode.
+        since = min(dates.start, dates.compare_start) - dt.timedelta(days=HISTORY_DAYS)
+        runs = run_dicts(athlete, sport, since=since, until=max(dates.end, dates.compare_end),
+                         limit=MAX_RUNS_DATES)
+        body = maths.progress_dates(runs, dates.start.isoformat(), dates.end.isoformat(),
+                                    dates.compare_start.isoformat(),
+                                    dates.compare_end.isoformat())
     body["sport"] = sport
     body["today"] = athlete.local_today
-    body["review"] = review_state(athlete, window)
+    body["review"] = review_state(athlete, review_key(window, dates))
     return body
 
 
 def ai_payload(body: dict) -> dict:
     """The comparison without the per-run series: aggregates only."""
     return {"window": body["window"], "today": str(body["today"]),
+            "period": body.get("period"), "highlights": body.get("highlights"),
             "current_n": body["current_n"], "previous_n": body["previous_n"],
             "metrics": body["metrics"], "bests": body["bests"], "focus": body["focus"],
             "distance_buckets": [b for b in body["distance_buckets"] if b["current_n"]]}

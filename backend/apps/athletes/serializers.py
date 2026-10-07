@@ -36,9 +36,10 @@ class AthleteSerializer(serializers.ModelSerializer):
     def validate_daily_limits(self, value):
         if value in (None, ""):
             return {}
-        if not isinstance(value, dict) or not set(value) <= {"smoke", "alcohol", "sugar"}:
+        if not isinstance(value, dict) or not set(value) <= {"smoke", "alcohol", "sugar",
+                                                             "private"}:
             raise serializers.ValidationError(
-                "Must be an object with optional keys smoke, alcohol, sugar.")
+                "Must be an object with optional keys smoke, alcohol, sugar, private.")
         for key, limit in value.items():
             if limit is not None and (not isinstance(limit, (int, float)) or
                                       isinstance(limit, bool) or not 0 <= limit <= 100):
@@ -93,6 +94,8 @@ class AthleteSerializer(serializers.ModelSerializer):
             "runs_per_week", "runs_per_week_recommended", "runs_per_week_effective",
             "smoke_goal", "smoke_quit_date", "smoke_baseline_per_day", "cigarette_price",
             "alcohol_goal", "sugar_goal", "daily_limits",
+            # R9
+            "private_habit_enabled", "private_on_today", "private_goal",
             "location_lat", "location_lon", "location_name", "location_source",
             "location_city",
         ]

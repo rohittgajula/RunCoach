@@ -10,9 +10,12 @@ import json
 
 from apps.coaching.models import AIAnalysis
 
+from .services import KINDS, PREVIOUS_LABELS
+
 HABITS_USER = """This athlete tracks habits (cigarettes, standard drinks, sugar \
 servings) next to their running. Everything below was calculated in Python; impact rows \
-compare the morning after a day with the habit against the morning after a day without.
+compare the morning after a day with the habit against the morning after a day without, \
+and `report` compares this range with the same-length range before it.
 
 {payload}
 
@@ -29,8 +32,23 @@ def rupees(value) -> str | None:
     return f"₹{value:,.0f}" if float(value).is_integer() or value >= 100 else f"₹{value:,.2f}"
 
 
+def ai_report(report: dict | None, range_key: str) -> dict | None:
+    """The health report without the private habit (R9 §B): its card is dropped and the
+    overall verdict is recomputed from the remaining habits, so not even a habit count
+    hints that it exists."""
+    if not report:
+        return None
+    from analysis import habits as maths
+
+    habits = [h for h in report["habits"] if h["habit"] in KINDS]
+    label = PREVIOUS_LABELS.get(range_key, "the previous period")
+    return {"overall": maths.overall(habits, report["garmin"], label),
+            "garmin": report["garmin"], "habits": habits}
+
+
 def ai_payload(payload: dict) -> dict:
-    """Aggregates only: drop the per-day series and the stored summary."""
+    """Aggregates only: drop the per-day series and the stored summary. The private
+    habit (R9 §B) never appears: no block, goal, impact row or report card."""
     def strip(block):
         return {k: v for k, v in (block or {}).items() if k != "series"}
 
@@ -42,7 +60,7 @@ def ai_payload(payload: dict) -> dict:
         smoke["since_quit"] = quit_
     return {
         "range": payload["range"], "today": str(payload["today"]),
-        "goals": payload.get("goals"),
+        "goals": {k: v for k, v in (payload.get("goals") or {}).items() if k in KINDS},
         "goal_meanings": {"quit": "stopping completely", "reduce": "cutting down",
                           "none": "no goal set — do not judge this habit against a goal"},
         "units": {"money": "INR (₹)", "alcohol":
@@ -51,8 +69,10 @@ def ai_payload(payload: dict) -> dict:
         "alcohol": strip(payload["alcohol"]), "sugar": strip(payload["sugar"]),
         "impact": [{k: r[k] for k in ("habit", "metric", "dose", "with_avg", "without_avg",
                                       "diff", "n_with", "n_without", "direction",
-                                      "enough_data")} for r in payload["impact"]],
+                                      "enough_data")} for r in payload["impact"]
+                   if r["habit"] in KINDS],
         "weekly": payload["weekly"],
+        "report": ai_report(payload.get("report"), payload["range"]),
     }
 
 

@@ -488,3 +488,134 @@ and never fails the save.
 
 **§E** Account deletion removes HabitLog (cascade) and location (Athlete row); per-activity
 progress cache keys are deleted too.
+
+## R9 (SPEC_R9.md) — additions and choices
+
+Field names follow the spec exactly; everything below is either an extra field or a
+choice the spec left open.
+
+**§B private habit** (`apps/habits`, migrations `athletes.0007_r9_private_habit`,
+`habits.0002_r9_private_kind`)
+- Athlete JSON (writable): `private_habit_enabled` (bool, default false),
+  `private_on_today` (bool, default false), `private_goal` (`reduce|none`, default none;
+  anything else → 400). `daily_limits` also accepts a `private` key.
+- `HabitLog.kind` gains `private` (label "Private").
+- **Disabled**: `GET /habits/today/` `counts` / `last_at` have no `private` key;
+  `GET /habits/summary/` has no top-level `private`, no `goals.private`, no private
+  impact rows and no private report card. `POST /habits/logs/ {kind: "private"}` → 400
+  `{kind: ["Turn on the Private habit in Settings first."]}`. PATCH of an existing private
+  log is also 400 while disabled; single `DELETE /habits/logs/{id}/` still works.
+  `GET /habits/logs/` without `kind` hides private logs while disabled; `?kind=private`
+  still lists them (so Settings can show what "Delete private logs" removes).
+- **Enabled**: `today.counts.private`, `today.last_at.private`; summary gets
+  `private: {series, total, per_day_avg}` (same shape as `sugar`), `goals.private`,
+  impact rows with `habit: "private"` and a `report.habits[]` card.
+- `DELETE /habits/logs/?kind=private` → 200 `{deleted: n}` (the requester's own logs only,
+  enabled or not). `kind` is required for a bulk delete (400 without it, 400 for an unknown
+  kind); any kind (smoke|alcohol|sugar|private) is accepted.
+- Never to the AI: chat `log_habit` rejects `private` ("kind must be smoke, alcohol or
+  sugar."), chat system prompt `habits` block only ever has smoke/alcohol/sugar (and is
+  omitted when only private logs exist), the AI habits summary input drops the private
+  block, goal, impact rows and report card (and recomputes `report.overall` without it, so
+  even the habit count does not hint at it), and check-in signals never read it.
+- Impact-row labels for it read "… the morning after a Private day …".
+
+**§C habit health report** (`analysis/habits.py`: `habit_report`, `garmin_compare`,
+`overall`, `report`, `spearman`) — `GET /habits/summary/?range=` gains:
+```
+report: {
+  overall: {status, headline},
+  garmin: [{metric, label, unit, now, before, delta, better}],
+  habits: [{habit, status, headline,
+            amount: {now_per_day, before_per_day, change_pct, now_per_week, before_per_week},
+            findings: [{tone, text, kind}]}]
+}
+```
+- Previous range = the same number of days just before the range (4w → 28 days before).
+  Headlines say "the previous 4 weeks" / "12 weeks" / "6 months".
+- `garmin[].metric` order: hrv, rhr, sleep_score, stress, body_battery_high, respiration
+  (sleep breathing rate), easy_pace_hr (HR on easy-pace runs), efficiency. A side needs
+  ≥ 3 days with a value, else null; `better` uses the R8 impact thresholds (HRV ±5 %,
+  RHR ±2 bpm, sleep ±3, stress ±3, Body Battery ±5, breathing ±0.5, easy HR ±2,
+  efficiency ±3 %), null when below or a side is missing.
+- `habits[]` lists only habits that have ever been logged or have a goal (smoke: or a quit
+  date); private only when enabled. Order smoke, alcohol, sugar, private.
+- `amount`: per-day averages over the *tracked* days of each range (from the first log /
+  quit date); extra `now_per_week` / `before_per_week` (alcohol is phrased per week).
+  `change_pct` null when the previous range was 0 and this one is not. A trend needs ≥ 7
+  tracked days in both ranges, else `status: not_enough_data`.
+- `findings[].kind`: `amount`, `next_morning`, `dose` (alcohol), `timing`
+  (alcohol/sugar/private), `weekly_link`, `since_quit` (smoke), `next_day_run`,
+  `keep_logging` (one neutral item, last, listing every finding still short of data, with
+  the counts so far). Thresholds as spec: next-morning = R8 impact rows with enough_data
+  (morning metrics only; no-clear-difference rows collapse into one neutral line);
+  dose ≥ 3 nights each of 1–2 vs 3+ (HRV and sleep score); timing = a log at ≥ 21:00 local
+  that day vs exposure days without one, ≥ 4 nights each (sleep score, HRV); weekly link =
+  Spearman over full 7-day blocks ending today (only blocks after tracking began, metric
+  needs ≥ 3 mornings in the block), ≥ 6 weeks, reported at |ρ| ≥ 0.4 (else one neutral
+  "no clear weekly link" when there were enough weeks; not mentioned at all for 4w, which
+  can never reach 6 weeks); since quit = quit date ≥ 7 days ago, 14 days before vs every
+  day since, ≥ 5 days each for HRV / RHR / sleep score / easy-pace HR; next-day run = runs
+  the day after an exposure vs a clean day within the range, ≥ 3 each (easy-pace HR,
+  efficiency). Tones: worse → bad, better → good, else neutral (an association in the
+  "better" direction for dose/timing/weekly link is neutral, not good).
+- Habit `status`: amount down ≥ 10 % with no *new* bad finding → improving (new bad = a
+  bad next-morning metric that was not already worse with enough data in the previous
+  range, or any bad since-quit finding); up ≥ 10 % → worsening; else steady.
+  `headline`: "Down 38% vs the previous 4 weeks" / "Up 25% vs …" / "Up from none in …" /
+  "About the same as …" / "None logged here or in …" / "Keep logging to see a trend".
+- `overall.status`: not_enough_data when no habit has a trend; improving when more than
+  half of those habits are improving and neither HRV nor RHR is worse; worsening when more
+  than half are worsening; else steady. Headline e.g. "2 of 3 habits improving vs the
+  previous 4 weeks; HRV 45 → 50 ms, resting HR 58 → 56 bpm".
+- `POST /habits/summary/?refresh=1` sends `report` (minus private) to the model.
+- Insights focus still calls the summary without the report (`with_report=False`).
+
+**§D progress dates + highlights** (`analysis/progress.py`: `progress_dates`,
+`highlights`, `bucket_rows`; `apps/activities/progress*.py`)
+- `GET /progress/?start=&end=[&compare_start=&compare_end=][&sport=]`. 400 `{detail}`
+  messages: window and dates together ("Use either window or start/end dates, not
+  both."), only one of start/end ("start and end are both required …"), bad date
+  ("… must be a date (YYYY-MM-DD)."), start > end, range > 730 days inclusive, only one
+  of compare_start/compare_end ("… go together."), compare_start > compare_end, compare
+  range > 730 days. Default compare = the same number of days just before `start`. The
+  same parameters and validation apply to `POST /progress/review/`.
+- Date mode body: same keys as window mode; `window: null`; `runs` = runs inside the
+  current + compare ranges; `distance_buckets` compare the two ranges per bucket (not the
+  last-N split); `bests` are over the year before the earlier range up to `end`
+  (`new` = set inside the range); `series` = runs in the two ranges (oldest first, max
+  200). Up to 600 runs are read in date mode.
+- `period: {mode: "window"|"dates", start, end, compare_start, compare_end,
+  runs_current, runs_previous}` in both modes (ISO dates). Window mode: start/end = dates
+  of the first/last current run, compare_* = first/last previous run (null when none).
+- `highlights: [{tone: "good"|"bad"|"neutral", text}]`, max 6, sorted good → bad →
+  neutral. Sources: metric rows with a non-null `better` (run pace "Run pace 7:12 → 6:58
+  /km — 14 s faster", easy HR, efficiency, run distance, run fraction, longest continuous
+  run, cadence vs 168, drift, Z2), new bests in the period (only when there were earlier
+  runs: "New best: fastest 1 km in 5:33 (2026-09-30)"), one like-for-like bucket pace line
+  ("2–5 km runs: run pace … (4 vs 3 runs)", skipped when one bucket holds every run),
+  consistency ("Consistency 1.5 → 3.0 runs/week", ±0.5 runs/week is "Consistency steady
+  at …"). Pinned neutral lines kept at the end: "No runs in this period" (then the only
+  item), "Only one run in this period" (date mode, or window mode with no earlier runs),
+  "No runs in the previous period to compare with" / "No earlier runs to compare with yet".
+  If nothing moved: "Much the same as before — no measure moved more than 1%".
+- Review cache: rows tagged with the window (1/5/10/20) or
+  `"dates:<start>:<end>:<compare_start>:<compare_end>"`; `GET /progress/` with the same
+  params returns that review. The model also gets `period` and `highlights`.
+
+**§E guides** (`analysis/guides.py`, `apps/coaching/guides.py`)
+- `GET /guides/` → `{for_you: [{key, reason, priority}], context: {window_days: 28, runs,
+  cadence_avg, metronome_bpm, hr_drift_runs, run_fraction_pct, smoking, feels_like_max,
+  longest_upcoming_run_min, weather_available, hydration}}`.
+- Keys: form | breathing | strength | fueling | warmup. `priority` 1 (most relevant) … 5;
+  sorted by priority then that key order; duplicates merged (reasons joined with " · ",
+  best priority kept). Priorities: HR drift > 5 % on ≥ 2 runs → breathing + fueling (1);
+  cadence < 160 → form (2); run fraction < 0.85 → strength + breathing (2); feels-like
+  max ≥ 28 °C or a planned non-walk run ≥ 60 min from today to Sunday → fueling (2);
+  smoke goal quit/reduce or a cigarette logged in 28 days → breathing (3); warmup always (5).
+- `metronome_bpm` = average cadence × 1.05, rounded, clamped 140–200; 165 without cadence.
+- Weather comes only from this hour's cached Open-Meteo response for the athlete's
+  location (`weather.cached_only`, never a network call). No location, nothing cached or a
+  broken entry → `weather_available: false`, `feels_like_max` / `hydration` null.
+  `hydration` has the `/weather/today/` shape `{before_ml, during_ml_per_h, after_note,
+  electrolytes}`. Diet targets for the fueling guide come from the existing diet endpoint.

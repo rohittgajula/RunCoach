@@ -298,9 +298,10 @@ class ToolRunner:
         from django.utils.dateparse import parse_datetime
 
         from apps.habits.models import HabitLog
-        from apps.habits.services import counts_on, log_json
+        from apps.habits.services import KINDS, counts_on, log_json
 
-        if kind not in HabitLog.Kind.values:
+        # KINDS, not HabitLog.Kind: the private habit is never loggable through chat.
+        if kind not in KINDS:
             return {"error": "kind must be smoke, alcohol or sugar."}
         try:
             quantity = float(quantity)

@@ -26,6 +26,12 @@ class LogSerializer(serializers.Serializer):
     at = serializers.DateTimeField(required=False)
     note = serializers.CharField(max_length=200, required=False, allow_blank=True)
 
+    def validate_kind(self, value):
+        athlete = self.context.get("athlete")
+        if value == services.PRIVATE and not (athlete and athlete.private_habit_enabled):
+            raise serializers.ValidationError("Turn on the Private habit in Settings first.")
+        return value
+
     def validate_at(self, value):
         if value > timezone.now() + dt.timedelta(minutes=5):
             raise serializers.ValidationError("Can't log a habit in the future.")
@@ -41,23 +47,34 @@ def _date(value):
         raise serializers.ValidationError({"detail": "Dates must be YYYY-MM-DD."}) from exc
 
 
-@api_view(["GET", "POST"])
+@api_view(["GET", "POST", "DELETE"])
 @permission_classes([IsAuthenticated])
 def logs(request):
     athlete = request.user.athlete
     if request.method == "POST":
-        data = LogSerializer(data=request.data)
+        data = LogSerializer(data=request.data, context={"athlete": athlete})
         data.is_valid(raise_exception=True)
         v = data.validated_data
         log = HabitLog.objects.create(athlete=athlete, kind=v["kind"], quantity=v["quantity"],
                                       at=v.get("at") or timezone.now(), note=v.get("note", ""))
         return Response(services.log_json(log), status=201)
-    qs = HabitLog.objects.filter(athlete=athlete)
     kind = request.query_params.get("kind")
+    if kind and kind not in services.ALL_KINDS:
+        return Response({"detail": "kind must be smoke, alcohol, sugar or private."},
+                        status=400)
+    if request.method == "DELETE":
+        # Bulk delete (R9 §B "Delete private logs"): only with an explicit kind, and only
+        # the requesting athlete's own logs. Works whether or not the habit is enabled.
+        if not kind:
+            return Response({"detail": "kind is required to delete logs in bulk."},
+                            status=400)
+        deleted, _ = HabitLog.objects.filter(athlete=athlete, kind=kind).delete()
+        return Response({"deleted": deleted})
+    qs = HabitLog.objects.filter(athlete=athlete)
     if kind:
-        if kind not in services.KINDS:
-            return Response({"detail": "kind must be smoke, alcohol or sugar."}, status=400)
         qs = qs.filter(kind=kind)
+    elif not athlete.private_habit_enabled:
+        qs = qs.exclude(kind=services.PRIVATE)
     start, end = (_date(request.query_params.get("start")),
                   _date(request.query_params.get("end")))
     if start:
@@ -76,7 +93,8 @@ def log_detail(request, pk: int):
     if request.method == "DELETE":
         log.delete()
         return Response(status=204)
-    data = LogSerializer(log, data={"kind": log.kind, **request.data}, partial=True)
+    data = LogSerializer(log, data={"kind": log.kind, **request.data}, partial=True,
+                         context={"athlete": request.user.athlete})
     data.is_valid(raise_exception=True)
     for key, value in data.validated_data.items():
         setattr(log, key, value)

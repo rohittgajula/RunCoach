@@ -1,4 +1,4 @@
-"""Habit logs (R8 §B): cigarettes, standard drinks, sugar servings.
+"""Habit logs (R8 §B): cigarettes, standard drinks, sugar servings; R9 §B: "Private".
 
 Private health data. It never leaves this database except as the aggregate numbers in
 `analysis.habits` (counts, averages, differences) — never as rows — and it goes with
@@ -17,6 +17,7 @@ class HabitLog(OwnedByAthlete):
         SMOKE = "smoke", "Cigarettes"
         ALCOHOL = "alcohol", "Standard drinks"
         SUGAR = "sugar", "Sugar servings"
+        PRIVATE = "private", "Private"   # R9 §B: never sent to the AI
 
     kind = models.CharField(max_length=8, choices=Kind.choices)
     at = models.DateTimeField()

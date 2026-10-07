@@ -278,7 +278,7 @@ def _habit_inputs(athlete: Athlete, today: dt.date) -> dict:
         athlete=athlete, kind="smoke", local_date__gte=today - dt.timedelta(days=27),
         quantity__gt=0).values_list("local_date", flat=True))
     cut = today - dt.timedelta(days=13)
-    impact = summary_payload(athlete, "12w")["impact"]
+    impact = summary_payload(athlete, "12w", with_report=False)["impact"]
     return {
         "smoke_days_recent": sum(1 for d in days if d >= cut),
         "smoke_days_before": sum(1 for d in days if d < cut),

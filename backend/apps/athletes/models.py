@@ -113,6 +113,12 @@ class Athlete(models.Model):
     sugar_goal = models.CharField(max_length=6, choices=ReduceGoal.choices,
                                   default=ReduceGoal.NONE)
     daily_limits = models.JSONField(default=dict, blank=True)
+    # R9 §B: the "Private" habit. Labelled only "Private" anywhere it is shown, and it
+    # never reaches the AI (chat, chat tools, AI summaries or check-in signals).
+    private_habit_enabled = models.BooleanField(default=False)
+    private_on_today = models.BooleanField(default=False)
+    private_goal = models.CharField(max_length=6, choices=ReduceGoal.choices,
+                                    default=ReduceGoal.NONE)
 
     # R8 §D: where the athlete runs, rounded to 2 decimals (~1 km) — never finer.
     class LocationSource(models.TextChoices):

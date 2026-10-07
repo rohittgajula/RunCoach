@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .chat_views import memory, memory_delete, messages, thread_detail, threads
+from .guides import guides
 from .insights import insights, insights_summary
 from .views import guidance, review, run_analysis, usage
 
@@ -15,5 +16,6 @@ urlpatterns = [
     path("memory/", memory, name="memory"),
     path("memory/<int:pk>/", memory_delete, name="memory-fact"),
     path("insights/", insights, name="insights"),
+    path("guides/", guides, name="guides"),
     path("insights/summary/", insights_summary, name="insights-summary"),
 ]

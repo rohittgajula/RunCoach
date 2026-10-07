@@ -8,6 +8,7 @@ no better direction (average and max HR on their own).
 
 from __future__ import annotations
 
+import datetime as dt
 import statistics
 
 WINDOWS = (1, 5, 10, 20)
@@ -173,8 +174,202 @@ def focus(metrics: list[dict]) -> list[dict]:
 def progress(runs: list[dict], window: int) -> dict:
     current, previous = split(runs, window)
     metrics = compare(current, previous) if current else []
-    return {"window": window, "runs": len(runs), "current_n": len(current),
+    body = {"window": window, "runs": len(runs), "current_n": len(current),
             "previous_n": len(previous), "metrics": metrics,
             "distance_buckets": distance_buckets(runs, window),
             "bests": bests(runs, current), "series": series(runs[-max(window * 2, 40):]),
             "focus": focus(metrics) if metrics else []}
+    body["period"] = {
+        "mode": "window",
+        "start": current[0].get("date") if current else None,
+        "end": current[-1].get("date") if current else None,
+        "compare_start": previous[0].get("date") if previous else None,
+        "compare_end": previous[-1].get("date") if previous else None,
+        "runs_current": len(current), "runs_previous": len(previous)}
+    body["highlights"] = highlights(body, history_n=len(runs) - len(current))
+    return body
+
+
+# --- R9 §D: custom dates and the "Summary" bullets ----------------------------------
+
+MAX_SERIES_DATES = 200
+MAX_HIGHLIGHTS = 6
+CONSISTENCY_STEP = 0.5        # runs/week that count as a change
+MIN_SPAN_DAYS = 7
+
+
+def progress_dates(runs: list[dict], start: str, end: str, compare_start: str,
+                   compare_end: str) -> dict:
+    """Runs dated in [start, end] against runs in [compare_start, compare_end]. Dates
+    are ISO strings (they compare correctly as text). `runs` may reach back further
+    than the comparison: earlier runs only count towards the all-time bests."""
+    current = [r for r in runs if start <= (r.get("date") or "") <= end]
+    previous = [r for r in runs if compare_start <= (r.get("date") or "") <= compare_end]
+    first, last = min(start, compare_start), max(end, compare_end)
+    span = [r for r in runs if first <= (r.get("date") or "") <= last]
+    history = [r for r in runs if (r.get("date") or "") <= end]
+    metrics = compare(current, previous) if current else []
+    body = {"window": None, "runs": len(span), "current_n": len(current),
+            "previous_n": len(previous), "metrics": metrics,
+            "distance_buckets": bucket_rows(current, previous, span),
+            "bests": bests(history, current), "series": series(span[-MAX_SERIES_DATES:]),
+            "focus": focus(metrics) if metrics else [],
+            "period": {"mode": "dates", "start": start, "end": end,
+                       "compare_start": compare_start, "compare_end": compare_end,
+                       "runs_current": len(current), "runs_previous": len(previous)}}
+    current_ids = {r.get("id") for r in current}
+    body["highlights"] = highlights(
+        body, history_n=sum(1 for r in history if r.get("id") not in current_ids))
+    return body
+
+
+def bucket_rows(current: list[dict], previous: list[dict], runs: list[dict]) -> list[dict]:
+    """Like-for-like by distance for two given sets of runs (date mode)."""
+    out = []
+    for key, label, _, _ in BUCKETS:
+        cur = [r for r in current if bucket_of(r.get("total_km")) == key]
+        prev = [r for r in previous if bucket_of(r.get("total_km")) == key]
+        out.append({"bucket": key, "label": label,
+                    "runs": sum(1 for r in runs if bucket_of(r.get("total_km")) == key),
+                    "current_n": len(cur), "previous_n": len(prev),
+                    "metrics": compare(cur, prev) if cur else []})
+    return out
+
+
+def _clock(seconds) -> str:
+    seconds = int(round(abs(seconds)))
+    return f"{seconds // 60}:{seconds % 60:02d}"
+
+
+def _more_less(delta, more="more", less="less") -> str:
+    return more if delta > 0 else less
+
+
+def metric_text(row: dict) -> str | None:
+    """"Run pace 7:12 → 6:58 /km — 14 s faster". None for rows without a sentence."""
+    key, cur, prev, delta = row["key"], row["current"], row["previous"], row["delta"]
+    if cur is None or prev is None or delta is None:
+        return None
+    if key == "run_pace":
+        return (f"Run pace {_clock(prev)} → {_clock(cur)} /km — {abs(delta):.0f} s "
+                f"{_more_less(delta, 'slower', 'faster')}")
+    if key == "easy_hr":
+        return (f"HR at easy pace {prev:.0f} → {cur:.0f} bpm — {abs(delta):.0f} bpm "
+                f"{_more_less(delta, 'higher', 'lower')}")
+    if key == "efficiency":
+        pct = abs(row["delta_pct"] or 0)
+        return (f"Efficiency {prev:.2f} → {cur:.2f} m/min per bpm — {pct:.0f}% "
+                f"{_more_less(delta, 'better', 'lower')}")
+    if key == "run_km":
+        return (f"Run distance {prev:.1f} → {cur:.1f} km per run — {abs(delta):.1f} km "
+                f"{_more_less(delta)}")
+    if key == "run_fraction":
+        return (f"Running {prev:.0f}% → {cur:.0f}% of the time — {abs(delta):.0f} points "
+                f"{_more_less(delta)}")
+    if key == "longest_run_s":
+        return (f"Longest continuous run {_clock(prev)} → {_clock(cur)} — {_clock(delta)} "
+                f"{_more_less(delta, 'longer', 'shorter')}")
+    if key == "cadence":
+        side = "closer to" if row["better"] else "further from"
+        return f"Cadence {prev:.0f} → {cur:.0f} spm — {side} {CADENCE_TARGET}"
+    if key == "hr_drift":
+        return (f"HR drift {prev:.1f}% → {cur:.1f}% — {abs(delta):.1f} points "
+                f"{_more_less(delta)}")
+    if key == "z2_pct":
+        return (f"Time in Z2 {prev:.0f}% → {cur:.0f}% — {abs(delta):.0f} points "
+                f"{_more_less(delta)}")
+    return None
+
+
+HIGHLIGHT_ORDER = ("run_pace", "easy_hr", "efficiency", "run_km", "run_fraction",
+                   "longest_run_s", "cadence", "hr_drift", "z2_pct")
+BEST_TEXT = {
+    "fastest_1k_s": lambda v: f"fastest 1 km in {_clock(v)}",
+    "longest_run_km": lambda v: f"longest run {v:.1f} km",
+    "longest_continuous_s": lambda v: f"longest continuous run {_clock(v)}",
+    "lowest_easy_hr": lambda v: f"lowest easy-pace HR {v:.0f} bpm",
+}
+
+
+def _days_between(first: str | None, last: str | None) -> int | None:
+    if not first or not last:
+        return None
+    return (dt.date.fromisoformat(last) - dt.date.fromisoformat(first)).days + 1
+
+
+def _consistency(period: dict) -> dict | None:
+    """Runs per week now vs before. Window mode measures each side's span from its
+    first run (the previous side up to the first current run); spans < 7 days count
+    as 7."""
+    n_now, n_before = period["runs_current"], period["runs_previous"]
+    if period["mode"] == "dates":
+        days_now = _days_between(period["start"], period["end"])
+        days_before = _days_between(period["compare_start"], period["compare_end"])
+    else:
+        if n_now < 2 or n_before < 2:
+            return None
+        days_now = _days_between(period["start"], period["end"])
+        days_before = (_days_between(period["compare_start"], period["start"]) or 1) - 1
+    if not days_now or not days_before or not n_before:
+        return None
+    now = n_now / max(days_now, MIN_SPAN_DAYS) * 7
+    before = n_before / max(days_before, MIN_SPAN_DAYS) * 7
+    diff = now - before
+    if diff >= CONSISTENCY_STEP:
+        tone = "good"
+    elif diff <= -CONSISTENCY_STEP:
+        tone = "bad"
+    else:
+        return {"tone": "neutral", "text": f"Consistency steady at {now:.1f} runs/week"}
+    return {"tone": tone, "text": f"Consistency {before:.1f} → {now:.1f} runs/week"}
+
+
+def highlights(body: dict, history_n: int = 0) -> list[dict]:
+    """Up to 6 readable bullets, good first: metric changes, new bests in the period,
+    like-for-like distance change, consistency. Never empty."""
+    current_n, previous_n = body["current_n"], body["previous_n"]
+    period = body.get("period") or {"mode": "window"}
+    pinned = []
+    if current_n == 0:
+        return [{"tone": "neutral", "text": "No runs in this period"}]
+    if current_n == 1 and (period["mode"] == "dates" or previous_n == 0):
+        pinned.append({"tone": "neutral", "text": "Only one run in this period"})
+    if previous_n == 0:
+        pinned.append({"tone": "neutral", "text": "No runs in the previous period to compare "
+                                                  "with" if period["mode"] == "dates" else
+                       "No earlier runs to compare with yet"})
+    items = []
+    rows = {m["key"]: m for m in body["metrics"]}
+    for key in HIGHLIGHT_ORDER:
+        row = rows.get(key)
+        if row is None or row["better"] is None:
+            continue
+        text = metric_text(row)
+        if text:
+            items.append({"tone": "good" if row["better"] else "bad", "text": text})
+    if history_n:
+        for key, best in (body.get("bests") or {}).items():
+            if best and best.get("new") and best.get("value") is not None:
+                when = f" ({best['date']})" if best.get("date") else ""
+                items.append({"tone": "good",
+                              "text": f"New best: {BEST_TEXT[key](best['value'])}{when}"})
+    buckets = [b for b in body.get("distance_buckets") or []
+               if b["current_n"] and b["previous_n"]
+               and not (b["current_n"] == current_n and b["previous_n"] == previous_n)]
+    for b in sorted(buckets, key=lambda b: -b["current_n"]):
+        pace = next((m for m in b["metrics"] if m["key"] == "run_pace"), None)
+        if pace and pace["better"] is not None:
+            items.append({"tone": "good" if pace["better"] else "bad",
+                          "text": f"{b['label']} runs: {metric_text(pace)[0].lower()}"
+                                  f"{metric_text(pace)[1:]} ({b['current_n']} vs "
+                                  f"{b['previous_n']} runs)"})
+            break
+    consistency = _consistency(period) if previous_n else None
+    if consistency:
+        items.append(consistency)
+    if not items and previous_n:
+        items.append({"tone": "neutral", "text": "Much the same as before — no measure moved "
+                                                 "more than 1%"})
+    order = {"good": 0, "bad": 1, "neutral": 2}
+    items.sort(key=lambda i: order[i["tone"]])
+    return items[:MAX_HIGHLIGHTS - len(pinned)] + pinned

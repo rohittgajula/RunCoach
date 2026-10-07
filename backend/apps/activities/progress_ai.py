@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from apps.coaching.models import AIAnalysis
 
-PROGRESS_USER = """This athlete's last {window} run(s) compared with the runs before, \
-calculated in Python. `better` is already direction-aware.
+PROGRESS_USER = """This athlete's {what} compared with {before}, calculated in Python. \
+`better` is already direction-aware; `highlights` are the deterministic summary bullets.
 
 {payload}
 
@@ -24,9 +24,11 @@ def _today_rows(athlete):
             if r.created_at.astimezone(tz).date() == today]
 
 
-def review_state(athlete, window: int) -> dict:
+def review_state(athlete, key) -> dict:
+    """`key` is the window (1/5/10/20) or a DateRange.key string (R9 §D); the stored
+    row is tagged with it under result["window"]."""
     row = next((r for r in _today_rows(athlete)
-                if (r.result or {}).get("window") == window), None)
+                if (r.result or {}).get("window") == key), None)
     if row is None:
         return {"status": "none", "went_well": [], "improve": [], "check": [],
                 "markdown": "", "generated_at": None}
@@ -35,14 +37,21 @@ def review_state(athlete, window: int) -> dict:
                                   for k in FIELDS}, "generated_at": row.created_at}
 
 
-def generate_review(athlete, body: dict, refresh: bool = False) -> dict:
-    """Raises AIUnavailable (incl. budget)."""
+def generate_review(athlete, body: dict, refresh: bool = False, key=None) -> dict:
+    """Raises AIUnavailable (incl. budget). `key` is the cache key (the window, or a
+    DateRange.key in date mode); defaults to the window."""
     from apps.coaching.schemas import ProgressReview
     from apps.coaching.services import _run
 
     from .progress import ai_payload, dumps
 
-    window = body["window"]
+    period = body.get("period") or {}
+    if period.get("mode") == "dates":
+        what = f"runs from {period['start']} to {period['end']}"
+        before = f"runs from {period['compare_start']} to {period['compare_end']}"
+    else:
+        what, before = f"last {body['window']} run(s)", "the runs before"
+    window = key if key is not None else body["window"]
     existing = review_state(athlete, window)
     if existing["status"] == "ready" and not refresh:
         return existing
@@ -53,7 +62,8 @@ def generate_review(athlete, body: dict, refresh: bool = False) -> dict:
     clean = ai_payload(body)
     result, _ = _run(athlete, kind=AIAnalysis.Kind.PROGRESS, operation="progress_review",
                      payload=clean,
-                     user_prompt=PROGRESS_USER.format(window=window, payload=dumps(clean)),
+                     user_prompt=PROGRESS_USER.format(what=what, before=before,
+                                                      payload=dumps(clean)),
                      schema=ProgressReview)
     # Tag the stored row with its window so the per-window cache can find it.
     row = (AIAnalysis.objects.filter(athlete=athlete, kind=AIAnalysis.Kind.PROGRESS)

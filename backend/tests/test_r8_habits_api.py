@@ -12,7 +12,7 @@ from apps.habits.models import HabitLog
 from tests.r7_helpers import make_workout, wellness
 
 SUMMARY_KEYS = {"range", "today", "smoke", "alcohol", "sugar", "impact", "weekly", "goals",
-                "summary"}
+                "summary", "report"}     # R9 §C added `report`
 
 
 def log(athlete, kind="smoke", qty=1, days_ago=0, hour=9):

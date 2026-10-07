@@ -49,9 +49,21 @@ def _get_json(url: str, params: dict) -> dict:
         raise WeatherUnavailable(str(exc)) from exc
 
 
-def _cached(kind: str, lat: float, lon: float, tz: str, fetch):
+def _key(kind: str, lat: float, lon: float, tz: str) -> str:
     hour = timezone.now().strftime("%Y%m%d%H")
-    key = f"wx:{kind}:{lat:.2f}:{lon:.2f}:{tz}:{hour}"
+    return f"wx:{kind}:{lat:.2f}:{lon:.2f}:{tz}:{hour}"
+
+
+def cached_only(kind: str, lat: float, lon: float, tz: str) -> dict | None:
+    """R9 §E: this hour's cached response ("fc" or "aq"), never a network call."""
+    try:
+        return cache.get(_key(kind, lat, lon, tz))
+    except Exception:  # noqa: BLE001 — a cache outage is just "no weather"
+        return None
+
+
+def _cached(kind: str, lat: float, lon: float, tz: str, fetch):
+    key = _key(kind, lat, lon, tz)
     data = cache.get(key)
     if data is not None:
         return data

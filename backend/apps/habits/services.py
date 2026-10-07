@@ -17,8 +17,13 @@ from apps.ingest.models import DailyMetrics
 
 from .models import HabitLog
 
-KINDS = ("smoke", "alcohol", "sugar")
+KINDS = ("smoke", "alcohol", "sugar")          # the habits the AI may ever see
+PRIVATE = "private"                             # R9 §B: never sent to the AI
+ALL_KINDS = (*KINDS, PRIVATE)
 RANGES = {"4w": 28, "12w": 84, "6m": 182}
+PREVIOUS_LABELS = {"4w": "the previous 4 weeks", "12w": "the previous 12 weeks",
+                   "6m": "the previous 6 months"}
+MAX_HISTORY_DAYS = 800
 DEFAULT_RANGE = "4w"
 EASY_PACE_SLACK_S = 30
 
@@ -28,21 +33,30 @@ def log_json(log: HabitLog) -> dict:
             "local_date": log.local_date, "note": log.note, "created_at": log.created_at}
 
 
-def counts_on(athlete, day: dt.date) -> dict:
-    rows = (HabitLog.objects.filter(athlete=athlete, local_date=day)
+def kinds_for(athlete) -> tuple[str, ...]:
+    """The habits shown to this athlete: the private one only when enabled."""
+    return ALL_KINDS if athlete.private_habit_enabled else KINDS
+
+
+def counts_on(athlete, day: dt.date, include_private: bool = False) -> dict:
+    """Counts for one day. `include_private` is for the athlete's own screens only —
+    the default (used by chat) never includes the private habit."""
+    kinds = kinds_for(athlete) if include_private else KINDS
+    rows = (HabitLog.objects.filter(athlete=athlete, local_date=day, kind__in=kinds)
             .values("kind").annotate(total=Sum("quantity")))
     totals = {r["kind"]: round(r["total"] or 0, 2) for r in rows}
-    return {k: totals.get(k, 0) for k in KINDS}
+    return {k: totals.get(k, 0) for k in kinds}
 
 
 def today_payload(athlete) -> dict:
     today = athlete.local_today
     last_at = {}
-    for kind in KINDS:
+    for kind in kinds_for(athlete):
         last = (HabitLog.objects.filter(athlete=athlete, kind=kind)
                 .order_by("-at").values_list("at", flat=True).first())
         last_at[kind] = last
-    return {"date": today, "counts": counts_on(athlete, today), "last_at": last_at}
+    return {"date": today, "counts": counts_on(athlete, today, include_private=True),
+            "last_at": last_at}
 
 
 def _totals(athlete, kind: str, since: dt.date | None = None) -> dict[dt.date, float]:
@@ -165,32 +179,84 @@ def _simple(totals, start, today, weekly: bool) -> dict:
     return out
 
 
-def summary_payload(athlete, range_key: str) -> dict:
+def _late_days(athlete, kind: str, start: dt.date, end: dt.date) -> set[dt.date]:
+    """Days with a log of `kind` at or after 21:00 local time."""
+    try:
+        zone = ZoneInfo(athlete.timezone or "UTC")
+    except Exception:  # noqa: BLE001
+        zone = ZoneInfo("UTC")
+    rows = HabitLog.objects.filter(athlete=athlete, kind=kind, local_date__gte=start,
+                                   local_date__lte=end).values_list("local_date", "at")
+    return {day for day, at in rows if at.astimezone(zone).hour >= maths.LATE_HOUR}
+
+
+def _tracked(athlete, kind: str, totals: dict) -> bool:
+    goal = {"smoke": athlete.smoke_goal, "alcohol": athlete.alcohol_goal,
+            "sugar": athlete.sugar_goal, PRIVATE: athlete.private_goal}[kind]
+    return bool(totals) or goal not in ("none", "") or (
+        kind == "smoke" and athlete.smoke_quit_date is not None)
+
+
+def _goals(athlete) -> dict:
+    goals = {"smoke": athlete.smoke_goal, "alcohol": athlete.alcohol_goal,
+             "sugar": athlete.sugar_goal}
+    if athlete.private_habit_enabled:
+        goals[PRIVATE] = athlete.private_goal
+    return goals
+
+
+def summary_payload(athlete, range_key: str, with_report: bool = True) -> dict:
     from .ai import summary_state
 
     today = athlete.local_today
-    start = today - dt.timedelta(days=RANGES[range_key] - 1)
-    totals = {k: _totals(athlete, k) for k in KINDS}
-    mornings = _mornings(athlete, start, today + dt.timedelta(days=1))
-    runs = _runs(athlete, start, today)
-    impact = []
-    for kind in KINDS:
+    length = RANGES[range_key]
+    start = today - dt.timedelta(days=length - 1)
+    prev_end = start - dt.timedelta(days=1)
+    prev_start = start - dt.timedelta(days=length)
+    kinds = kinds_for(athlete)
+    totals = {k: _totals(athlete, k) for k in kinds}
+    history_start = prev_start
+    if athlete.smoke_quit_date:
+        history_start = min(history_start, athlete.smoke_quit_date
+                            - dt.timedelta(days=maths.QUIT_BEFORE_DAYS))
+    history_start = max(history_start, today - dt.timedelta(days=MAX_HISTORY_DAYS))
+    mornings = _mornings(athlete, history_start, today + dt.timedelta(days=1))
+    runs = _runs(athlete, history_start, today)
+    impact, impact_prev, tracking = [], [], {}
+    for kind in kinds:
         extra = athlete.smoke_quit_date if kind == "smoke" else None
-        days = [d for d in _window(start, today, _tracking_start(totals[kind], extra))
-                if d < today]
+        tracking[kind] = _tracking_start(totals[kind], extra)
+        days = [d for d in _window(start, today, tracking[kind]) if d < today]
         if days:
             impact += maths.impact(kind, totals[kind], days, mornings, runs)
-    return {
+        prev_days = [d for d in _window(prev_start, prev_end, tracking[kind])]
+        if with_report and prev_days:
+            impact_prev += maths.impact(kind, totals[kind], prev_days, mornings, runs)
+    payload = {
         "range": range_key, "today": today,
         "smoke": _smoke(athlete, totals["smoke"], start, today),
         "alcohol": _simple(totals["alcohol"], start, today, weekly=True),
         "sugar": _simple(totals["sugar"], start, today, weekly=False),
         "impact": impact,
         "weekly": maths.weekly(start, today, totals, mornings, runs),
-        "goals": {"smoke": athlete.smoke_goal, "alcohol": athlete.alcohol_goal,
-                  "sugar": athlete.sugar_goal},
+        "goals": _goals(athlete),
         "summary": summary_state(athlete, today),
     }
+    if PRIVATE in kinds:
+        payload[PRIVATE] = _simple(totals[PRIVATE], start, today, weekly=False)
+    if with_report:
+        label = PREVIOUS_LABELS[range_key]
+        habits = [maths.habit_report(
+            kind, totals=totals[kind], start=start, end=today, prev_start=prev_start,
+            prev_end=prev_end, tracking=tracking[kind], impact_rows=impact,
+            prev_impact_rows=impact_prev, mornings=mornings, runs=runs,
+            late_days=(_late_days(athlete, kind, start, today)
+                       if kind in maths.TIMING_HABITS else None),
+            quit_date=athlete.smoke_quit_date if kind == "smoke" else None,
+            previous_label=label) for kind in kinds if _tracked(athlete, kind, totals[kind])]
+        garmin = maths.garmin_compare(mornings, runs, start, today, prev_start, prev_end)
+        payload["report"] = maths.report(habits, garmin, label)
+    return payload
 
 
 def smoke_streak(athlete) -> dict:
@@ -203,7 +269,7 @@ def chat_context(athlete) -> dict | None:
     """Aggregates for the chat system prompt: today's / yesterday's counts, goals and
     the smoke-free streak. None when the athlete tracks nothing."""
     today = athlete.local_today
-    tracks = (HabitLog.objects.filter(athlete=athlete).exists()
+    tracks = (HabitLog.objects.filter(athlete=athlete, kind__in=KINDS).exists()
               or "quit" == athlete.smoke_goal or athlete.smoke_goal == "reduce"
               or athlete.alcohol_goal == "reduce" or athlete.sugar_goal == "reduce")
     if not tracks:
