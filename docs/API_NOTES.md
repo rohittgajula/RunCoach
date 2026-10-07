@@ -1122,7 +1122,7 @@ Athlete JSON gains writable `map_hide_endpoints: bool` (default true).
 
 `GET /activities/{id}/route/`
 ```
-{ activity_id: int, available: bool, reason: null|"no_gps",
+{ activity_id: int, available: bool, reason: null|"no_gps"|"too_short",
   hidden_endpoints: bool, trimmed_m: int,             # 200 when hidden, else 0
   total_distance_m: float, sampled_from: int,
   bounds: {south, west, north, east: float}|null,
@@ -1140,7 +1140,9 @@ Athlete JSON gains writable `map_hide_endpoints: bool` (default true).
   over ±15 s at that point (null when slower than 20:00/km), HR ±5 s mean, segment from
   the run/walk segmentation. Coordinates rounded to 6 dp. Cached per activity
   (+ segmentation version, + setting).
-- `available: false` (`points: []`, nulls) when the activity has no GPS records.
+- `available: false` (`points: []`, nulls) when the activity has no GPS records
+  (`no_gps`), or when hiding the ends leaves nothing to draw (`too_short`, a run under
+  ~400 m with the setting on).
 
 `GET /activities/routes/?limit=20` (1–50) — "Your routes" overlay
 ```
