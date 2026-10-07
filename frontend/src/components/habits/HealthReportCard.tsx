@@ -16,14 +16,25 @@ function Cell({ g }: { g: HabitReportGarmin }) {
     <div className={`garmin-cell ${tone}`}>
       <span className="garmin-cell-label">{g.label}</span>
       <span className="garmin-cell-values">
-        <span className="muted">{fmt(g.before)}</span>
-        <span className="garmin-cell-to" aria-hidden="true">→</span>
-        <strong>{fmt(g.now)}</strong>
-        {g.unit && <small className="muted"> {g.unit}</small>}
+        {g.before == null || g.now == null || !Number.isFinite(g.before) || !Number.isFinite(g.now) ? (
+          <>
+            {g.now != null && Number.isFinite(g.now) && <><strong>{fmt(g.now)}</strong>{g.unit && <small className="muted"> {g.unit}</small>} </>}
+            <span className="muted-note">{g.now == null ? 'Not enough data yet' : 'nothing to compare yet'}</span>
+          </>
+        ) : (
+          <>
+            <span className="muted">{fmt(g.before)}</span>
+            <span className="garmin-cell-to" aria-hidden="true">→</span>
+            <strong>{fmt(g.now)}</strong>
+            {g.unit && <small className="muted"> {g.unit}</small>}
+          </>
+        )}
       </span>
-      <span className="garmin-cell-delta" aria-label={word}>
-        <span className="garmin-arrow">{arrow}</span> {g.delta != null ? `${g.delta > 0 ? '+' : g.delta < 0 ? '−' : ''}${fmt(Math.abs(g.delta))}` : ''}
-      </span>
+      {g.delta != null && Number.isFinite(g.delta) && (
+        <span className="garmin-cell-delta" aria-label={word}>
+          <span className="garmin-arrow">{arrow}</span> {`${g.delta > 0 ? '+' : g.delta < 0 ? '−' : ''}${fmt(Math.abs(g.delta))}`}
+        </span>
+      )}
     </div>
   )
 }

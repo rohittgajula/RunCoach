@@ -49,8 +49,8 @@ export function ProgressChart({ series, height = 240 }: { series: ProgressPoint[
           <ComposedChart data={data} margin={{ top: 48, right: 0, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 4" />
             <XAxis dataKey="date" tickFormatter={tickDate} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={28} />
-            <YAxis yAxisId="pace" reversed tickFormatter={(v: number) => pace(v)} axisLine={false} tickLine={false} width={42} domain={['auto', 'auto']} tickCount={4} mirror />
-            <YAxis yAxisId="hr" orientation="right" axisLine={false} tickLine={false} width={30} domain={[(min: number) => Math.floor(min - 8), (max: number) => Math.ceil(max + 8)]} tickCount={4} allowDecimals={false} mirror />
+            <YAxis yAxisId="pace" reversed tickFormatter={(v: number) => pace(v)} axisLine={false} tickLine={false} width={42} domain={['auto', 'auto']} tickCount={4} />
+            <YAxis yAxisId="hr" orientation="right" axisLine={false} tickLine={false} width={30} domain={[(min: number) => Math.floor(min - 8), (max: number) => Math.ceil(max + 8)]} tickCount={4} allowDecimals={false} />
             <Tooltip content={Tip} cursor={{ stroke: 'var(--faint)', strokeDasharray: '3 3' }} {...TIP} />
             <Line yAxisId="hr" dataKey="avg_hr" name="hr" stroke="var(--hard)" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls isAnimationActive={false} />
             <Line yAxisId="pace" dataKey="pace" name="pace" stroke="var(--faint)" strokeWidth={1.5} dot={<PaceDot />} activeDot={{ r: 6 }} connectNulls isAnimationActive={false} />

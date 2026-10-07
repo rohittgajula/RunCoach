@@ -19,7 +19,6 @@ import { CaffeineCard } from './CaffeineCard'
 import { CravingPatternsCard, SavingsGoalCard } from '../quit/QuitCards'
 import { HABITS, PRIVATE_HABIT, PRIVATE_SHOWN_KEY, habitMeta, readFlag, writeFlag } from './habitUtil'
 
-const fmt = (v: number | null | undefined, digits = 1) => (v == null ? '--' : v.toFixed(digits))
 const COLORS: Record<HabitKind, string> = { smoke: 'var(--habits)', alcohol: 'var(--habits)', sugar: 'var(--habits)', private: 'var(--habits)', caffeine: 'var(--habits)' }
 
 /** Insights → Habits: range, health report, a card per habit, since-quit, impact, AI, history. */
@@ -79,6 +78,8 @@ export function HabitsPage() {
               period={caption}
               sub={subOf(data, h.kind)}
               color={COLORS[h.kind]}
+              start={period.start}
+              end={period.end}
             >
               {h.kind === 'smoke' && <Streak data={data} quitting={quitting} />}
             </HabitCard>
@@ -157,14 +158,13 @@ function pointsOf(data: HabitSummary, kind: HabitKind, freq: Freq) {
   return sum(series.map((p) => ({ date: p.date, value: p.count })), freq)
 }
 
+/** Under the chart title. The average lives once, in the chart's key row (same maths as its dashed line). */
 function subOf(data: HabitSummary, kind: HabitKind): string {
   if (kind === 'alcohol') {
     const d = data.alcohol.drink_days
-    return `avg ${fmt(data.alcohol.per_week_avg)}/week · ${d} drink ${d === 1 ? 'day' : 'days'}`
+    return `${d} drink ${d === 1 ? 'day' : 'days'}`
   }
-  if (kind === 'caffeine') return ''
-  const avg = kind === 'private' ? data.private?.per_day_avg : data[kind].per_day_avg
-  return `avg ${fmt(avg)}/day`
+  return ''
 }
 
 function Streak({ data, quitting }: { data: HabitSummary; quitting: boolean }) {
@@ -191,7 +191,7 @@ function PrivateCard({
     return (
       <section className="card insight private-card is-hidden">
         <div className="card-head">
-          <h2 className="card-title habit-card-title"><span aria-hidden="true">🌙</span> Private</h2>
+          <h2 className="card-title habit-card-title"><span className="habit-emoji" aria-hidden="true">🌙</span> Private</h2>
         </div>
         <button type="button" className="private-cover" onClick={() => onToggle(true)}>
           <span className="private-blur" aria-hidden="true">

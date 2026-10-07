@@ -83,3 +83,49 @@ html[data-nav="back"]::view-transition-old(root) { animation-name: vt-out-back; 
   .sheet, .sheet-backdrop, .sheet-root.is-closing .sheet, .sheet-root.is-closing .sheet-backdrop { animation: none; transition: none; }
   .tab:active .tab-icon, .section-chip:active, .icon-btn:active { transform: none; }
 }
+
+/* ---------- habit bar chart (components/habits/HabitBarChart.tsx) ---------- */
+.hbar { touch-action: pan-y; cursor: crosshair; -webkit-user-select: none; user-select: none; }
+.hbar svg { display: block; overflow: visible; }
+.hbar-grid { stroke: var(--line); stroke-dasharray: 3 4; shape-rendering: crispEdges; }
+.hbar-base { stroke: var(--line); shape-rendering: crispEdges; }
+.hbar-avg { stroke: var(--muted); stroke-dasharray: 4 4; stroke-opacity: 0.7; shape-rendering: crispEdges; }
+.hbar-label { fill: var(--axis, var(--muted)); font-size: 10px; font-family: var(--font); font-variant-numeric: tabular-nums; }
+.hbar-bar { fill-opacity: 0.55; transition: fill-opacity 120ms ease; }
+.hbar-bar.is-off { fill-opacity: 0.3; }
+.hbar-bar.is-on { fill-opacity: 1; }
+.hbar-zero { fill: var(--faint); opacity: 0.45; transition: opacity 120ms ease; }
+.hbar-zero.is-on { opacity: 1; }
+.hbar-tip {
+  position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none; white-space: nowrap;
+  will-change: transform; transition: transform 90ms var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hbar-bar, .hbar-zero, .hbar-tip { transition: none; }
+}
+
+/* ---------- habits: "keep logging" checklist, emoji titles ---------- */
+.needs { border-radius: 12px; background: var(--card-2); padding: 0 12px; }
+.needs > summary {
+  list-style: none; display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  min-height: 44px; padding: 10px 0; cursor: pointer; font-size: 14px; font-weight: 700;
+}
+.needs > summary::-webkit-details-marker { display: none; }
+.needs > summary::after { content: '›'; color: var(--muted); transform: rotate(90deg); transition: transform 150ms var(--ease-out); }
+.needs[open] > summary::after { transform: rotate(-90deg); }
+.needs > summary > .muted { margin-left: auto; font-weight: 600; }
+.needs-list { list-style: none; margin: 0; padding: 0 0 12px; display: flex; flex-direction: column; gap: 10px; }
+.needs-list li { display: flex; flex-direction: column; gap: 2px; }
+.needs-label { font-size: 14px; font-weight: 600; }
+.needs-bar { display: block; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 4px; }
+.needs-bar span { display: block; height: 100%; background: var(--habits, var(--accent)); transform-origin: left; }
+
+.habit-emoji {
+  display: inline-grid; place-items: center; flex: none;
+  width: 24px; height: 24px; font-size: 20px; line-height: 1;
+}
+.habit-card-title { line-height: 1.2; }
+.habit-card-title .habit-icon { flex: none; }
+
+/* Comparison cells with a missing side. */
+.garmin-cell-values .muted-note, .lung-row .muted-note { font-size: 12px; font-weight: 600; color: var(--muted); white-space: normal; }

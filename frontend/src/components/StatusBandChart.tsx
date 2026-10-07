@@ -52,7 +52,6 @@ export function StatusBandChart({ data, height = 380 }: { data: Array<{ date: st
             axisLine={false}
             tickLine={false}
             width={36}
-            mirror
           />
           <Tooltip content={Tip} cursor={{ stroke: 'var(--faint)', strokeDasharray: '3 3' }} {...TIP} position={{ y: 4 }} />
           <Line

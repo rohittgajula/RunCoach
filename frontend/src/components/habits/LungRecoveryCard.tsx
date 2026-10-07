@@ -28,7 +28,11 @@ export function LungRecoveryCard({ enabled }: { enabled: boolean }) {
                 {!m.enough_data && <span className="muted small"> · keep logging</span>}
               </span>
               <span className="num-strong">
-                {fmt(m, m.before)} → {fmt(m, m.now)} {m.unit}{' '}
+                {m.before == null || m.now == null ? (
+                  m.now == null
+                    ? <span className="muted-note">Not enough data yet</span>
+                    : <>{fmt(m, m.now)} {m.unit} <span className="muted-note">· nothing before to compare</span></>
+                ) : <>{fmt(m, m.before)} → {fmt(m, m.now)} {m.unit}</>}{' '}
                 {m.enough_data && m.change != null && (
                   <Arrow value={m.change} better={m.better == null ? null : (m.change > 0) === m.better ? 'higher' : 'lower'} />
                 )}

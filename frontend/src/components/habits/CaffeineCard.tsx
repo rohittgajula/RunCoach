@@ -21,7 +21,7 @@ export function CaffeineCard({ range, freq, period }: { range: string; freq: Fre
     <section className={`card stack-sm caffeine-card ${q.isPlaceholderData ? 'is-stale' : ''}`}>
       <CardHead
         title={<span>☕ Caffeine</span>}
-        sub={`${r.total} ${r.total === 1 ? 'cup' : 'cups'} · avg ${r.per_day_avg != null ? r.per_day_avg.toFixed(1) : '--'}/day · ${period}`}
+        sub={`${r.total} ${r.total === 1 ? 'cup' : 'cups'} · ${period}`}
       />
       {r.total > 0 ? (
         <>

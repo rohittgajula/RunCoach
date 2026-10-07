@@ -5,10 +5,11 @@ import { Bullets } from '../Bullets'
 import { ChartFrame, DeltaChip } from '../ChartFrame'
 import type { Trend } from '../chartUtil'
 import { HabitBarChart } from './HabitBarChart'
+import { NeedsChecklist } from './NeedsChecklist'
 import { type HabitMeta } from './habitUtil'
 import type { Freq } from '../health/healthRange'
 
-const n1 = (v: number | null | undefined) => (v == null ? '--' : v.toFixed(v >= 10 ? 0 : 1))
+const n1 = (v: number) => v.toFixed(v >= 10 ? 0 : 1)
 
 /** "Now 2.1/day · before 3.4/day" (alcohol per week). */
 function amountText(meta: HabitMeta, entry: HabitReportHabit | undefined): string | null {
@@ -20,12 +21,15 @@ function amountText(meta: HabitMeta, entry: HabitReportHabit | undefined): strin
   const now = weekly && a.now_per_week !== undefined ? a.now_per_week : scale(a.now_per_day)
   const before = weekly && a.before_per_week !== undefined ? a.before_per_week : scale(a.before_per_day)
   const pct = a.change_pct != null && Number.isFinite(a.change_pct) ? ` · ${a.change_pct > 0 ? '+' : a.change_pct < 0 ? '−' : ''}${Math.abs(Math.round(a.change_pct))}%` : ''
+  // Unknown halves are left out rather than shown as "--".
+  if (now == null) return before == null ? null : `Before ${n1(before)}${per}`
+  if (before == null) return `Now ${n1(now)}${per}`
   return `Now ${n1(now)}${per} · before ${n1(before)}${per}${pct}`
 }
 
 /** One habit: status pill, headline, amount chart and the report's findings as bullets. */
 export function HabitCard({
-  meta, entry, points, chartTitle, sub, color, children, title, aside, className = '', freq, period,
+  meta, entry, points, chartTitle, sub, color, children, title, aside, className = '', freq, period, start, end,
 }: {
   meta: HabitMeta
   entry?: HabitReportHabit
@@ -40,6 +44,9 @@ export function HabitCard({
   /** R12: bucket of `points` (x labels) and the period line under the chart. */
   freq?: Freq
   period?: string
+  /** The range shown, so days with nothing logged still get their (zero) slot. */
+  start?: string
+  end?: string
 }) {
   const amount = amountText(meta, entry)
   const pct = entry?.amount?.change_pct
@@ -48,12 +55,14 @@ export function HabitCard({
     ? { avg: 0, last: 0, delta: pct, tone: Math.abs(pct) < 10 ? 'flat' : pct < 0 ? 'good' : 'bad' }
     : null
   const hasPoints = points.some((p) => p.value > 0)
-  const findings = entry?.findings ?? []
+  const all = entry?.findings ?? []
+  const findings = all.filter((f) => f.kind !== 'keep_logging')
+  const needs = all.find((f) => f.kind === 'keep_logging')
   return (
     <section className={`card insight habit-card ${className}`}>
       <div className="card-head">
         <h2 className="card-title habit-card-title">
-          <span aria-hidden="true">{meta.emoji}</span> {title ?? meta.label}
+          <span className="habit-emoji" aria-hidden="true">{meta.emoji}</span> {title ?? meta.label}
         </h2>
         <div className="habit-card-aside">
           {entry?.status && <StatusPill status={entry.status} />}
@@ -68,7 +77,7 @@ export function HabitCard({
           chip={<DeltaChip trend={chip} format={(v) => `${Math.round(v)}%`} label="vs the previous range" />}
           caption={<>{amount ? `${amount}. Dashed line: your average.` : 'Dashed line: your average for this range.'}{period && <span className="block">{period}</span>}</>}
         >
-          <HabitBarChart data={points} color={color} unit={meta.units} freq={freq} />
+          <HabitBarChart data={points} color={color} unit={meta.units} freq={freq} start={start} end={end} />
         </ChartFrame>
       ) : (
         <>
@@ -77,7 +86,8 @@ export function HabitCard({
         </>
       )}
       {findings.length > 0 && <Bullets items={findings} />}
-      {entry?.status === 'not_enough_data' && !findings.length && (
+      {needs && <NeedsChecklist text={needs.text} />}
+      {entry?.status === 'not_enough_data' && !findings.length && !needs && (
         <p className="muted small">Keep logging for a couple of weeks — then this shows whether it is going up or down and what it does to your sleep, HRV and runs.</p>
       )}
     </section>
