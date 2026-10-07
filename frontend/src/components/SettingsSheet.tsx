@@ -75,6 +75,39 @@ function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
   )
 }
 
+/** R11 §E: saves on tap (not part of the profile form). */
+function MapPrivacy() {
+  const { athlete, updateAthlete } = useAuth()
+  const client = useQueryClient()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const on = athlete?.map_hide_endpoints ?? true
+  const toggle = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await updateAthlete({ map_hide_endpoints: !on })
+      client.invalidateQueries({ queryKey: ['activity-route'] })
+    } catch {
+      setError('Could not save that.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <>
+      <div className="toggle-row">
+        <span className="grow">
+          <strong>Hide start/end on maps</strong>
+          <span className="muted small block">Trims the first and last 200 m of every route, so your home or work isn’t on the map.</span>
+        </span>
+        <button type="button" role="switch" aria-checked={on} aria-label="Hide start and end on maps" disabled={busy} className={`switch ${on ? 'is-on' : ''}`} onClick={toggle} />
+      </div>
+      {error && <p className="bad small">{error}</p>}
+    </>
+  )
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="card settings-section">
@@ -279,6 +312,10 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
         <button type="button" className="btn btn-primary btn-block" onClick={save} disabled={busy}>
           {busy ? 'Saving…' : saved ? 'Saved' : 'Save profile'}
         </button>
+
+        <Section title="Maps">
+          <MapPrivacy />
+        </Section>
 
         <Section title="Appearance">
           <div className="segmented segmented-full" role="radiogroup" aria-label="Theme">

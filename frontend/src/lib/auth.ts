@@ -169,6 +169,8 @@ export type Athlete = {
   location_name?: string
   location_source?: 'runs' | 'city' | 'none'
   location_city?: string
+  // R11 §E — trim the first/last 200 m of every run map (default on).
+  map_hide_endpoints?: boolean
   // Only on a PATCH response: what changing the training days did to the active plan.
   plan_reflow?: PlanReflow | null
 }

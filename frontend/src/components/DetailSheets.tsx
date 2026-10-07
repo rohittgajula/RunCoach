@@ -16,6 +16,7 @@ import { Loading } from './States'
 import { StepsList } from './StepsList'
 import { WeatherBlock } from './weather/WeatherBlock'
 import { WorkoutBar } from './WorkoutBar'
+import { RunMapSection } from './map/RunMapSection'
 import { useCoachLaunch } from './useCoachLaunch'
 
 export { StepsList }
@@ -76,7 +77,10 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
           </div>
 
           {done ? (
-            <WorkoutResult workout={w} />
+            <>
+              <WorkoutResult workout={w} />
+              {w.actual?.activity_id != null && <RunMapSection activityId={w.actual.activity_id} />}
+            </>
           ) : (
             <>
               <WorkoutBar steps={w.steps} height={72} />
@@ -252,6 +256,8 @@ export function ActivitySheet({ activity, onClose }: { activity: ActivityCard | 
               error={aiReview.isError ? errorText(aiReview.error, 'Could not get a review. Try again.') : undefined}
             />
           )}
+
+          {!/strength|yoga|swim|indoor|treadmill/i.test(a.sport) && <RunMapSection activityId={a.id} />}
 
           {/run|walk|hik/i.test(a.sport) && (
             <CheckinSection key={a.id} activityId={a.id} entry={detail.data?.checkin} journalled={a.journalled} />
