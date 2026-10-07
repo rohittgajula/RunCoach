@@ -1137,7 +1137,7 @@ Athlete JSON gains writable `map_hide_endpoints: bool` (default true).
             segment: "run"|"walk"|"stop"|null, ele_m: float|null}] }   # ≤ 800
 ```
 - Douglas–Peucker on the GPS track (tolerance grown until ≤ 800 points); pace = smoothed
-  over ±15 s at that point (null when slower than 20:00/km), HR ±5 s mean, segment from
+  over ±15 s at that point (null when slower than 20:00/km or faster than 2:30/km — a GPS jump), HR ±5 s mean, segment from
   the run/walk segmentation. Coordinates rounded to 6 dp. Cached per activity
   (+ segmentation version, + setting).
 - `available: false` (`points: []`, nulls) when the activity has no GPS records
