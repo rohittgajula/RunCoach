@@ -33,10 +33,18 @@ export function MetricChart({
   const values = data.map((d) => d.value).filter((v): v is number => v != null && Number.isFinite(v))
   const avg = average && values.length >= 3 ? values.reduce((a, b) => a + b, 0) / values.length : null
   const Tip = chartTip((items, label) => ({ title: tickDate(label), lines: [{ text: format(num(items[0]?.value)), color }] }))
+  const showKey = avg != null || !!band?.label
   return (
+    <div className="metric-chart">
+    {showKey && (
+      <div className="chart-key">
+        {band?.label && <span><i className="key-band" style={{ background: color, opacity: 0.25 }} />{band.label}</span>}
+        {avg != null && <span><i className="key-avg" />avg {format(avg)}</span>}
+      </div>
+    )}
     <div className="chart" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 44, right: 0, left: 0, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 36, right: axis === 'right' ? 4 : 0, left: axis === 'left' ? 4 : 0, bottom: 0 }}>
           <defs>
             <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity={0.16} />
@@ -52,7 +60,6 @@ export function MetricChart({
               fillOpacity={0.12}
               stroke="none"
               ifOverflow="extendDomain"
-              label={band.label ? { value: band.label, position: 'insideTopLeft', fill: 'var(--muted)', fontSize: 11, fontWeight: 600 } : undefined}
             />
           )}
           <XAxis
@@ -70,8 +77,7 @@ export function MetricChart({
             tickFormatter={format}
             axisLine={false}
             tickLine={false}
-            width={40}
-            mirror
+            width={38}
             domain={domain ?? ['auto', 'auto']}
             tickCount={4}
           />
@@ -82,7 +88,6 @@ export function MetricChart({
               strokeDasharray="4 4"
               strokeOpacity={0.7}
               ifOverflow="extendDomain"
-              label={{ value: `avg ${format(avg)}`, position: axis === 'left' ? 'insideTopRight' : 'insideTopLeft', fill: 'var(--muted)', fontSize: 11 }}
             />
           )}
           <Tooltip content={Tip} cursor={{ stroke: 'var(--faint)', strokeDasharray: '3 3' }} {...TIP} />
@@ -102,6 +107,7 @@ export function MetricChart({
           />
         </AreaChart>
       </ResponsiveContainer>
+    </div>
     </div>
   )
 }

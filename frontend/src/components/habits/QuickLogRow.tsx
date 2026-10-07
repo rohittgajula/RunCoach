@@ -4,7 +4,6 @@ import { ApiError } from '../../lib/auth'
 import { errorText, useDeleteHabitLog, useHabitsToday, useLogHabit } from '../../lib/queries'
 import type { HabitKind, HabitLog } from '../../lib/types'
 import { MoreHIcon } from '../Icons'
-import { HabitIcon } from './HabitIcon'
 import { HabitLogSheet } from './HabitLogSheet'
 import { habitMeta, loggableHabits, loggedText } from './habitUtil'
 
@@ -97,7 +96,7 @@ export function QuickLogRow({ label = 'Log', aside }: { label?: string; aside?: 
               onPointerCancel={pressEnd}
               onContextMenu={(e) => e.preventDefault()}
             >
-              <HabitIcon kind={h.kind} />
+              <span className="quicklog-emoji" aria-hidden="true">{h.emoji}</span>
               <span className="quicklog-count">{Number.isInteger(n) ? n : n.toFixed(1)}</span>
             </button>
           )

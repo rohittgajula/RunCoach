@@ -41,7 +41,7 @@ function MeHome() {
         <span className="avatar-btn avatar-lg" aria-hidden="true">{initialOf(athlete?.display_name || username)}</span>
         <div className="grow">
           <p className="kit-title">{athlete?.display_name || 'Athlete'}</p>
-          <p className="muted small">Signed in as {username}</p>
+          <p className="muted small">{username}</p>
         </div>
         <button type="button" className="btn btn-secondary btn-sm" onClick={openSettings}>
           <GearIcon size={18} /> Settings

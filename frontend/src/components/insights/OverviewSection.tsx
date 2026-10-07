@@ -105,10 +105,10 @@ function SummaryHero({ data, range }: { data: Insights; range: InsightRange }) {
   const sleepScore = trendOf(data.sleep?.series.map((p) => p.score) ?? [], 'higher')
   const share = values(data, 'run_fraction')
   const shareTrend = trendOf(share, 'higher')
-  const rings: Array<{ key: string; name: string; topic: 'recovery' | 'sleep' | 'run'; value: number | null; trend: Trend | null; better: 'higher' | 'lower' }> = [
+  const rings: Array<{ key: string; name: string; caption?: string; topic: 'recovery' | 'sleep' | 'run'; value: number | null; trend: Trend | null; better: 'higher' | 'lower' }> = [
     { key: 'r', name: 'Readiness', topic: 'recovery', value: data.readiness?.score ?? null, trend: null, better: 'higher' },
     { key: 's', name: 'Sleep score', topic: 'sleep', value: data.sleep?.avg_score ?? null, trend: sleepScore, better: 'higher' },
-    { key: 'f', name: 'Running share', topic: 'run', value: lastOf(share), trend: shareTrend, better: 'higher' },
+    { key: 'f', name: 'Run vs walk', caption: 'share of time running', topic: 'run', value: lastOf(share), trend: shareTrend, better: 'higher' },
   ]
   const shown = rings.filter((r) => r.value != null)
 
@@ -122,6 +122,7 @@ function SummaryHero({ data, range }: { data: Insights; range: InsightRange }) {
             <div key={r.key}>
               <TopicRing value={r.value} topic={r.topic} size={84} label={r.name} />
               <span className="ring-name">{r.name}</span>
+              {r.caption && <span className="ring-caption">{r.caption}</span>}
               {r.trend && r.trend.tone !== 'flat' ? (
                 <span className="arrow-line">
                   <Arrow value={r.trend.delta} better={r.better} /> {Math.round(Math.abs(r.trend.delta))}

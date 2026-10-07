@@ -616,3 +616,10 @@ button.mt:active { transform: scale(0.98); }
 .metric-label { font-size: 12px; font-weight: 600; }
 .metric-value { font-weight: 800; }
 .card:empty { display: none; }
+.ring-row .ring-caption { font-size: 11px; color: var(--muted); line-height: 1.2; }
+.quicklog-btn .quicklog-emoji { font-size: 20px; line-height: 1; }
+.chart-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--muted); font-weight: 600; }
+.chart-key span { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.chart-key .key-avg { width: 16px; border-top: 2px dashed var(--muted); }
+.chart-key .key-band { width: 12px; height: 10px; border-radius: 3px; }
+.metric-chart { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

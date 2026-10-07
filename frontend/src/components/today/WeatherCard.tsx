@@ -29,6 +29,11 @@ export function WeatherCard() {
     const hr = hourOf(h.time)
     return hr != null && bestStart != null && bestEnd != null && hr >= bestStart && hr < Math.max(bestEnd, bestStart + 1)
   }
+  const firstHour = hours.length ? hourOf(hours[0].time) : null
+  const lastHour = hours.length ? hourOf(hours[hours.length - 1].time) : null
+  // Only label a best window that is on the chart; one that already passed is said so.
+  const bestPassed = bestEnd != null && firstHour != null && Math.max(bestEnd, (bestStart ?? 0) + 1) <= firstHour
+  const bestOnChart = bestStart != null && firstHour != null && lastHour != null && !bestPassed && bestStart <= lastHour
   const temps = hours.map((h) => h.feels_like ?? h.temp).filter((v): v is number => v != null)
   const lo = Math.min(...temps)
   const hi = Math.max(...temps)
@@ -71,7 +76,8 @@ export function WeatherCard() {
           </div>
           <div className="hour-labels">
             <span>{clock(hours[0].time)}</span>
-            {w.best_window && <span className="hour-best">Best {clock(w.best_window.start)}–{clock(w.best_window.end)}</span>}
+            {w.best_window && bestOnChart && <span className="hour-best">Best {clock(w.best_window.start)}–{clock(w.best_window.end)}</span>}
+            {w.best_window && bestPassed && <span className="muted">Best window passed</span>}
             <span>{clock(hours[hours.length - 1].time)}</span>
           </div>
         </>
