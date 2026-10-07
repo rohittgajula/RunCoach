@@ -12,7 +12,8 @@ from apps.habits.models import HabitLog
 from tests.r7_helpers import make_workout, wellness
 
 SUMMARY_KEYS = {"range", "today", "smoke", "alcohol", "sugar", "impact", "weekly", "goals",
-                "summary", "report"}     # R9 §C added `report`
+                "summary", "report",     # R9 §C added `report`
+                "start", "end", "period"}    # R12 §A
 
 
 def log(athlete, kind="smoke", qty=1, days_ago=0, hour=9):
@@ -96,7 +97,8 @@ def test_summary_shapes(api, athlete):
         "habit", "metric", "dose", "label", "with_avg", "without_avg", "diff", "diff_pct",
         "n_with", "n_without", "direction", "enough_data"}
     assert body["weekly"] and body["summary"]["status"] == "none"
-    assert api.get("/api/habits/summary/", {"range": "1y"}).status_code == 400
+    # R12: 1y is a preset everywhere now; anything else is still a 400.
+    assert api.get("/api/habits/summary/", {"range": "2y"}).status_code == 400
 
 
 def test_impact_from_real_rows(api, athlete):

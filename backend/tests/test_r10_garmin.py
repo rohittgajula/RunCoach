@@ -103,6 +103,17 @@ class FakeClient:
         self._hit("get_gear_stats")
         return {"totalDistance": 10668.3, "totalActivities": 6}
 
+    # R12 §B4: read-only watch alarms.
+    def get_devices(self):
+        self._hit("get_devices")
+        return [{"deviceId": 3442975544, "productDisplayName": "Forerunner 265"}]
+
+    def get_device_settings(self, device_id):
+        self._hit("get_device_settings")
+        return {"alarms": [{"alarmMode": "ON", "alarmTime": 360,
+                            "alarmDays": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+                            "alarmId": 1}]}
+
 
 # --- fields from stored payloads ------------------------------------------------------
 

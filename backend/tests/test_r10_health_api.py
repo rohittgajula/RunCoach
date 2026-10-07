@@ -55,7 +55,8 @@ def test_fitness_payload(api, athlete):
     athlete.lt_hr, athlete.lt_pace_s, athlete.lt_date = 171, 365, ago(athlete, 5)
     athlete.zones_source, athlete.zones_updated_at = "lactate_threshold", timezone.now()
     athlete.save()
-    body = api.get("/api/health/fitness/").json()
+    # R12: 6m defaults to weekly buckets; the daily series is freq=day.
+    body = api.get("/api/health/fitness/", {"freq": "day"}).json()
     assert body["vo2max"] == {"current": 41.0, "change": 2.0, "series": [
         {"date": str(ago(athlete, 60)), "value": 39.0}, {"date": str(ago(athlete, 1)), "value": 41.0}]}
     assert body["fitness_age"]["current"] == 29.4 and body["fitness_age"]["chronological_age"] == 31

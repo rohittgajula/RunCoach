@@ -10,7 +10,8 @@ from tests.r6_helpers import make_activity
 
 TOP_KEYS = {"range", "today", "readiness", "hrv", "sleep", "resting_hr", "body_battery",
             "stress", "respiration", "vo2max", "race_predictions", "running", "load",
-            "focus", "summary"}
+            "focus", "summary",
+            "start", "end", "period"}      # R12 §A
 
 
 def keys(items):

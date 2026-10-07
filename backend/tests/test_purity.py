@@ -44,6 +44,9 @@ PURE_MODULES = [
     "analysis.day",
     "analysis.day_trends",
     "analysis.route",
+    # R12
+    "analysis.buckets",
+    "analysis.wake",
     "planning",
     "planning.calendar",
     "planning.prediction",
