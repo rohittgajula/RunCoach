@@ -1955,6 +1955,10 @@ Snapshot = {date, runs: int, duration_under_cap_s: int|null, hr_at_ref_pace: int
 `since_day1` uses all history: first = median of the first 3 runs, latest = of the last 3.
 
 ### §14 Admin (staff only: `is_staff`; everyone else 403, signed-out 401)
+The session `user` object (`GET /auth/me/`, login and register responses) gains
+`is_staff: bool` — show the Admin entry only when true. (`POST /auth/refresh/` returns
+only `{access}`, unchanged.)
+
 All under `/api/admin/`. Never returns keys or secrets — only `configured: bool`.
 ```
 AdminUser = { id, username, display_name, email, joined: datetime, last_active: datetime|null,
@@ -2021,3 +2025,91 @@ Invite = {id, code, note, max_uses, uses, expires_at|null, created_at, usable: b
   gcp: {configured: bool, trial_end: date|null, days_left: int|null, credit_inr: number|null},
   checked_at: datetime }
 ```
+
+### R14 backend choices (and where the spec was silent)
+- **Contract details added after the first commit** (additive only): experiment
+  `adherence.series[]` items also carry `display: str|null` ("23:10", "8,412 steps",
+  "2 drinks"); for `bed_by` the numeric `value` is minutes after 12:00 noon (so 23:30 = 690,
+  00:30 = 750). Admin `by_user` rows with `athlete_id: null` are the admin's own test prompts
+  (`name: "Admin tests"`).
+- **ICS path** is `/api/cal/<token>.ics` (not `/cal/…`): it then goes through the existing
+  ingress route and the PWA service worker's `/api` deny-list with no deploy change. The
+  token is `secrets.token_urlsafe(32)` (256 bits), stored as-is (it is a capability URL the
+  athlete must be able to copy again); regenerate replaces it, DELETE revokes it.
+  `DTSTAMP` = the feed's last change (so identical content gives an identical body and
+  ETag). Events: workouts of the active plan (RACE-kind workouts are left out — the Race
+  itself is the event), strength sessions, races. All-day events are `TRANSP:TRANSPARENT`.
+- **Weather swap**: a day is "bad" only when every candidate start hour (05–08, 17–19) is
+  bad, so a hot afternoon with a cool morning never triggers a move. "Better" = the
+  target's best window rates good/caution and scores lower (feels-like + AQI and rain
+  penalties). Moves stay inside the session's Mon–Sun week, on an available training day
+  with no other run, never after the day before the race; LONG/TEMPO/INTERVALS never next
+  to another LONG/hard/race day. `moved_from` keeps the original date (as a manual move);
+  the watch copy is re-sent through `garmin_sync.resync_on_garmin`. A dismissed (or
+  applied) suggestion is never re-proposed for the same workout + date. The daily check is
+  the beat `weather-checks` (hourly, acts at 18:xx local); reading `/weather/report/`
+  also checks. Pending suggestions expire when their day arrives or the workout changes.
+- **Weather report** uses separate 7-day forecast / 5-day air-quality cache keys (`fc7`,
+  `aq5`) next to the existing 2-day ones, so `/weather/today/` is unchanged.
+- **Experiments**: one scheduled/active experiment at a time. A habit day with no log
+  counts as kept once the day is over; today is `null` until it can no longer change
+  (a logged drink → false; steps reached → true). Bedtime = Garmin `sleep_start_local`,
+  the night belonging to the evening it started (00:40 belongs to the day before). Nightly
+  numbers (HRV, resting HR, sleep score) are moved back one day — the morning after a rule
+  day is "during". Easy-run HR = average run-block HR of runs ≥ 10 min whose run pace is
+  within the easy band (−20 s … +60 s/km). Thresholds for "clear difference": HRV 3 ms,
+  RHR 2 bpm, sleep score 3, stress 3, easy HR 3 bpm, mood/energy 0.4; n ≥ 4 days each
+  side (easy HR ≥ 2 runs). The private habit is allowed in a custom experiment (no AI is
+  involved); its share card says "Private habit limit".
+- **Goals**: `distance` = longest single run (km); `weekly_km` = the last 7 days of runs;
+  `resting_hr` = 7-day median; `smoke_free_days` = the current streak of finished days.
+  Start value defaults to the current value (distance: the longest run of the last 30
+  days). Milestone badges are stored as Achievement rows (`goal_<id>_<pct>`), so they show
+  in `/achievements/` `recent`; the badge grid itself is unchanged. 100 % sets `achieved`.
+- **Heart adaptation** (`analysis/heart_adaptation.py`, definitions in its docstring):
+  steady running = 30-s windows in run blocks after the first 5 min of the activity and
+  the first 60 s of each block, speed CV ≤ 12 %, ≥ 80 % HR coverage, ≥ 1.4 m/s. Reference
+  bands ±15 s/km and ±3 bpm with ≥ 2 min matched. Efficiency in m/min per bpm; terrain
+  adjustment +8 m per metre climbed (smoothed altitude); heat adjustment −1 bpm per °C of
+  feels-like above 20 °C; hot ≥ 28 °C; hilly ≥ 15 m/km. Per-run numbers are cached in
+  `RunHeartStats` (key = algorithm + segmentation version + references + feels-like).
+  Weather at run start comes from the Open-Meteo **archive** (older than 6 days) or the
+  forecast API's `past_days` (recent), per rounded start position (2 dp) — filled by the
+  `health.heart_weather` task queued from the endpoint; runs with no position and no
+  profile location are marked `source: none`. "Since day 1" = median of the first 3 runs
+  with HR vs the last 3 (with fewer than 7 runs the halves are smaller); needs ≥ 4 runs.
+- **AI routing** (`apps/coaching/client.py`): `route_for(operation)` → (provider, model):
+  an `AIConfig` row for the operation's tier, else env (`AI_PROVIDER`, `AI_<TIER>_MODEL`).
+  Gemini = the `openai` SDK with `base_url=https://generativelanguage.googleapis.com/v1beta/openai/`
+  and `GEMINI_API_KEY`. Structured output: strict `json_schema` first; if the provider
+  rejects the schema (4xx mentioning schema/response_format) one retry in `json_object`
+  mode with the schema in the system prompt, then the same Pydantic validation. Tool
+  calling: OpenAI keeps `reasoning_effort="none"`; Gemini gets no reasoning parameter;
+  missing tool-call ids are synthesised and Gemini 3 thought signatures
+  (`extra_content`) are echoed back. Streaming is not used anywhere in the app. Every call
+  logs provider, model, tier, tokens, cost (price table `ModelPrice`, else the built-in
+  fallback), latency and status. The per-athlete monthly budget (default
+  `AI_MONTHLY_CALL_BUDGET`, or the admin's per-user `ai_budget`) applies to every provider.
+  The price table is seeded from the built-in list the first time the admin page reads it.
+- **Admin**: `IsAdminUser` (`is_staff`) on every `/api/admin/…` view. Disabling a user sets
+  `is_active=false` and blacklists their refresh tokens (access tokens expire within 15
+  min). "Last active" = newest of last login and the newest refresh-token issue. Invites
+  gained `revoked_at` (revoked codes can't be used). System view: Celery queue lengths =
+  Redis `LLEN` of `celery`, `garmin`, `metrics`, `ai`, `planning`; Garmin breaker from the
+  shared cache key; Kubernetes via the pod's ServiceAccount (token + CA under
+  `/var/run/secrets/kubernetes.io/serviceaccount`, httpx, 4 s timeout) — `GET /api/v1/nodes`,
+  `/apis/metrics.k8s.io/v1beta1/nodes`, `/api/v1/namespaces/<ns>/pods`, `…/pods/<own pod>`
+  (image tag = git sha), `/apis/batch/v1/namespaces/<ns>/cronjobs/postgres-backup`,
+  `/apis/batch/v1/namespaces/<ns>/jobs`. Not in a cluster → `reason: "not_in_cluster"`;
+  401/403 → `"forbidden"`. Disk = node ephemeral-storage capacity/allocatable (real disk
+  usage would need `nodes/proxy`, deliberately not granted). R2: the backend can't see the
+  bucket (`r2.configured: null`) unless `R2_BUCKET` is in its env. `GIT_SHA`/`APP_VERSION`
+  env wins over the image tag.
+- **Account deletion**: all R14 tables cascade (see apps/athletes/deletion.py).
+- **Deploy**: migrations `athletes.0011_r14`, `coaching.0009_r14` (backfills `tier` on old
+  log rows), `health.0003_r14`, `planning.0006_r14`. New tasks `planning.weather_checks`,
+  `planning.weather_check` (planning queue), `health.heart_weather` (metrics queue); new beat
+  entry `weather-checks` — restart worker and beat. New env (all optional):
+  `GEMINI_API_KEY`, `GCP_TRIAL_END` (default 2027-01-03), `GCP_CREDIT_INR`, `GIT_SHA`. No
+  new Python dependencies. Make an admin with `python manage.py shell -c "from
+  django.contrib.auth.models import User; User.objects.filter(username='rohit').update(is_staff=True)"`.
