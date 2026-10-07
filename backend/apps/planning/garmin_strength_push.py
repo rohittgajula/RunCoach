@@ -4,7 +4,11 @@ Same rules as the running workouts (garmin_push.py): the `garmin` queue (concurr
 the shared circuit breaker (a 429 trips it for everyone), the existing authenticated
 client, and idempotency by payload hash. Uses `Garmin.upload_strength_workout`
 (garminconnect 0.3.10) with a `StrengthWorkout` built from planning/garmin_strength.py,
-then `schedule_workout`, exactly like the running upload.
+then `schedule_workout`, exactly like the running upload — including the GarminUpload
+registry and the same-day sweep of RunCoach leftovers (garmin_registry).
+
+Strength steps stay `no.target` (planning/garmin_strength.py): they are reps and
+time, not paced, so there is no heart-rate band to show.
 """
 
 from __future__ import annotations
@@ -16,7 +20,8 @@ from django.utils import timezone
 from apps.athletes.models import Athlete
 from planning.garmin_strength import build_payload, payload_hash
 
-from .garmin_push import _client, _delete_remote, _rate_limited, _schedule_id
+from . import garmin_registry as registry
+from .garmin_push import _client, _rate_limited, _schedule_id, _schedule_or_discard, remove_copy
 from .models import StrengthSession
 
 logger = logging.getLogger(__name__)
@@ -25,15 +30,6 @@ logger = logging.getLogger(__name__)
 def _result(session: StrengthSession, status: str, detail: str = "") -> dict:
     return {"strength_id": session.pk, "date": session.date.isoformat(), "status": status,
             "garmin_workout_id": session.garmin_workout_id, "detail": detail}
-
-
-def _clear(session: StrengthSession) -> None:
-    session.garmin_workout_id = None
-    session.garmin_schedule_id = None
-    session.garmin_synced_at = None
-    session.garmin_payload_hash = ""
-    session.save(update_fields=["garmin_workout_id", "garmin_schedule_id",
-                                "garmin_synced_at", "garmin_payload_hash"])
 
 
 def send_one(client, session: StrengthSession, today) -> dict:
@@ -46,30 +42,28 @@ def send_one(client, session: StrengthSession, today) -> dict:
     payload = build_payload({"title": session.title, "duration_s": session.duration_s,
                              "exercises": session.exercises or []})
     digest = payload_hash(payload, session.date.isoformat())
+    athlete = session.athlete
+    registry.sweep(client, athlete,
+                   {session.date, registry.date_of(athlete, session.garmin_workout_id)})
     if session.garmin_workout_id and session.garmin_payload_hash == digest:
         return _result(session, "unchanged")
     replacing = bool(session.garmin_workout_id)
     if replacing:
-        _delete_remote(client, session)
-        _clear(session)
+        remove_copy(client, session)
     uploaded = client.upload_strength_workout(StrengthWorkout.model_validate(payload))
     garmin_id = (uploaded or {}).get("workoutId") if isinstance(uploaded, dict) else None
     if not garmin_id:
         return _result(session, "error", "Garmin did not return a workout id.")
-    try:
-        scheduled = client.schedule_workout(garmin_id, session.date.isoformat())
-    except Exception:
-        try:
-            client.delete_workout(garmin_id)
-        except Exception:  # noqa: BLE001
-            logger.warning("could not remove unscheduled garmin strength workout %s", garmin_id)
-        raise
+    registry.record(athlete, garmin_id, None, session.date, strength=session)
+    scheduled = _schedule_or_discard(client, athlete, garmin_id, session.date)
     session.garmin_workout_id = int(garmin_id)
     session.garmin_schedule_id = _schedule_id(scheduled)
     session.garmin_synced_at = timezone.now()
     session.garmin_payload_hash = digest
     session.save(update_fields=["garmin_workout_id", "garmin_schedule_id",
                                 "garmin_synced_at", "garmin_payload_hash"])
+    registry.record(athlete, garmin_id, session.garmin_schedule_id, session.date,
+                    strength=session)
     return _result(session, "updated" if replacing else "uploaded")
 
 
@@ -97,8 +91,7 @@ def run_job(athlete_id: int, session_ids: list[int], action: str) -> dict:
         try:
             if action == "delete":
                 if session.garmin_workout_id:
-                    _delete_remote(client, session)
-                    _clear(session)
+                    remove_copy(client, session)
                     results.append(_result(session, "removed"))
                 else:
                     results.append(_result(session, "skipped", "Not on the watch."))

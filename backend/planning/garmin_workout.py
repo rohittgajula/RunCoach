@@ -8,9 +8,23 @@ copied here so this module needs neither Django nor the library.
 
 * warmup -> warmup, cooldown -> cooldown, run / interval / stride -> interval,
   walk / recovery -> recovery. Every step ends on time.
-* A step with an HR band and a non-walk intensity gets a custom heart-rate range:
-  targetType heart.rate.zone (id 4) with targetValueOne/Two = the band in bpm.
-  Walk steps get no target.
+* EVERY step gets a custom heart-rate range — targetType heart.rate.zone (id 4) with
+  targetValueOne/Two = the band in bpm — so the watch shows its target screen (gauge
+  against the band) for the whole workout, walks included, not just the run blocks.
+  The band for a step:
+    - non-walk step that carries an HR band (run, easy jog warm-up/cool-down, tempo,
+      reps when zones are known): that band, unchanged.
+    - walk-intensity step (walk, walk warm-up / cool-down, walk recovery, any kind):
+      the GENTLE band. low = max(resting HR + 20, 90); high = the athlete's easy-run
+      top (hr_easy_max, else hr_ceiling), lowered to the lowest top of any banded run
+      step in the same workout, so a walk band is never higher than a run band and
+      never asks for harder effort. If that leaves no room, low = high - 10.
+    - non-walk step without a band (strides, reps or a race when no HR zones are
+      known): easy -> (hr_easy_min, hr_easy_max), moderate/hard -> (hr_easy_max,
+      hr_ceiling) — capped at the athlete's ceiling, never above it.
+  The athlete numbers come in `workout["hr"]` ({resting_hr, hr_easy_min, hr_easy_max,
+  hr_ceiling}); without them the walk band is derived from the run steps alone (low
+  90) and a step with nothing to derive from gets no target.
 * Consecutive identical blocks (e.g. run 4:00 + walk 2:00, five times) become one
   RepeatGroupDTO with numberOfIterations; labels are ignored when comparing.
 """
@@ -43,6 +57,9 @@ HEART_RATE = {"workoutTargetTypeId": 4, "workoutTargetTypeKey": "heart.rate.zone
               "displayOrder": 4}
 
 MAX_NAME = 60
+GENTLE_FLOOR = 90          # bpm: a walk band never starts below this
+GENTLE_ABOVE_RESTING = 20  # bpm above resting HR where the walk band starts
+GENTLE_MIN_WIDTH = 10
 MAX_PATTERN = 4
 
 
@@ -76,7 +93,50 @@ def group_repeats(steps: list[dict]) -> list[tuple[int, list[dict]]]:
     return out
 
 
-def _executable(step: dict, order: int, child_id: int | None) -> dict:
+def _banded(step: dict) -> bool:
+    return step.get("intensity") != "walk" and bool(step.get("hr_min")) \
+        and bool(step.get("hr_max"))
+
+
+def gentle_band(hr: dict | None, steps: list[dict]) -> tuple[int, int] | None:
+    """The walk / warm-up / cool-down HR band (see module docstring)."""
+    hr = hr or {}
+    tops = [int(s["hr_max"]) for s in steps if _banded(s)]
+    candidates = [v for v in (hr.get("hr_easy_max") or hr.get("hr_ceiling"),) if v] + tops
+    if not candidates:
+        return None
+    high = int(min(candidates))
+    resting = hr.get("resting_hr")
+    low = max(int(resting) + GENTLE_ABOVE_RESTING if resting else 0, GENTLE_FLOOR)
+    if low > high - GENTLE_MIN_WIDTH:
+        low = high - GENTLE_MIN_WIDTH
+    return low, high
+
+
+def _fallback_band(step: dict, hr: dict | None) -> tuple[int, int] | None:
+    """A non-walk step with no band of its own: the athlete's easy or ceiling range."""
+    hr = hr or {}
+    easy_min, easy_max, ceiling = hr.get("hr_easy_min"), hr.get("hr_easy_max"), \
+        hr.get("hr_ceiling")
+    if step.get("intensity") == "easy" and easy_min and easy_max and easy_min < easy_max:
+        return int(easy_min), int(easy_max)
+    if easy_max and ceiling and easy_max < ceiling:
+        return int(easy_max), int(ceiling)
+    return None
+
+
+def step_band(step: dict, gentle: tuple[int, int] | None,
+              hr: dict | None) -> tuple[int, int] | None:
+    """The (low, high) bpm target the watch shows for one step."""
+    if step.get("intensity") == "walk":
+        return gentle
+    if _banded(step):
+        return int(step["hr_min"]), int(step["hr_max"])
+    return _fallback_band(step, hr)
+
+
+def _executable(step: dict, order: int, child_id: int | None,
+                band: tuple[int, int] | None = None) -> dict:
     out = {
         "type": "ExecutableStepDTO",
         "stepOrder": order,
@@ -87,25 +147,31 @@ def _executable(step: dict, order: int, child_id: int | None) -> dict:
     }
     if child_id is not None:
         out["childStepId"] = child_id
-    if step.get("intensity") != "walk" and step.get("hr_min") and step.get("hr_max"):
+    if band:
         out["targetType"] = dict(HEART_RATE)
-        out["targetValueOne"] = float(step["hr_min"])
-        out["targetValueTwo"] = float(step["hr_max"])
+        out["targetValueOne"] = float(band[0])
+        out["targetValueTwo"] = float(band[1])
     if step.get("label"):
         out["description"] = str(step["label"])[:100]
     return out
 
 
 def build_payload(workout: dict) -> dict:
-    """workout = {title, duration_s, steps, description?} -> Garmin workout JSON."""
+    """workout = {title, duration_s, steps, description?, hr?} -> Garmin workout JSON."""
     steps = [s for s in workout.get("steps") or [] if (s.get("duration_s") or 0) > 0]
+    hr = workout.get("hr")
+    gentle = gentle_band(hr, steps)
+
+    def executable(step, order, child):
+        return _executable(step, order, child, step_band(step, gentle, hr))
+
     order = 0
     child = 0
     out_steps: list[dict] = []
     for iterations, block in group_repeats(steps):
         if iterations == 1:
             order += 1
-            out_steps.append(_executable(block[0], order, None))
+            out_steps.append(executable(block[0], order, None))
             continue
         order += 1
         child += 1
@@ -122,7 +188,7 @@ def build_payload(workout: dict) -> dict:
         }
         for step in block:
             order += 1
-            group["workoutSteps"].append(_executable(step, order, child))
+            group["workoutSteps"].append(executable(step, order, child))
         out_steps.append(group)
 
     payload = {

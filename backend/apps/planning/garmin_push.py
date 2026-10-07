@@ -7,6 +7,12 @@ Idempotent per workout. The hash of the exact JSON uploaded (plus its date) is s
 sending again with the same hash is a no-op, a different hash (check-in applied,
 moved, rebuilt) deletes the old Garmin workout and uploads the new one. Every
 workout gets its own result — a batch never reports success for a part that failed.
+
+One RunCoach copy per day: every upload is recorded in the GarminUpload registry, and
+each send first sweeps the workout's date (and the date its old copy was on, when it
+moved) for RunCoach-created copies no current row owns any more — see
+garmin_registry. Workouts the athlete made in Garmin Connect are never registered, so
+never deleted.
 """
 
 from __future__ import annotations
@@ -18,6 +24,7 @@ from django.utils import timezone
 from apps.athletes.models import Athlete
 from planning.garmin_workout import build_payload, payload_hash
 
+from . import garmin_registry as registry
 from .models import PlannedWorkout
 
 logger = logging.getLogger(__name__)
@@ -55,17 +62,9 @@ def _result(workout: PlannedWorkout, status: str, detail: str = "") -> dict:
 
 
 def _source(workout: PlannedWorkout) -> dict:
-    return {"title": workout.title, "duration_s": workout.duration_s,
-            "steps": workout.steps or [], "description": workout.description}
+    from .presenters import _garmin_source
 
-
-def _clear(workout: PlannedWorkout) -> None:
-    workout.garmin_workout_id = None
-    workout.garmin_schedule_id = None
-    workout.garmin_synced_at = None
-    workout.garmin_payload_hash = ""
-    workout.save(update_fields=["garmin_workout_id", "garmin_schedule_id",
-                                "garmin_synced_at", "garmin_payload_hash"])
+    return _garmin_source(workout)
 
 
 def _delete_remote(client, workout: PlannedWorkout) -> None:
@@ -104,37 +103,36 @@ def send_one(client, workout: PlannedWorkout, today) -> dict:
         return _result(workout, "skipped", f"Workout is {workout.status}.")
     if workout.date < today:
         return _result(workout, "skipped", "Workout is in the past.")
+    athlete = workout.athlete
+    dates = {workout.date, registry.date_of(athlete, workout.garmin_workout_id)}
     steps = [s for s in workout.steps or [] if (s.get("duration_s") or 0) > 0]
     if not steps:
         if workout.garmin_workout_id:
-            _delete_remote(client, workout)
-            _clear(workout)
+            remove_copy(client, workout)
+            registry.sweep(client, athlete, dates)
             return _result(workout, "removed", "Nothing to do today — removed from the watch.")
+        registry.sweep(client, athlete, dates)
         return _result(workout, "skipped", "Nothing to send (rest day).")
 
     payload = build_payload(_source(workout))
     digest = payload_hash(payload, workout.date.isoformat())
+    # Leftover RunCoach copies on this day (or on the day this one is moving off).
+    registry.sweep(client, athlete, dates)
     if workout.garmin_workout_id and workout.garmin_payload_hash == digest:
         return _result(workout, "unchanged")
 
     replacing = bool(workout.garmin_workout_id)
     if replacing:
-        _delete_remote(client, workout)
-        _clear(workout)
+        remove_copy(client, workout)
 
     uploaded = client.upload_running_workout(RunningWorkout.model_validate(payload))
     garmin_id = (uploaded or {}).get("workoutId") if isinstance(uploaded, dict) else None
     if not garmin_id:
         return _result(workout, "error", "Garmin did not return a workout id.")
-    try:
-        scheduled = client.schedule_workout(garmin_id, workout.date.isoformat())
-    except Exception:
-        # Do not leave an unscheduled orphan in the athlete's library.
-        try:
-            client.delete_workout(garmin_id)
-        except Exception:  # noqa: BLE001
-            logger.warning("could not remove unscheduled garmin workout %s", garmin_id)
-        raise
+    # Registered before scheduling: if both the schedule and the orphan delete fail,
+    # the next send's sweep still finds it.
+    registry.record(athlete, garmin_id, None, workout.date, workout=workout)
+    scheduled = _schedule_or_discard(client, athlete, garmin_id, workout.date)
 
     workout.garmin_workout_id = int(garmin_id)
     workout.garmin_schedule_id = _schedule_id(scheduled)
@@ -142,14 +140,40 @@ def send_one(client, workout: PlannedWorkout, today) -> dict:
     workout.garmin_payload_hash = digest
     workout.save(update_fields=["garmin_workout_id", "garmin_schedule_id",
                                 "garmin_synced_at", "garmin_payload_hash"])
+    registry.record(athlete, garmin_id, workout.garmin_schedule_id, workout.date,
+                    workout=workout)
     return _result(workout, "updated" if replacing else "uploaded")
+
+
+def _schedule_or_discard(client, athlete, garmin_id, date):
+    try:
+        return client.schedule_workout(garmin_id, date.isoformat())
+    except Exception:
+        # Do not leave an unscheduled orphan in the athlete's library.
+        try:
+            client.delete_workout(garmin_id)
+            registry.forget(athlete, [garmin_id])
+        except Exception:  # noqa: BLE001
+            logger.warning("could not remove unscheduled garmin workout %s", garmin_id)
+        raise
+
+
+def remove_copy(client, row) -> None:
+    """Delete a row's own Garmin copy, drop it from the registry, clear the row."""
+    _delete_remote(client, row)
+    registry.forget(row.athlete_id, [row.garmin_workout_id])
+    row.garmin_workout_id = None
+    row.garmin_schedule_id = None
+    row.garmin_synced_at = None
+    row.garmin_payload_hash = ""
+    row.save(update_fields=["garmin_workout_id", "garmin_schedule_id",
+                            "garmin_synced_at", "garmin_payload_hash"])
 
 
 def remove_one(client, workout: PlannedWorkout) -> dict:
     if not workout.garmin_workout_id:
         return _result(workout, "skipped", "Not on the watch.")
-    _delete_remote(client, workout)
-    _clear(workout)
+    remove_copy(client, workout)
     return _result(workout, "removed")
 
 
@@ -226,6 +250,7 @@ def forget_remote(athlete_id: int, refs: list[list]) -> dict:
         try:
             _delete_remote(client, SimpleNamespace(garmin_workout_id=garmin_id,
                                                    garmin_schedule_id=schedule_id))
+            registry.forget(athlete, [garmin_id])
             removed.append(garmin_id)
         except Exception as exc:  # noqa: BLE001 — log and keep going; one failure is not all
             logger.warning("could not remove garmin workout %s: %s", garmin_id, exc)

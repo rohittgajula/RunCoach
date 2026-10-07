@@ -266,6 +266,42 @@ class StrengthSession(OwnedByAthlete):
         ordering = ["date", "id"]
 
 
+class GarminUpload(OwnedByAthlete):
+    """Every Garmin workout RunCoach itself created on the athlete's Garmin calendar.
+
+    The registry is what makes cleanup safe: only ids recorded here are ever deleted by
+    the same-day sweep (garmin_registry.sweep), so a workout the athlete made in Garmin
+    Connect is never touched. A row is added right after an upload and removed once the
+    Garmin copy is deleted. It outlives the PlannedWorkout / StrengthSession it was sent
+    for (SET_NULL) — exactly the leftovers (plan rebuilds, re-layouts, a forget that hit
+    the rate limit) the sweep exists to remove.
+    """
+
+    class Source(models.TextChoices):
+        RUN = "run", "Running workout"
+        STRENGTH = "strength", "Strength session"
+
+    garmin_workout_id = models.BigIntegerField()
+    garmin_schedule_id = models.BigIntegerField(null=True, blank=True)
+    date = models.DateField(db_index=True)
+    source = models.CharField(max_length=10, choices=Source.choices, default=Source.RUN)
+    workout = models.ForeignKey(PlannedWorkout, on_delete=models.SET_NULL, null=True,
+                                blank=True, related_name="garmin_uploads")
+    strength = models.ForeignKey(StrengthSession, on_delete=models.SET_NULL, null=True,
+                                 blank=True, related_name="garmin_uploads")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["date", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["athlete", "garmin_workout_id"],
+                                    name="uniq_athlete_garmin_upload"),
+        ]
+
+    def __str__(self):
+        return f"{self.date} garmin {self.garmin_workout_id}"
+
+
 class WeatherSuggestion(OwnedByAthlete):
     """R14 §3: "Weather: move Thu run to Fri?" — a proposed move (or swap with an
     optional walk) of one planned run away from a bad-weather day. Nothing moves until

@@ -39,8 +39,15 @@ def garmin_status(workout: PlannedWorkout) -> str:
 
 
 def _garmin_source(workout: PlannedWorkout) -> dict:
+    """What planning.garmin_workout.build_payload is given — by the push AND by the
+    status check, so both hash the same payload. `hr` carries the athlete numbers the
+    walk / warm-up / cool-down bands come from (profile fields only: no query whose
+    answer drifts day to day, so a synced workout does not flip to "changed")."""
+    athlete = workout.athlete
     return {"title": workout.title, "duration_s": workout.duration_s,
-            "steps": workout.steps or [], "description": workout.description}
+            "steps": workout.steps or [], "description": workout.description,
+            "hr": {"resting_hr": athlete.resting_hr, "hr_easy_min": athlete.hr_easy_min,
+                   "hr_easy_max": athlete.hr_easy_max, "hr_ceiling": athlete.hr_ceiling}}
 
 
 def workout_json(workout: PlannedWorkout, guard_inputs: dict | None = None) -> dict:

@@ -27,7 +27,8 @@ HR = {"workoutTargetTypeId": 4, "workoutTargetTypeKey": "heart.rate.zone", "disp
 RUNNING = {"sportTypeId": 1, "sportTypeKey": "running", "displayOrder": 1}
 
 # Hand-written: what garminconnect 0.3.10's RunningWorkout(...).to_dict() produces for
-# this workout, with a custom HR range on the run steps and none on the walks.
+# this workout, with the run band on the run steps and the gentle band on every walk
+# (no athlete numbers here: low 90, high = the run band's top).
 EXPECTED = {
     "workoutName": "16m run/walk",
     "description": "Two blocks.",
@@ -40,8 +41,8 @@ EXPECTED = {
         "workoutSteps": [
             {"type": "ExecutableStepDTO", "stepOrder": 1,
              "stepType": {"stepTypeId": 1, "stepTypeKey": "warmup", "displayOrder": 1},
-             "endCondition": TIME, "endConditionValue": 180.0, "targetType": NO_TARGET,
-             "description": "Walk warm-up"},
+             "endCondition": TIME, "endConditionValue": 180.0, "targetType": HR,
+             "targetValueOne": 90.0, "targetValueTwo": 145.0, "description": "Walk warm-up"},
             {"type": "RepeatGroupDTO", "stepOrder": 2,
              "stepType": {"stepTypeId": 6, "stepTypeKey": "repeat", "displayOrder": 6},
              "childStepId": 1, "numberOfIterations": 2, "smartRepeat": False,
@@ -55,13 +56,13 @@ EXPECTED = {
                   "targetValueOne": 130.0, "targetValueTwo": 145.0, "description": "Run 4:00"},
                  {"type": "ExecutableStepDTO", "stepOrder": 4, "childStepId": 1,
                   "stepType": {"stepTypeId": 4, "stepTypeKey": "recovery", "displayOrder": 4},
-                  "endCondition": TIME, "endConditionValue": 120.0, "targetType": NO_TARGET,
-                  "description": "Walk 2:00"},
+                  "endCondition": TIME, "endConditionValue": 120.0, "targetType": HR,
+                  "targetValueOne": 90.0, "targetValueTwo": 145.0, "description": "Walk 2:00"},
              ]},
             {"type": "ExecutableStepDTO", "stepOrder": 5,
              "stepType": {"stepTypeId": 2, "stepTypeKey": "cooldown", "displayOrder": 2},
-             "endCondition": TIME, "endConditionValue": 60.0, "targetType": NO_TARGET,
-             "description": "Walk cool-down"},
+             "endCondition": TIME, "endConditionValue": 60.0, "targetType": HR,
+             "targetValueOne": 90.0, "targetValueTwo": 145.0, "description": "Walk cool-down"},
         ],
     }],
 }
@@ -71,7 +72,7 @@ def test_payload_matches_the_expected_fixture():
     assert build_payload(RUN_WALK) == EXPECTED
 
 
-def test_walk_steps_never_get_a_target_even_with_hr():
+def test_walk_only_with_nothing_to_derive_a_band_from_gets_no_target():
     payload = build_payload({"title": "w", "steps": [step("walk", 600, "walk", (100, 120))]})
     only = payload["workoutSegments"][0]["workoutSteps"][0]
     assert only["targetType"] == NO_TARGET and "targetValueOne" not in only

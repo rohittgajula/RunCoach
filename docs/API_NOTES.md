@@ -292,6 +292,17 @@ on a bad month)
   removed. If scheduling fails after upload, the uploaded workout is deleted again.
   New columns: `garmin_workout_id, garmin_schedule_id, garmin_synced_at,
   garmin_payload_hash` (+ `adjusted_by, original_steps, original` for §1).
+- One RunCoach copy per day (`apps/planning/garmin_registry.py`): every Garmin workout
+  the app uploads (running and strength) is recorded in **`GarminUpload`** (athlete,
+  garmin_workout_id, schedule id, date, source, row FK SET_NULL; migration 0007
+  backfills it from rows that already hold a Garmin id). Every send — including an
+  `unchanged` one, a rest-day send and a week send — first sweeps the workout's date
+  (and the date its old copy is on, when it moved) and unschedules + deletes every
+  registered copy no current PlannedWorkout/StrengthSession holds any more (left over
+  by plan rebuilds, re-layouts, swaps, row reuse, or a forget that hit the breaker).
+  Identification is by stored id only, never by name: workouts the athlete made in
+  Garmin Connect are never registered, so never touched. Copies already gone (404) are
+  dropped from the registry; a 429 trips the breaker and keeps the row for next time.
 
 **Garmin payload** (`planning/garmin_workout.py`, checked against the installed
 garminconnect 0.3.10: `RunningWorkout.model_validate(payload).to_dict() == payload`).
@@ -308,7 +319,15 @@ removal is `unschedule_workout(scheduleId)` + `delete_workout(workoutId)`.
     endConditionValue: seconds (float),
     targetType: {workoutTargetTypeId: 4, workoutTargetTypeKey: "heart.rate.zone",
                  displayOrder: 4}, targetValueOne: hr_min, targetValueTwo: hr_max,
-    # or targetType no.target (id 1) with no values — walks and steps without a band
+    # every step has an HR target (the watch shows its target screen throughout):
+    #   banded run steps: their band, unchanged;
+    #   walk-intensity steps (walk, walk warm-up/cool-down/recovery): gentle band
+    #     low = max(resting_hr + 20, 90), high = hr_easy_max (else hr_ceiling) lowered
+    #     to the lowest run-step top in the workout; at least 10 bpm wide;
+    #   unbanded non-walk steps (strides/reps without zones): easy → (hr_easy_min,
+    #     hr_easy_max), else (hr_easy_max, hr_ceiling).
+    # no.target (id 1) only when there is nothing to derive a band from. Strength
+    # workouts (planning/garmin_strength.py) stay no.target.
     description: step label, childStepId?: (inside a repeat)},
    {type: "RepeatGroupDTO", stepOrder, stepType: {6, "repeat", 6}, childStepId,
     numberOfIterations: n, smartRepeat: false, endConditionValue: n,
@@ -2299,3 +2318,4 @@ CompareRun = { id, created_at, created_by: {id, username},
 ```
 Endpoint trimming follows the athlete's `map_hide_endpoints` (first/last 200 m never leave
 the server), exactly as `/activities/{id}/route/`.
+
