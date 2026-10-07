@@ -947,3 +947,202 @@ avg_hr, efficiency, cadence, hr_drift, run_fraction`. `bedtime_h`: 22.5 = 22:30,
   Achievement, PushSubscription, ReminderSettings).
 - New env: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (secrets),
   optional `GARMIN_SLOW_PAUSE_S`. New dependency: `pywebpush` (rebuild the image).
+
+## R11 (SPEC_R11.md) — contract for Day, nudges, water and run maps
+
+Same conventions as R10: every path is under `/api/`, needs a signed-in athlete (401
+otherwise) and only reads/writes the requester's own rows (another athlete's id → 404).
+Dates `YYYY-MM-DD`; datetimes ISO 8601 with offset; clock times `"HH:MM"` (24 h, athlete's
+timezone). **`min` = minute of the local day, an int 0–1439** (`[min, value]` pairs).
+`|null` = absent from Garmin / not enough data — hide it. Errors `400 {detail: str}`.
+
+### A. Stored data (no endpoint of its own)
+`IntradayDay` (apps/ingest), one row per athlete-day, filled after each successful sync
+(today + yesterday) and by `garmin_backfill_intraday`. Arrays, local time:
+`hr [[min, bpm]]` (Garmin's 2-min samples), `stress [[min, 0–100]]` (3-min; Garmin's −1
+off-wrist / −2 activity samples are dropped), `body_battery [[min, 0–100]]` (3-min samples,
+only the points where the value changes + the last one), `steps [[min, steps, level]]`
+(15-min buckets; `level` = `"sleeping"|"sedentary"|"active"|"highly_active"|null`).
+
+### F1 `GET /health/day/?date=` (default today)
+`date` in the future or > 365 days ago, or malformed → 400.
+```
+{ date, is_today: bool, available: bool,           # available=false: no intraday row (all blocks below still present, with nulls/[]/0)
+  complete: bool,                                   # the day was fetched after it ended
+  fetched_at: datetime|null, data_as_of: "HH:MM"|null,   # last sample time in the arrays
+  prev_date: date|null, next_date: date|null,       # next_date null for today
+  awake: {start: "HH:MM", end: "HH:MM", source: "sleep"|"steps"|"default"},
+  timeline: {
+    hr: [[min, int]], stress: [[min, int]], body_battery: [[min, int]],
+    steps: [[min, int]],                            # bucket start, steps in that 15 min
+    markers: [{type: "run"|"sleep"|"nap"|"habit", start_min: int, end_min: int|null,
+               label: str, activity_id: int|null, kind: str|null}] },
+  steps: {total: int|null, goal: int|null, goal_source: "garmin"|"adaptive"|null,
+          adaptive_goal: int|null, pct: int|null, met: bool|null,
+          streak_days: int,                         # consecutive goal days ending this date (or the day before, while today is unmet)
+          trend: {last7_avg: int|null, prev7_avg: int|null, change_pct: int|null},
+          most_active_hour: Hour|null, least_active_hour: Hour|null,
+          hourly: [{hour: int, steps: int}],        # 24 rows
+          run_days_avg: int|null, rest_days_avg: int|null, run_days_n: int, rest_days_n: int},
+  activity: {sedentary_min: int|null, active_min: int|null, intense_min: int|null,
+             sleeping_min: int|null, source: "garmin"|"steps"|null,
+             longest_sedentary: {minutes: int, start: "HH:MM", end: "HH:MM"}|null},
+  stress: {avg: int|null, max: int|null, rest_min: int, low_min: int, medium_min: int,
+           high_min: int, stressful_min: int,       # stressful = medium + high (≥ 51)
+           peak: {start: "HH:MM", end: "HH:MM", avg: int}|null,
+           stretches: [{start: "HH:MM", end: "HH:MM", minutes: int, avg: int, peak: int}]},
+  body_battery: {start: int|null, end: int|null, high: int|null, low: int|null,
+                 charged: int|null, drained: int|null, at_wake: int|null,
+                 at_bedtime: int|null, now: int|null,
+                 events: [{type: "charge"|"drain",
+                           cause: "sleep"|"nap"|"run"|"stress"|"rest"|"activity",
+                           start: "HH:MM", end: "HH:MM", amount: int,
+                           from_value: int, to_value: int}]},
+  heart_rate: {resting: int|null, awake_min: int|null, awake_max: int|null,
+               awake_avg: int|null,
+               trend: {this_week_avg: int|null, prev_week_avg: int|null, change: int|null}},
+  score_card: {status: "good"|"ok"|"low"|"no_data", sentence: str,
+               bullets: [str], tips: [str]},        # bullets ≤ 3, tips 1–2 (0 when no_data)
+  now: {steps: int|null, stress: int|null, stress_at: "HH:MM"|null,
+        body_battery: int|null, body_battery_at: "HH:MM"|null} }
+Hour = {hour: int, label: "14:00–15:00", steps: int}
+```
+- Stress bands are Garmin's: rest 0–25, low 26–50, medium 51–75, high 76–100.
+  `stretches` = ≥ 30 min at ≥ 51 (gaps ≤ 6 min bridged); `peak` = the 60-min window with
+  the highest average stress.
+- Steps goal: Garmin's daily goal when set (`goal_source: "garmin"`), else the adaptive
+  goal = median of the last 28 days' steps × 1.05, clamped 6,000–15,000 (`"adaptive"`;
+  needs ≥ 7 days, else null). `adaptive_goal` is always the adaptive value (or null).
+- Activity minutes come from Garmin's daily summary when present (`source: "garmin"`), else
+  from the step buckets (< 50 steps / 15 min = sedentary, 50–999 active, ≥ 1000 intense).
+  `longest_sedentary` = longest run of < 50-step, not-sleeping buckets while awake.
+- `awake`: wake = end of the night that ended this morning, end = start of the next night
+  (from sleep data), else from `sleeping` step buckets, else 07:00–23:00.
+- Body battery `events`: the biggest charges/drains (≥ 5 points), at most 3 of each,
+  labelled by what overlaps them most (sleep, nap, a run, a stressful stretch; charge
+  otherwise `rest`, drain otherwise `activity`).
+- `heart_rate.awake_*` exclude the night and recorded activities; `trend` = mean daily
+  awake average of the 7 days ending this date vs the 7 before.
+- Markers: `run` (activity_id, label "Run · 5.2 km"), `sleep` (one per night touching the
+  day), `nap` (≥ 30 min of `sleeping` buckets while awake), `habit` (kind
+  smoke|alcohol|sugar; `private` only while the Private habit is enabled; `end_min` null).
+- Never sent to the AI.
+
+### F2 `GET /health/day/summary/` — Today's compact row
+```
+{ date, available: bool, steps: int|null, step_goal: int|null,
+  goal_source: "garmin"|"adaptive"|null, pct: int|null,
+  stress: int|null, stress_at: "HH:MM"|null, body_battery: int|null,
+  body_battery_at: "HH:MM"|null, data_as_of: "HH:MM"|null, fetched_at: datetime|null }
+```
+
+### F3 `GET /health/day/trends/?range=` (default 4w; 7d|4w|3m|6m|1y)
+```
+{ range, start, end,
+  days: [{date, steps: int|null, step_goal: int|null, active_min: int|null,
+          sedentary_min: int|null, stress_avg: int|null, stress_high_min: int|null,
+          stressful_min: int|null, awake_hr_avg: int|null, bb_charged: int|null,
+          bb_drained: int|null, bb_at_wake: int|null, bb_at_bedtime: int|null}],
+  averages: Avg, previous: Avg,
+  weeks: [{week_start: date, n: int, steps_avg: int|null, active_min_avg: int|null,
+           stress_avg: int|null, awake_hr_avg: int|null}],
+  awake_hr_trend: {per_week: float|null, direction: "up"|"down"|"flat"|null, sentence: str},
+  weekday_pattern: {by_weekday: [{weekday: 0..6, label: "Mon", n: int,
+                                  steps_avg: int|null, stress_avg: int|null}],
+                    stress_peak_weekdays: {start: "HH:MM", end: "HH:MM", avg: int}|null,
+                    stress_peak_weekends: {start, end, avg}|null,
+                    sentence: str|null},
+  goal_streak: int,
+  day_night_run: {caveat: str,
+     groups: [{key: "stress"|"steps", label: str, split: float|null,
+               high_label: str, low_label: str, n_high: int, n_low: int,
+               rows: [{metric: "sleep_score"|"hrv"|"sleep_h"|"easy_hr"|"efficiency",
+                       label: str, unit: str, high: float|null, low: float|null,
+                       n_high: int, n_low: int, diff: float|null,
+                       enough_data: bool, sentence: str}]}]} }
+Avg = {steps, active_min, sedentary_min, stress_avg, stress_high_min, awake_hr_avg,
+       bb_at_bedtime: int|null}
+```
+- `days` oldest first; one row per day in the range with an intraday row (else
+  `steps`/`stress_avg` from the daily summary when present). `stress_high_min` = 76–100.
+- Weekday pattern needs ≥ 2 days per side for a peak; sentence e.g. "Stress tends to peak
+  11:00–12:00 on weekdays."
+- Day → night → run: days split at the range median (stress average, then steps);
+  "that night" = the sleep that ended the next morning; "next run" = the first run in
+  the next 2 days. Sleep/HRV rows need ≥ 5 days each side, run rows ≥ 3 runs each side.
+  Association only (`caveat`).
+
+### F4 Compare catalogue (R10 C11) gains group `"day"`
+Keys: `active_min` (Active time, min), `sedentary_min` (Sedentary time, min),
+`stress_high_min` (High-stress time, min), `bb_bedtime` (Body Battery at bedtime),
+`awake_hr` (Awake HR, bpm). Existing keys/groups unchanged (`steps`, `stress` stay
+wellness).
+
+### C Reminders: `GET/PATCH /reminders/` gain `nudges`, `quiet_hours`, `data_as_of`
+GET body (R10 keys unchanged) adds:
+```
+nudges: [{key: "move"|"breathing"|"water", label, description, enabled: bool,
+          start: "HH:MM", end: "HH:MM", max_per_day: int,
+          after_min: int|null,        # move only: 60–90 (default 60)
+          threshold: int|null,        # breathing only: 51–90 (default 51)
+          every_h: int|null}],        # water only: 1–4 (default 2)
+quiet_hours: {start: "HH:MM", end: "HH:MM"},   # default 22:00–07:00
+data_as_of: datetime|null,                     # last intraday fetch (UI: "based on your last sync at …")
+```
+Defaults: all off; move 09:00–19:00, max 4; breathing 09:00–21:00, max 3; water
+09:00–21:00, max 6. PATCH accepts `{move|breathing|water: {enabled?, start?, end?,
+max_per_day? (1–8), after_min?, threshold?, every_h?}, quiet_hours: {start?, end?}}`
+alongside the R10 keys; a field that does not belong to that nudge, or out of range → 400.
+- Rules: never inside quiet hours; never during a recorded run or within 60 min after one
+  (or while the latest step bucket is `highly_active`); per-day cap; at most one nudge of
+  a kind per stretch (dedupe) and ≥ 60 min between two of the same kind (water: `every_h`).
+  Move = trailing sedentary stretch ≥ `after_min` in the latest data; breathing = stress
+  ≥ `threshold` for ≥ 30 min in the latest data; both only when the latest sample is
+  ≤ 60 min old. Water = every `every_h` hours in its window, skipped when water was
+  logged within that time or today's target is reached.
+- Pushes: move `{title: "Time to move", url: "/health/day"}`, breathing `{title:
+  "Breathing break", url: "/health/guides?g=breathing"}`, water `{title: "Drink some
+  water", url: "/diet"}`; tags `move`/`breathing`/`water`. No numbers in payloads.
+
+### D Water — `GET/POST /diet/water/`, `DELETE /diet/water/{id}/`
+```
+WaterDay = {date, target_ml: int, bonus_ml: int, drunk_ml: int, remaining_ml: int,
+            pct: int, quick_add: [250, 500],
+            logs: [{id, at: datetime, local_date: date, ml: int}]}   # oldest first
+```
+- `GET /diet/water/?date=` (default today) → WaterDay.
+- `POST /diet/water/ {ml: int 50–2000, at?: datetime (default now; ≤ 5 min in the
+  future, ≤ 7 days ago)}` → 201 `{log: {id, at, local_date, ml}, day: WaterDay}`.
+- `DELETE /diet/water/{id}/` → 200 WaterDay (that log's day).
+- `GET /diet/day/` gains `water: WaterDay` (target = the existing water target incl. the
+  weather bonus).
+
+### E Run maps
+Athlete JSON gains writable `map_hide_endpoints: bool` (default true).
+
+`GET /activities/{id}/route/`
+```
+{ activity_id: int, available: bool, reason: null|"no_gps",
+  hidden_endpoints: bool, trimmed_m: int,             # 200 when hidden, else 0
+  total_distance_m: float, sampled_from: int,
+  bounds: {south, west, north, east: float}|null,
+  start: {lat, lon}|null, finish: {lat, lon}|null,    # first/last point shown (after trimming)
+  has_hr: bool, has_elevation: bool, has_segments: bool,
+  pace_range: {min: int, max: int}|null,              # 5th–95th percentile s/km, for colouring
+  hr_range: {min: int, max: int}|null,
+  elevation: {gain_m: float, loss_m: float, min_m: float, max_m: float}|null,
+  km_markers: [{km: int, lat, lon, index: int}],      # index into points
+  points: [{lat: float, lon: float, dist_m: float, t_s: int,
+            pace_s_per_km: int|null, hr: int|null,
+            segment: "run"|"walk"|"stop"|null, ele_m: float|null}] }   # ≤ 800
+```
+- Douglas–Peucker on the GPS track (tolerance grown until ≤ 800 points); pace = smoothed
+  over ±15 s at that point (null when slower than 20:00/km), HR ±5 s mean, segment from
+  the run/walk segmentation. Coordinates rounded to 6 dp. Cached per activity
+  (+ segmentation version, + setting).
+- `available: false` (`points: []`, nulls) when the activity has no GPS records.
+
+`GET /activities/routes/?limit=20` (1–50) — "Your routes" overlay
+```
+{ routes: [{activity_id, date, distance_m: float, points: [[lat, lon]]}] }   # ≤ 150 points each, trimmed like above
+```
