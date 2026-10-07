@@ -1195,3 +1195,118 @@ Athlete JSON gains writable `map_hide_endpoints: bool` (default true).
   and beat (new tasks + beat entry); optional env `INTRADAY_REFRESH_MIN`; then (optional)
   `python manage.py garmin_backfill_intraday --all` once the breaker is clear. No new
   dependency.
+
+## R12 (SPEC_R12.md) — contract for custom ranges + frequency, wake planner and alarms
+
+Conventions as R10/R11 (`/api/`, signed-in, own rows only, `400 {detail}`).
+
+### A. Period parameters (one shared parser, `apps/health/period.py`)
+Accepted by: `GET /insights/`, `POST /insights/summary/`, `/health/fitness/`,
+`/health/sleep/`, `/health/form/`, `/health/body/`, `/health/day/trends/`,
+`/health/compare/`, `GET|POST /habits/summary/`, `/health/training-status/`.
+- `range` = a preset: `7d | 4w | 3m | 6m | 1y` (7, 28, 91, 182, 365 days ending today).
+  Insights and habits summary also keep their old `12w` (84 days). Defaults unchanged
+  (insights 4w, habits 4w, fitness 6m, sleep 4w, form 3m, body 6m, day trends 4w,
+  compare 3m, training-status 4w).
+- **or** `start=YYYY-MM-DD&end=YYYY-MM-DD` (custom, inclusive). 400 when: both `range`
+  and a date are given ("Use either range or start/end dates, not both."); only one of
+  start/end; a malformed date; `start > end`; `end` after today; more than 730 days.
+- `freq = day | week | month` (optional). Default from the period length: ≤ 92 days →
+  `day`, ≤ 366 → `week`, longer → `month`. Anything else → 400.
+- Every one of those bodies keeps `range` (the preset, or `"custom"`), `start`, `end`
+  and gains
+  ```
+  period: {start: date, end: date, days: int,
+           compare_start: date, compare_end: date,     # the same-length period just before
+           freq: "day"|"week"|"month"}
+  ```
+- **Bucketing** (`analysis/buckets.py`): with `freq=day` every series is exactly as
+  before. With `week` / `month`, the series listed below are replaced by one point per
+  bucket: `date` = the bucket's first day (Monday / the 1st), the same value keys, plus
+  `n: int` (how many daily points went in). Rule per value: **mean** for rates and
+  scores, **sum** for counts/amounts, **last** for levels; text fields (e.g.
+  `status_key`, `source`) take the last value. Means keep the endpoint's rounding.
+
+| endpoint | bucketed arrays (rule) |
+|---|---|
+| insights | `hrv.series` (mean), `sleep.series` (mean), `resting_hr.series` (mean), `body_battery.series` (mean), `stress.series` (mean), `respiration.series` (mean), `vo2max.series` (last), `running.run_fraction_trend` / `longest_run_trend` / `easy_pace_trend` (mean) |
+| fitness | `vo2max.series`, `fitness_age.series`, `endurance_score.series`, `race_predictions.series`, `lactate_threshold.series` (last) |
+| sleep | `nights` stay one per night (unchanged); **new** `series` (below) is bucketed (mean) |
+| form | `runs` stay one per run; **new** `series` (below) bucketed (mean; `run_km` sum) |
+| body | `series` (last) |
+| day/trends | `days` (`steps` sum, the rest mean) — `weeks` unchanged |
+| compare | both daily series are bucketed first (sum for `steps`, habits, `run_km`, `training_load`; mean otherwise), then paired; `points[].date` = bucket start; `lag=1` = the next bucket; `n` counts buckets |
+| habits summary | `smoke.series`, `alcohol.series`, `sugar.series`, `private.series` (sum of `count`) — `weekly` unchanged |
+| training-status | `history` (mean loads, last `status_key`) over the period (was: fixed last 28 days) |
+
+New arrays:
+```
+sleep.series: [{date, n?: int, sleep_s, need_s, score, deep_s, light_s, rem_s, awake_s,
+                restless_moments, spo2_avg, breathing_rate: number|null,
+                bedtime_h: float|null, wake_h: float|null}]   # 22.5 = 22:30, 25.0 = 01:00
+form.series:  [{date, n?: int, cadence_spm, ground_contact_ms, vertical_oscillation_cm,
+                stride_length_m, run_pace_s_per_km: float|null, run_km: float}]
+```
+(`n` only present when freq ≠ day.) "vs previous" blocks (sleep `previous`, day-trends
+`previous`, habits `report`) use `compare_start..compare_end`. Habits summary with a
+custom period: amounts, series and report cover start..end; streak, since-quit and
+milestones stay "as of today"; the previous label reads "the previous N days".
+
+### B1 Wake planner — `GET /health/wake-plan/?date=` (default tomorrow; today..today+7)
+```
+{ date, weekday: int (0 = Mon),
+  run: {planned: bool, workout_id: int|null, title: str|null, kind: str|null,
+        run_time: "HH:MM"|null, run_time_source: "setting"|"history"|null},
+  need_s: int, need_source: "garmin"|"default",          # default 8 h
+  wake_time: "HH:MM", wake_source: "run"|"habit"|"default",
+  bedtime: "HH:MM",                                       # wake − (need + 15 min)
+  bedtime_reminder_at: "HH:MM",                           # bedtime − lead (default 30 min)
+  my_alarm: Alarm, my_alarm_on_date: "HH:MM"|null,        # the saved alarm if active that day
+  watch: Watch,
+  flags: [{kind: "watch_alarm_after_run"|"no_watch_alarm_for_run"|
+                 "my_alarm_after_run"|"no_alarm_for_run", text: str}],
+  android_intent: str,                                    # SET_ALARM intent URL for wake_time
+  sentence: str }
+```
+- Run time: the alarm settings' `run_time`, else the median start time of the last 10
+  runs (morning starts only), else none. Wake = run time − 45 min when the plan has a
+  non-rest workout that day and a run time is known (`"run"`), else the median wake time
+  of the last 7 nights (`"habit"`), else 07:00 (`"default"`). Need = median Garmin sleep
+  need of the last 7 nights, else 8 h.
+- Flags compare against the run time (only on run days): a watch alarm / my alarm
+  active that day but later than run time − 15 min, or none at all ("no_alarm_for_run"
+  when neither exists; "no_watch_alarm_for_run" when the watch check is available and
+  has none for that day). Text e.g. "Your run is at 06:30 but your watch alarm is 07:00."
+- `android_intent` = `intent:#Intent;action=android.intent.action.SET_ALARM;i.android.intent.extra.alarm.HOUR=H;i.android.intent.extra.alarm.MINUTES=M;S.android.intent.extra.alarm.MESSAGE=RunCoach;end`.
+
+### B2 My alarm — `GET/PATCH /alarm/`
+```
+Alarm = { time: "HH:MM"|null, days: [int 0..6], enabled: bool,
+          push: bool,                 # push notification at the alarm time (not a real alarm)
+          run_time: "HH:MM"|null,     # "when I usually run", feeds the planner
+          bedtime_reminder: bool, bedtime_lead_min: int,   # 15–120, default 30
+          push_available: bool,       # VAPID configured
+          note: str }                 # "A web app can't set your phone's alarm…"
+```
+Defaults: time null, days [0..6], enabled false, push false, run_time null,
+bedtime_reminder false, lead 30. PATCH any subset; `time`/`run_time` accept null;
+`days` = unique ints 0–6 (non-empty when enabled); unknown key / bad value → 400.
+
+### B3 Pushes (R10 web push, every 5 min beat)
+- `alarm`: on an alarm day at `time` (when `enabled` and `push`) — title "Alarm",
+  body "Time to get up. (A RunCoach notification, not a phone alarm.)", url "/health/sleep".
+- `bedtime`: at tomorrow's planned bedtime − lead (when `bedtime_reminder`) — title
+  "Wind down", url "/health/sleep". Each at most once per local day, up to 15 min late;
+  quiet hours do not apply (the athlete chose these times). No numbers in payloads.
+
+### B4 Watch alarms (read-only) — `GET /health/watch-alarms/`
+```
+Watch = { available: bool,              # false: no device / the call failed — hide the card
+          checked_on: date|null,
+          alarms: [{time: "HH:MM", days: [int 0..6], once: bool, enabled: bool,
+                    label: str|null, device: str|null}],
+          summary: str|null }           # "06:00 Mon–Fri · 08:00 Sat"
+```
+Fetched once a day with the R10 slow fetch: `get_devices()` then
+`get_device_settings(deviceId)` per device (≤ 3), each through the spaced runner and the
+breaker; only `alarms` is read. Device settings are never written.
