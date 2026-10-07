@@ -1,0 +1,65 @@
+/* R15 — share studio (loaded with the studio chunk only). */
+
+.studio { display: flex; flex-direction: column; gap: 14px; }
+.studio-preview {
+  position: sticky; top: -8px; z-index: 2; display: grid; place-items: center;
+  padding: 10px; margin: -8px -16px 0; background: var(--bg); border-bottom: 1px solid var(--line-soft);
+}
+.studio-preview.is-checker {
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(45deg, var(--line) 25%, transparent 25%), linear-gradient(-45deg, var(--line) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--line) 75%), linear-gradient(-45deg, transparent 75%, var(--line) 75%);
+  background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+.studio-canvas {
+  display: block; height: 40vh; max-height: 420px; width: auto; max-width: 100%;
+  border-radius: 12px; box-shadow: var(--shadow);
+}
+.studio-canvas.is-draggable { cursor: grab; touch-action: none; }
+.studio-canvas.is-draggable:active { cursor: grabbing; }
+.studio-hint { margin: -6px 0 0; text-align: center; }
+.studio-h { font-size: 14px; font-weight: 800; margin: 0; }
+
+.studio-choices { display: flex; flex-direction: column; gap: 8px; }
+.studio-choice {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 14px;
+  background: var(--card); border: 2px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow);
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.studio-choice.is-active { border-color: var(--run); }
+.studio-swatch { flex: none; width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); }
+.studio-swatch.bg-transparent {
+  background: repeating-conic-gradient(var(--line) 0% 25%, var(--card) 0% 50%) 50% / 12px 12px;
+}
+.studio-swatch.bg-photo { background: linear-gradient(135deg, #f2a516, #f26b3a 50%, #7a5af8); }
+.studio-swatch.bg-map { background: linear-gradient(135deg, #e9ecef, #cfe3c4 60%, #b9d3ee); }
+
+.studio-swatches { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.studio-dot {
+  position: relative; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line);
+  box-shadow: inset 0 0 0 3px var(--card); cursor: pointer; padding: 0;
+}
+.studio-dot.is-active { outline: 3px solid var(--run); outline-offset: 2px; }
+.studio-pick { overflow: hidden; background: conic-gradient(#e5533d, #f2a516, #12a150, #0e9f9a, #2f6bff, #7a5af8, #e5533d); }
+.studio-pick input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.studio-auto {
+  min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--card); color: var(--fg); font: inherit; font-weight: 700; cursor: pointer;
+}
+.studio-auto.is-active { background: var(--run); color: #fff; border-color: var(--run); }
+
+.studio-slider { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.studio-slider input { width: 100%; min-height: 44px; accent-color: var(--run); }
+
+.studio-title-input { display: flex; flex-direction: column; gap: 6px; }
+.studio-fields { padding: 4px 12px; }
+.studio-field { display: flex; align-items: center; gap: 6px; min-height: 56px; }
+.studio-field + .studio-field { border-top: 1px solid var(--line-soft); }
+.studio-field .chip { width: 44px; height: 44px; }
+.studio-field .switch { margin-left: 6px; }
+.studio-field.is-na b { color: var(--muted); }
+.studio-field .flip { transform: rotate(180deg); }
+
+.studio-actions { display: flex; gap: 10px; width: 100%; }
+.studio-actions .btn { min-height: 48px; }
