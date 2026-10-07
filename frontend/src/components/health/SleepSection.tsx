@@ -60,8 +60,8 @@ function SleepHero({ s }: { s: HealthSleep }) {
     const w = eveningMinutes(n.wake_time)!
     return w < b ? w + 24 * 60 : w
   })
-  const lo = Math.max(0, Math.min(...starts) - 20)
-  const hi = Math.max(...ends) + 20
+  const lo = Math.max(0, Math.floor((Math.min(...starts) - 10) / 60) * 60)
+  const hi = Math.ceil((Math.max(...ends) + 10) / 60) * 60
   const span = hi - lo || 1
   const pct = (m: number) => `${((m - lo) / span) * 100}%`
   return (
@@ -90,7 +90,7 @@ function SleepHero({ s }: { s: HealthSleep }) {
           </div>
           <div className="sleep-axis">
             <span>{fromEvening(lo)}</span>
-            <span>{fromEvening(lo + span / 2)}</span>
+            <span>{fromEvening(Math.round((lo + span / 2) / 60) * 60)}</span>
             <span>{fromEvening(hi)}</span>
           </div>
           <div className="sleep-legend">
@@ -138,13 +138,13 @@ function SleepTiles({ s }: { s: HealthSleep }) {
     tiles.push(<MetricTile key="score" label="Sleep score" value={Math.round(a.score)} chip={<Delta value={p?.score != null ? a.score - p.score : null} better="higher" flatWithin={1} />} />)
   }
   if (a?.spo2_avg != null) {
-    tiles.push(<MetricTile key="spo2" label="Overnight SpO2" value={`${Math.round(a.spo2_avg)}%`} chip={<Delta value={p?.spo2_avg != null ? a.spo2_avg - p.spo2_avg : null} better="higher" format={(v) => v.toFixed(1)} flatWithin={0.5} />} />)
+    tiles.push(<MetricTile key="spo2" label="SpO2" value={`${Math.round(a.spo2_avg)}%`} chip={<Delta value={p?.spo2_avg != null ? a.spo2_avg - p.spo2_avg : null} better="higher" format={(v) => v.toFixed(1)} flatWithin={0.5} />} />)
   }
   if (a?.breathing_rate != null) {
     tiles.push(<MetricTile key="br" label="Breathing rate" value={a.breathing_rate.toFixed(1)} unit="/min" chip={<Delta value={p?.breathing_rate != null ? a.breathing_rate - p.breathing_rate : null} better="lower" format={(v) => v.toFixed(1)} flatWithin={0.2} />} />)
   }
   if (a?.restless_moments != null) {
-    tiles.push(<MetricTile key="rest" label="Restless moments" value={Math.round(a.restless_moments)} chip={<Delta value={p?.restless_moments != null ? a.restless_moments - p.restless_moments : null} better="lower" flatWithin={1} />} />)
+    tiles.push(<MetricTile key="rest" label="Restless" value={Math.round(a.restless_moments)} chip={<Delta value={p?.restless_moments != null ? a.restless_moments - p.restless_moments : null} better="lower" flatWithin={1} />} />)
   }
   if (!tiles.length) return null
   return <div className="mt-grid">{tiles}</div>

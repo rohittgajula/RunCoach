@@ -14,7 +14,7 @@ const syncedAt = (iso: string) => {
  * Send to Garmin → "On your watch ✓ · synced 08:12"; "Update on watch" when the steps
  * changed since; remove from the watch in ⋮. Planned workouts only.
  */
-export function GarminSendButton({ workout }: { workout: Workout }) {
+export function GarminSendButton({ workout, compact = false }: { workout: Workout; compact?: boolean }) {
   const send = useSendWorkoutToGarmin()
   const remove = useRemoveWorkoutFromGarmin()
   const [menu, setMenu] = useState(false)
@@ -33,8 +33,19 @@ export function GarminSendButton({ workout }: { workout: Workout }) {
   const error = send.error ?? remove.error
   return (
     <div className="garmin-send">
-      <div className="garmin-send-row">
-        {onWatch && !stale ? (
+      <div className="garmin-send-row" ref={wrap}>
+        {onWatch && !stale && compact ? (
+          <button
+            type="button"
+            className="btn btn-primary btn-grow"
+            aria-haspopup="menu"
+            aria-expanded={menu}
+            title={workout.garmin_synced_at ? `Synced ${syncedAt(workout.garmin_synced_at)}` : undefined}
+            onClick={() => setMenu(!menu)}
+          >
+            On watch <CheckIcon size={16} />
+          </button>
+        ) : onWatch && !stale ? (
           <p className="garmin-on">
             <span className="garmin-check"><CheckIcon size={14} /></span>
             On your watch{workout.garmin_synced_at && <span className="muted"> · synced {syncedAt(workout.garmin_synced_at)}</span>}
@@ -45,12 +56,14 @@ export function GarminSendButton({ workout }: { workout: Workout }) {
           </button>
         )}
         {onWatch && (
-          <div className="menu-wrap" ref={wrap}>
-            <button type="button" className="icon-btn" aria-label="Garmin options" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>
-              <MoreVIcon />
-            </button>
+          <div className="menu-wrap">
+            {!(compact && !stale) && (
+              <button type="button" className="icon-btn" aria-label="Garmin options" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>
+                <MoreVIcon />
+              </button>
+            )}
             {menu && (
-              <div className="menu menu-up" role="menu">
+              <div className={`menu menu-up ${compact ? 'menu-left' : ''}`} role="menu">
                 <button type="button" role="menuitem" disabled={busy} onClick={() => { setMenu(false); send.mutate(workout.id) }}>
                   Send again
                 </button>

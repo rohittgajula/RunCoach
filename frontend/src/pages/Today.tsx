@@ -5,6 +5,7 @@ import { QuickLogRow } from '../components/habits/QuickLogRow'
 import { ChipButton } from '../components/ChipButton'
 import { RefreshIcon } from '../components/Icons'
 import { AvatarButton } from '../components/Kit'
+import { ErrorState } from '../components/States'
 import { ForecastCard } from '../components/today/ForecastCard'
 import { FuelToday } from '../components/today/FuelToday'
 import { ThisWeek } from '../components/today/ThisWeek'
@@ -71,6 +72,9 @@ export default function Today() {
       <PendingCheckins />
       <WeeklyReportCard />
       <TodayCard />
+      {week.isError && !week.data && (
+        <ErrorState message={errorText(week.error, 'Today’s plan did not load.')} onRetry={() => week.refetch()} />
+      )}
       <TodayWorkout day={day} loading={week.isPending} />
       <WeatherCard />
       <section className="card">

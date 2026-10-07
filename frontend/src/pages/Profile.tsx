@@ -68,7 +68,7 @@ export function ProfileCards() {
         <>
           <section className="card athlete">
             <div className="card-head">
-              <h2 className="card-title">{s.athlete.display_name || 'Athlete'}</h2>
+              <h2 className="card-title">Your numbers</h2>
               <div className="menu-wrap">
                 <button type="button" className="icon-btn" aria-label="More" onClick={() => setMenu(!menu)}>
                   <MoreHIcon />

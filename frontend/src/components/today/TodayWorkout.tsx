@@ -125,7 +125,7 @@ export function TodayWorkout({ day, loading }: { day: CalDay | undefined; loadin
                 {done ? (
                   <p className="hero-done"><span className="garmin-check"><CheckIcon size={14} /></span> Done</p>
                 ) : w.status === 'planned' ? (
-                  <GarminSendButton workout={w} />
+                  <GarminSendButton workout={w} compact />
                 ) : (
                   <p className="hero-done muted">Skipped</p>
                 )}

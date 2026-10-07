@@ -89,7 +89,7 @@ function AgeEndurance({ f, range }: { f: HealthFitness | null | undefined; range
     tiles.push(
       <MetricTile
         key="end"
-        label="Endurance score"
+        label="Endurance"
         value={end.current.toLocaleString()}
         chip={<Delta value={end.change} better="higher" format={(v) => Math.round(v).toLocaleString()} />}
         sub={end.level ?? RANGE_WORDS[range]}
@@ -134,7 +134,7 @@ function RaceCard({ f }: { f: HealthFitness | null | undefined }) {
   )
 }
 
-const ZONE_BG = ['var(--run-soft)', 'var(--easy-2)', 'var(--run)', 'var(--fuel)', 'var(--fuel-ink)']
+const ZONE_BG = ['var(--run-soft)', 'var(--easy-2)', 'var(--run)', '#f26b3a', '#c93d17']
 
 export function ZoneStrip({ zones }: { zones: AthleteZones }) {
   const list = zones.zones ?? []

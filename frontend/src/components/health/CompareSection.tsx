@@ -95,8 +95,9 @@ function Scatter({ r }: { r: CompareResult }) {
   const pad = { l: 36, r: 10, t: 10, b: 30 }
   const xs = r.points.map((p) => p.x)
   const ys = r.points.map((p) => p.y)
-  const [x0, x1] = [Math.min(...xs), Math.max(...xs)]
-  const [y0, y1] = [Math.min(...ys), Math.max(...ys)]
+  const padOf = (lo: number, hi: number) => (hi - lo || Math.abs(hi) || 1) * 0.06
+  const [x0, x1] = [Math.min(...xs) - padOf(Math.min(...xs), Math.max(...xs)), Math.max(...xs) + padOf(Math.min(...xs), Math.max(...xs))]
+  const [y0, y1] = [Math.min(...ys) - padOf(Math.min(...ys), Math.max(...ys)), Math.max(...ys) + padOf(Math.min(...ys), Math.max(...ys))]
   const sx = (v: number) => pad.l + ((v - x0) / (x1 - x0 || 1)) * (W - pad.l - pad.r)
   const sy = (v: number) => H - pad.b - ((v - y0) / (y1 - y0 || 1)) * (H - pad.t - pad.b)
   const t = r.trend

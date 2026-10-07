@@ -188,7 +188,7 @@ export function ShoesTeaser() {
         <ChevronRight size={18} className="muted" />
       </div>
       {main && <Meter value={main.distance_km} max={main.retire_km} topic="run" over={main.replace_due} label={`${main.name} mileage`} />}
-      {due.length > 0 && <p className="bad small">Time to replace: {due.map((s) => s.name).join(', ')}</p>}
+      {due.length > 0 && <p className="bad small">{due.some((s) => s.replace_due) ? 'Time to replace' : 'Replace soon'}: {due.map((s) => s.name).join(', ')}</p>}
     </Link>
   )
 }

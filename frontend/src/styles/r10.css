@@ -115,7 +115,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--run); }
 .health-top .page-header { position: static; }
 .section-chips {
   display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px;
-  scrollbar-width: none; scroll-snap-type: x proximity;
+  scrollbar-width: none; scroll-snap-type: x proximity; scroll-padding-inline: 16px;
 }
 .section-chips::-webkit-scrollbar { display: none; }
 .section-chip {
@@ -607,3 +607,12 @@ button.mt:active { transform: scale(0.98); }
 .badge-toast { border: 1px solid var(--line); cursor: pointer; text-align: left; font: inherit; }
 .me-teaser { display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: inherit; }
 .me-teaser .kit-head { margin-bottom: 0; }
+.hero-actions .garmin-send-row { position: relative; }
+.hero-actions .menu-wrap { position: static; }
+.menu-left { left: 0; right: auto; }
+.mini-card { min-height: 130px; }
+.mini-card-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.mini-card-value { font-weight: 800; }
+.metric-label { font-size: 12px; font-weight: 600; }
+.metric-value { font-weight: 800; }
+.card:empty { display: none; }

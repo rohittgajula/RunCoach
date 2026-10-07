@@ -1,10 +1,11 @@
+import { StatusPill } from '../Kit'
 import type { ReactNode } from 'react'
 import type { HabitReportHabit } from '../../lib/types'
 import { Bullets } from '../Bullets'
 import { ChartFrame, DeltaChip } from '../ChartFrame'
 import type { Trend } from '../chartUtil'
 import { HabitBarChart } from './HabitBarChart'
-import { STATUS_TEXT, statusTag, type HabitMeta } from './habitUtil'
+import { type HabitMeta } from './habitUtil'
 
 const n1 = (v: number | null | undefined) => (v == null ? '--' : v.toFixed(v >= 10 ? 0 : 1))
 
@@ -51,7 +52,7 @@ export function HabitCard({
           <span aria-hidden="true">{meta.emoji}</span> {title ?? meta.label}
         </h2>
         <div className="habit-card-aside">
-          {entry?.status && <span className={`tag ${statusTag(entry.status)}`}>{STATUS_TEXT[entry.status] ?? entry.status}</span>}
+          {entry?.status && <StatusPill status={entry.status} />}
           {aside}
         </div>
       </div>

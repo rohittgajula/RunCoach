@@ -1,5 +1,5 @@
+import { StatusPill } from '../Kit'
 import type { HabitReport, HabitReportGarmin } from '../../lib/types'
-import { STATUS_TEXT, statusTag } from './habitUtil'
 
 const fmt = (v: number | null | undefined) => {
   if (v == null || !Number.isFinite(v)) return '--'
@@ -37,7 +37,7 @@ export function HealthReportCard({ report, rangeLabel }: { report: HabitReport |
     <section className="card insight health-report">
       <div className="card-head">
         <h2 className="card-title">Health report</h2>
-        {overall?.status && <span className={`tag ${statusTag(overall.status)}`}>{STATUS_TEXT[overall.status] ?? overall.status}</span>}
+        {overall?.status && <StatusPill status={overall.status} />}
       </div>
       {overall?.headline && <p className="report-headline">{overall.headline}</p>}
       {garmin.length > 0 ? (
