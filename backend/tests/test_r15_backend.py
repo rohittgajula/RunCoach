@@ -125,9 +125,11 @@ def test_busy_gemini_retries_then_falls_back_to_env_openai(keys, fakes, athlete,
     assert [(r.status, r.provider, r.error_kind) for r in rows] == [
         ("fallback", "gemini", "busy"), ("ok", "openai", "")]
     assert rows[0].retry_count == 2 and rows[0].model == "gemini-3.8-flash"
-    from apps.coaching.services import _spent_this_month
-
-    assert _spent_this_month(athlete) == 1                     # a fallback costs one call
+    # A fallback costs one budgeted call: only ok/invalid rows count towards the budget.
+    # (Counted directly: _spent_this_month uses the local month, which at 20:00 UTC on
+    # the 31st is already the next month in Asia/Kolkata.)
+    assert AIRequestLog.objects.filter(athlete=athlete,
+                                       status__in=["ok", "invalid"]).count() == 1
 
 
 def test_quota_falls_back_without_retry_to_the_tiers_own_fallback(keys, fakes, athlete,
