@@ -13,6 +13,10 @@ R10: every new table hangs off the Athlete and cascades with it — GarminProfil
 PersonalRecord, BodyComposition, LactateThreshold (ingest), Shoe and ShoeAssignment
 (gear), WeeklyReport and Achievement (health), PushSubscription and ReminderSettings
 (reminders). The LT and zone source fields live on the Athlete row itself.
+
+R11: IntradayDay (ingest) and WaterLog (diet) cascade with the Athlete; the nudge settings
+live on ReminderSettings and `map_hide_endpoints` on the Athlete row. Cached run routes
+(`route:v1:…`, `route-overlay:v1:…`) are dropped explicitly with the other cache keys.
 """
 
 import logging
@@ -88,8 +92,14 @@ def _cache_keys(user: User) -> list[str]:
     athlete = getattr(user, "athlete", None)
     if athlete is None:
         return []
-    return [f"progress:fastest1k:{pk}:{version}" for pk, version in
-            Activity.objects.filter(athlete=athlete).values_list("pk", "segmentation_version")]
+    keys = []
+    for pk, version in Activity.objects.filter(athlete=athlete).values_list(
+            "pk", "segmentation_version"):
+        keys.append(f"progress:fastest1k:{pk}:{version}")
+        # R11 §E: cached run routes (both privacy settings) and overlay lines.
+        keys += [f"route:v1:{pk}:{version}:{hide}" for hide in (0, 1)]
+        keys += [f"route-overlay:v1:{pk}:{hide}" for hide in (0, 1)]
+    return keys
 
 
 def delete_account(user: User) -> None:

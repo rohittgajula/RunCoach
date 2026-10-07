@@ -36,6 +36,12 @@ CATALOGUE: dict[str, tuple[str, str, str, str]] = {
     "alcohol": ("Drinks", "standard drinks", "habits", "drinks"),
     "sugar": ("Sugar servings", "servings", "habits", "sugar"),
     "private": ("Private", "count", "habits", "Private"),
+    # R11 §B8: the day between runs (IntradayDay aggregates)
+    "active_min": ("Active time", "min", "day", "active time"),
+    "sedentary_min": ("Sedentary time", "min", "day", "sedentary time"),
+    "stress_high_min": ("High-stress time", "min", "day", "high-stress time"),
+    "bb_bedtime": ("Body Battery at bedtime", "", "day", "Body Battery at bedtime"),
+    "awake_hr": ("Awake HR", "bpm", "day", "awake heart rate"),
     "run_km": ("Run distance", "km", "runs", "running distance"),
     "run_pace": ("Run pace", "s/km", "runs", "run pace (seconds per km)"),
     "easy_hr": ("HR at easy pace", "bpm", "runs", "HR at easy pace"),
@@ -87,6 +93,20 @@ def _wellness(athlete, key, start, end) -> dict[dt.date, float]:
         if value is not None:
             out[row.metric_date] = float(value)
     return out
+
+
+DAY_FIELDS = {"active_min": "active_min", "sedentary_min": "sedentary_min",
+              "stress_high_min": "stress_high_min", "bb_bedtime": "bb_at_bedtime",
+              "awake_hr": "awake_hr_avg"}
+
+
+def _day(athlete, key, start, end) -> dict[dt.date, float]:
+    from apps.ingest.models import IntradayDay
+
+    field = DAY_FIELDS[key]
+    rows = (IntradayDay.objects.filter(athlete=athlete, day__gte=start, day__lte=end)
+            .exclude(**{f"{field}__isnull": True}).values_list("day", field))
+    return {day: float(value) for day, value in rows}
 
 
 def _habit(athlete, kind, start, end) -> dict[dt.date, float]:
@@ -149,6 +169,8 @@ def series_for(athlete, key: str, start: dt.date, end: dt.date) -> dict[dt.date,
         return _wellness(athlete, key, start, end)
     if group == "habits":
         return _habit(athlete, key, start, end)
+    if group == "day":
+        return _day(athlete, key, start, end)
     return _runs(athlete, key, start, end)
 
 

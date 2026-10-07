@@ -65,6 +65,7 @@ def sync_one(self, athlete_id: int) -> dict:
         trip_breaker("rate limited mid-sync")
     else:
         queue_slow(athlete)
+        queue_intraday(athlete)
     # New runs may change last week's picture: adapt the active plan (idempotent per
     # ISO week, so this is a no-op after the first run of the week).
     try:
@@ -192,3 +193,117 @@ def backfill_r10(athlete_id: int, days: int = 180) -> dict:
     if result.get("rate_limited"):
         trip_breaker("rate limited during the R10 backfill")
     return {"athlete": athlete_id, **result}
+
+
+# --- R11 §A: intraday series (today + yesterday after each sync) ------------------------
+
+INTRADAY_DELAY_S = 90
+BACKFILL_CHUNK_DAYS = 7
+
+
+def queue_intraday(athlete, countdown: int = INTRADAY_DELAY_S) -> bool:
+    """Queue today's + yesterday's intraday fetch after a successful sync. Never raises."""
+    if garmin_blocked():
+        return False
+    try:
+        sync_intraday_one.apply_async((athlete.pk,), countdown=countdown)
+        return True
+    except Exception:  # noqa: BLE001 — no broker in a one-off script
+        logger.debug("could not queue the intraday fetch for %s", athlete.pk)
+        return False
+
+
+def _run_intraday(athlete_id: int, label: str, fn) -> dict:
+    from .garmin_wellness import RateLimited
+
+    if garmin_blocked():
+        return {"skipped": "rate_limited"}
+    try:
+        athlete, client = _slow_client(athlete_id)
+        if athlete is None:
+            return {"skipped": "not_connected"}
+        result = fn(athlete, client)
+    except (GarminRateLimited, RateLimited) as exc:
+        trip_breaker(str(exc))
+        return {"skipped": "rate_limited"}
+    except GarminAuthError as exc:
+        logger.warning("garmin auth failed for %s: %s", athlete_id, exc)
+        return {"error": "auth"}
+    if result.get("rate_limited"):
+        trip_breaker(f"rate limited during {label}")
+    return {"athlete": athlete_id, **result}
+
+
+@shared_task(name="ingest.sync_intraday_one")
+def sync_intraday_one(athlete_id: int, today_only: bool = False, minimal: bool = False) -> dict:
+    """Today + yesterday (or just today, with only steps + stress, for the nudge
+    refresh). Garmin queue; breaker applies."""
+    import datetime as dt
+
+    from .garmin_intraday import sync_intraday
+
+    def fetch(athlete, client):
+        today = athlete.local_today
+        days = [today] if today_only else [today, today - dt.timedelta(days=1)]
+        return sync_intraday(athlete, client, days, minimal=minimal)
+
+    return _run_intraday(athlete_id, "the intraday fetch", fetch)
+
+
+@shared_task(name="ingest.backfill_intraday")
+def backfill_intraday(athlete_id: int, days: list[str]) -> dict:
+    """One chunk of the intraday backfill (manage.py garmin_backfill_intraday)."""
+    import datetime as dt
+
+    from .garmin_intraday import sync_intraday
+
+    wanted = [dt.date.fromisoformat(d) for d in days]
+    return _run_intraday(athlete_id, "the intraday backfill",
+                         lambda athlete, client: sync_intraday(athlete, client, wanted))
+
+
+@shared_task(name="ingest.intraday_refresh")
+def intraday_refresh() -> dict:
+    """R11 §C: for athletes with the move or breathing nudge on (and a device to push
+    to), refresh today's steps + stress at most every INTRADAY_REFRESH_MIN minutes while
+    inside their nudge hours. Staggered a minute apart; breaker applies."""
+    import datetime as dt
+
+    from django.conf import settings
+    from django.db.models import Q
+    from django.utils import timezone
+
+    from apps.reminders.models import PushSubscription, ReminderSettings
+    from apps.reminders.nudges import in_window
+
+    from .models import IntradayDay
+
+    every = getattr(settings, "INTRADAY_REFRESH_MIN", 60)
+    if not every or garmin_blocked():
+        return {"skipped": "off" if not every else "rate_limited"}
+    with_subs = set(PushSubscription.objects.values_list("athlete_id", flat=True))
+    rows = (ReminderSettings.objects.filter(athlete_id__in=with_subs,
+                                            athlete__garmin_connected=True)
+            .filter(Q(move=True) | Q(breathing=True)).select_related("athlete"))
+    queued = 0
+    stale_before = timezone.now() - dt.timedelta(minutes=every)
+    for row in rows:
+        athlete = row.athlete
+        now = athlete.local_now.time()
+        if in_window(now, row.quiet_start, row.quiet_end):
+            continue
+        active = ((row.move and in_window(now, row.move_start, row.move_end))
+                  or (row.breathing and in_window(now, row.breathing_start, row.breathing_end)))
+        if not active:
+            continue
+        fresh = IntradayDay.objects.filter(athlete=athlete, day=athlete.local_today,
+                                           fetched_at__gte=stale_before).exists()
+        if fresh:
+            continue
+        try:
+            sync_intraday_one.apply_async((athlete.pk,), {"today_only": True, "minimal": True},
+                                          countdown=queued * 60)
+            queued += 1
+        except Exception:  # noqa: BLE001
+            logger.debug("could not queue the intraday refresh for %s", athlete.pk)
+    return {"queued": queued}

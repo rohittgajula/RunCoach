@@ -85,3 +85,20 @@ class Meal(OwnedByAthlete):
         if update_fields is not None:
             kwargs["update_fields"] = set(update_fields) | set(MACROS) | {"local_date"}
         super().save(*args, **kwargs)
+
+
+class WaterLog(OwnedByAthlete):
+    """R11 §D: one drink of water. `local_date` is fixed at save time in the athlete's
+    timezone (like Meal.local_date)."""
+
+    at = models.DateTimeField()
+    local_date = models.DateField(db_index=True)
+    ml = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["at", "id"]
+        indexes = [models.Index(fields=["athlete", "local_date"])]
+
+    def __str__(self):
+        return f"{self.local_date} {self.ml} ml"

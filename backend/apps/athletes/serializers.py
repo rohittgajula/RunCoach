@@ -105,6 +105,8 @@ class AthleteSerializer(serializers.ModelSerializer):
             "private_habit_enabled", "private_on_today", "private_goal",
             "location_lat", "location_lon", "location_name", "location_source",
             "location_city",
+            # R11
+            "map_hide_endpoints",
         ]
         # System-managed. A client that could PATCH garmin_connected=True could make
         # the UI claim sync works when it does not.

@@ -134,6 +134,8 @@ def diet_day(athlete: Athlete, day: dt.date) -> dict:
 
     from apps.ingest.weather_services import water_bonus_ml
 
+    from .water import water_day
+
     bonus, food_tips = water_bonus_ml(athlete, day)
     rationale = targets.rationale
     if bonus:
@@ -157,6 +159,8 @@ def diet_day(athlete: Athlete, day: dt.date) -> dict:
             "exercise": targets.exercise, "exercise_source": targets.exercise_source,
         },
         "meals": [meal_json(m) for m in meals],
+        # R11 §D: the hydration log against the same target.
+        "water": water_day(athlete, day, (int(targets.water_ml + bonus), int(bonus))),
         "fueling": fueling,
         "missing_profile": targets.missing,
     }

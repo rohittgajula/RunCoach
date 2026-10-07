@@ -217,3 +217,50 @@ class LactateThreshold(OwnedByAthlete):
         ordering = ["measured_on"]
         constraints = [models.UniqueConstraint(fields=["athlete", "measured_on"],
                                                name="uniq_athlete_lt_day")]
+
+
+class IntradayDay(OwnedByAthlete):
+    """R11 §A: one athlete-day of Garmin's intraday series, compact.
+
+    Arrays are `[minute_of_day, value]` in the athlete's local time (steps buckets add
+    Garmin's activity level as a third item). Only what the Day screen needs is kept —
+    no raw payloads — so a year is a few MB. The aggregate columns feed trends and
+    Compare; they are recomputed whenever the day is stored again.
+    """
+
+    day = models.DateField(db_index=True)
+    utc_offset_min = models.SmallIntegerField(null=True, blank=True)
+    hr = models.JSONField(default=list, blank=True)              # [[min, bpm]] every 2 min
+    stress = models.JSONField(default=list, blank=True)          # [[min, 0-100]] every 3 min
+    body_battery = models.JSONField(default=list, blank=True)    # [[min, 0-100]] on change
+    steps = models.JSONField(default=list, blank=True)           # [[min, steps, level]] / 15 min
+
+    # Garmin's daily summary bits the arrays cannot give (from DailyMetrics.raw["stats"]).
+    step_goal = models.IntegerField(null=True, blank=True)
+    resting_hr = models.IntegerField(null=True, blank=True)
+
+    # Derived aggregates (analysis.day.aggregates).
+    steps_total = models.IntegerField(null=True, blank=True)
+    sedentary_min = models.IntegerField(null=True, blank=True)
+    active_min = models.IntegerField(null=True, blank=True)
+    intense_min = models.IntegerField(null=True, blank=True)
+    stress_avg = models.IntegerField(null=True, blank=True)
+    stress_high_min = models.IntegerField(null=True, blank=True)
+    stressful_min = models.IntegerField(null=True, blank=True)
+    awake_hr_avg = models.IntegerField(null=True, blank=True)
+    bb_charged = models.IntegerField(null=True, blank=True)
+    bb_drained = models.IntegerField(null=True, blank=True)
+    bb_at_wake = models.IntegerField(null=True, blank=True)
+    bb_at_bedtime = models.IntegerField(null=True, blank=True)
+
+    complete = models.BooleanField(default=False, help_text="Fetched after the day ended.")
+    fetched_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-day"]
+        constraints = [models.UniqueConstraint(fields=["athlete", "day"],
+                                               name="uniq_athlete_intraday_day")]
+
+    def __str__(self):
+        return f"{self.day} intraday ({len(self.hr)} hr, {len(self.stress)} stress)"

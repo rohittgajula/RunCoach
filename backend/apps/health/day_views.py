@@ -1,0 +1,53 @@
+"""R11 §B/§F: the Day section — one day's timeline and cards, Today's compact row and
+the daytime trends. Deterministic; never sent to the AI."""
+
+from __future__ import annotations
+
+import datetime as dt
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from .common import BadRequest, parse_range, window
+from .day_service import day_json, summary_json, trends_json
+
+MAX_DAYS_BACK = 365
+
+
+def parse_day(request, athlete) -> dt.date:
+    raw = request.query_params.get("date")
+    today = athlete.local_today
+    if not raw:
+        return today
+    try:
+        day = dt.date.fromisoformat(raw)
+    except ValueError as exc:
+        raise BadRequest("date must be a date (YYYY-MM-DD).") from exc
+    if day > today:
+        raise BadRequest("date can't be in the future.")
+    if (today - day).days > MAX_DAYS_BACK:
+        raise BadRequest("date must be within the last 365 days.")
+    return day
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def day(request):
+    athlete = request.user.athlete
+    return Response(day_json(athlete, parse_day(request, athlete)))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def day_summary(request):
+    return Response(summary_json(request.user.athlete))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def day_trends(request):
+    athlete = request.user.athlete
+    range_key = parse_range(request, "4w")
+    start, end = window(athlete, range_key)
+    return Response(trends_json(athlete, range_key, start, end))

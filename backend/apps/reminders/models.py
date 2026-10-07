@@ -31,6 +31,27 @@ class ReminderSettings(OwnedByAthlete):
     best_run_time_time = models.TimeField(default=dt.time(6, 0))
     weekly_report = models.BooleanField(default=False)
     weekly_report_time = models.TimeField(default=dt.time(7, 0))
+    # R11 §C: nudges driven by the intraday data (and water by the clock). All off.
+    move = models.BooleanField(default=False)
+    move_start = models.TimeField(default=dt.time(9, 0))
+    move_end = models.TimeField(default=dt.time(19, 0))
+    move_max_per_day = models.PositiveSmallIntegerField(default=4)
+    move_after_min = models.PositiveSmallIntegerField(default=60)
+    breathing = models.BooleanField(default=False)
+    breathing_start = models.TimeField(default=dt.time(9, 0))
+    breathing_end = models.TimeField(default=dt.time(21, 0))
+    breathing_max_per_day = models.PositiveSmallIntegerField(default=3)
+    breathing_threshold = models.PositiveSmallIntegerField(default=51)
+    water = models.BooleanField(default=False)
+    water_start = models.TimeField(default=dt.time(9, 0))
+    water_end = models.TimeField(default=dt.time(21, 0))
+    water_max_per_day = models.PositiveSmallIntegerField(default=6)
+    water_every_h = models.PositiveSmallIntegerField(default=2)
+    quiet_start = models.TimeField(default=dt.time(22, 0))
+    quiet_end = models.TimeField(default=dt.time(7, 0))
+    # {nudge key: {"date": local date, "count": n, "last_at": iso, "stretch": minute}}
+    nudge_state = models.JSONField(default=dict, blank=True)
+
     # {reminder key: "YYYY-MM-DD" last sent, local date} — once a day each.
     last_sent = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)

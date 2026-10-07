@@ -1,5 +1,6 @@
 """R10 §C12: every 5 minutes, send each enabled reminder once per local day at its
-time (up to 2 h late). A no-op while VAPID is not configured."""
+time (up to 2 h late). R11 §C: the same beat evaluates the move / breathing / water
+nudges (apps.reminders.nudges). A no-op while VAPID is not configured."""
 
 from __future__ import annotations
 
@@ -40,4 +41,12 @@ def send_due() -> dict:
             sent += ok
         if changed:
             row.save(update_fields=["last_sent", "updated_at"])
+        # R11 §C: move / breathing / water nudges (their own caps and dedupe).
+        try:
+            from .nudges import run_for
+
+            sent += run_for(athlete, row, local_now,
+                            lambda body, a=athlete: send_to_athlete(a, body)[0] > 0)
+        except Exception:  # noqa: BLE001 — one athlete's nudges must not stop the rest
+            logger.exception("nudges failed for %s", athlete.pk)
     return {"sent": sent}

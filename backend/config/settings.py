@@ -315,6 +315,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "reminders.send_due",
         "schedule": crontab(minute="*/5"),
     },
+    # R11 §C: today's steps + stress for athletes with the move/breathing nudge on,
+    # at most every INTRADAY_REFRESH_MIN minutes inside their nudge hours.
+    "intraday-refresh-for-nudges": {
+        "task": "ingest.intraday_refresh",
+        "schedule": crontab(minute="*/15"),
+    },
 }
 
 # Queue separation matters from the start: a stuck AI call must not block the next
@@ -329,6 +335,11 @@ GARMIN_TOKEN_DIR = os.environ.get("GARMIN_TOKEN_DIR", "/app/.garmin")
 # R10 §B: pause between the slow-changing Garmin calls (endurance score, PRs, gear …),
 # so one athlete's daily fetch never arrives as a burst from this IP.
 GARMIN_SLOW_PAUSE_S = float(os.environ.get("GARMIN_SLOW_PAUSE_S", "1.5"))
+
+# R11 §C: how often (minutes) today's intraday steps + stress are refreshed for athletes
+# who turned on the move or breathing nudge (2 requests each, only inside their hours).
+# 0 turns the refresh off; nudges then use whatever the regular syncs fetched.
+INTRADAY_REFRESH_MIN = int(os.environ.get("INTRADAY_REFRESH_MIN", "60"))
 
 # --- Web push (R10 §C12) -----------------------------------------------------------
 # All three or the reminders feature hides itself. Generate the key pair once with the

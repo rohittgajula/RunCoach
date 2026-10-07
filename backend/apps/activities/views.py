@@ -145,3 +145,103 @@ def activity_series(request, pk: int):
         "has_cadence": any(p["cadence"] for p in points),
         "has_altitude": any(p["altitude"] for p in points),
     })
+
+
+# --- R11 §E: run maps ------------------------------------------------------------------
+
+ROUTE_CACHE_S = 24 * 3600
+ROUTES_MAX = 50
+
+
+def route_cache_key(activity: Activity, hide: bool) -> str:
+    return f"route:v1:{activity.pk}:{activity.segmentation_version}:{int(hide)}"
+
+
+def overlay_cache_key(activity: Activity, hide: bool) -> str:
+    return f"route-overlay:v1:{activity.pk}:{int(hide)}"
+
+
+def _route_samples(activity: Activity) -> list[dict]:
+    rows = activity.records.filter(latitude__isnull=False, longitude__isnull=False).order_by(
+        "offset_s").values_list("offset_s", "latitude", "longitude", "distance_m", "heart_rate",
+                                "altitude_m")
+    return [{"t": t, "lat": lat, "lon": lon, "dist": d, "hr": hr, "alt": alt}
+            for t, lat, lon, d, hr, alt in rows]
+
+
+def route_body(activity: Activity, hide: bool) -> dict:
+    """Cached per activity, segmentation version and the hide setting."""
+    from django.core.cache import cache
+
+    from analysis import route as maths
+
+    key = route_cache_key(activity, hide)
+    try:
+        cached = cache.get(key)
+    except Exception:  # noqa: BLE001 — a cache outage only costs a recompute
+        cached = None
+    if cached is not None:
+        return cached
+    segments = [(s.start_offset_s, s.start_offset_s + s.duration_s, s.kind)
+                for s in activity.segments.all()]
+    body = {"activity_id": activity.pk,
+            **maths.build(_route_samples(activity), segments,
+                          hide_m=maths.HIDE_M if hide else 0)}
+    try:
+        cache.set(key, body, ROUTE_CACHE_S)
+    except Exception:  # noqa: BLE001
+        pass
+    return body
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def activity_route(request, pk: int):
+    athlete = request.user.athlete
+    activity = Activity.objects.filter(athlete=athlete, pk=pk).first()
+    if activity is None:
+        return Response({"detail": "Not found."}, status=404)
+    return Response(route_body(activity, athlete.map_hide_endpoints))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def activity_routes(request):
+    """"Your routes": light polylines of the latest runs with GPS (trimmed the same way)."""
+    from analysis import route as maths
+
+    athlete = request.user.athlete
+    try:
+        limit = int(request.query_params.get("limit", 20))
+    except ValueError:
+        return Response({"detail": "limit must be a number (1–50)."}, status=400)
+    if not 1 <= limit <= ROUTES_MAX:
+        return Response({"detail": "limit must be between 1 and 50."}, status=400)
+    hide = maths.HIDE_M if athlete.map_hide_endpoints else 0
+    from django.db.models import Exists, OuterRef
+
+    from .models import ActivityRecord
+
+    gps = ActivityRecord.objects.filter(activity=OuterRef("pk"), latitude__isnull=False)
+    with_gps = (Activity.objects.filter(athlete=athlete, sport__icontains="run")
+                .filter(Exists(gps)).order_by("-started_at")[:limit])
+    routes = []
+    from django.core.cache import cache
+
+    for activity in with_gps:
+        key = overlay_cache_key(activity, bool(hide))
+        try:
+            points = cache.get(key)
+        except Exception:  # noqa: BLE001
+            points = None
+        if points is None:
+            points = maths.overlay(_route_samples(activity), hide_m=hide)
+            try:
+                cache.set(key, points, ROUTE_CACHE_S)
+            except Exception:  # noqa: BLE001
+                pass
+        if points:
+            routes.append({"activity_id": activity.pk, "date": activity.local_date,
+                           "distance_m": round(activity.total_distance_m or 0, 1),
+                           "points": points})
+    return Response({"routes": routes})

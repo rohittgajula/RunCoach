@@ -148,6 +148,9 @@ class Athlete(models.Model):
     location_source = models.CharField(max_length=4, choices=LocationSource.choices,
                                        default=LocationSource.NONE)
 
+    # R11 §E: run maps trim the first and last 200 m so home/work never shows.
+    map_hide_endpoints = models.BooleanField(default=True)
+
     # Whether the athlete has been through onboarding. Needed as an explicit flag
     # rather than inferred: the router has to decide where a freshly-registered
     # athlete lands, and racing a redirect against a state update silently skipped

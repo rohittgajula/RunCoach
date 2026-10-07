@@ -12,17 +12,30 @@ from rest_framework.response import Response
 
 from .models import PushSubscription
 from .push import available, send_to_athlete
+from .nudges import NUDGES, nudges_json, quiet_json, validate_patch, validate_quiet
 from .service import IOS_NOTE, REMINDERS, reminders_json, settings_for
 
 UNAVAILABLE = "Reminders aren't set up on this server yet."
 
 
+def _data_as_of(athlete):
+    from apps.ingest.models import IntradayDay
+
+    return (IntradayDay.objects.filter(athlete=athlete).order_by("-fetched_at")
+            .values_list("fetched_at", flat=True).first())
+
+
 def _state(athlete) -> dict:
+    row = settings_for(athlete)
     return {"available": available(),
             "public_key": settings.VAPID_PUBLIC_KEY if available() else None,
             "subscriptions": PushSubscription.objects.filter(athlete=athlete).count(),
             "ios_note": IOS_NOTE,
-            "reminders": reminders_json(settings_for(athlete))}
+            "reminders": reminders_json(row),
+            # R11 §C
+            "nudges": nudges_json(row),
+            "quiet_hours": quiet_json(row),
+            "data_as_of": _data_as_of(athlete)}
 
 
 def _bad(message: str) -> Response:
@@ -39,6 +52,13 @@ def reminders(request):
             return _bad("Send an object keyed by reminder.")
         updates: dict = {}
         for key, change in request.data.items():
+            if key in NUDGES or key == "quiet_hours":
+                try:
+                    updates.update(validate_quiet(change) if key == "quiet_hours"
+                                   else validate_patch(key, change))
+                except ValueError as exc:
+                    return _bad(str(exc))
+                continue
             if key not in REMINDERS:
                 return _bad(f"Unknown reminder: {key}.")
             if not isinstance(change, dict) or not set(change) <= {"enabled", "time"}:
