@@ -88,3 +88,16 @@ def no_real_weather(monkeypatch):
 
     monkeypatch.setattr(progress, "cache", cache)
     return cache
+
+
+@pytest.fixture(autouse=True)
+def fake_ai_models(settings):
+    """Tests never depend on the machine's AI configuration.
+
+    CI has no model ids in its environment; a developer's .env has real ones. Code
+    that resolves a model before calling the (mocked) client then behaved differently
+    in the two places — green locally, 503 in CI. Every test gets the same fake tiers;
+    a test about "no model configured" sets settings.AI_MODELS itself.
+    """
+    settings.AI_MODELS = {"lite": "test-model", "fast": "test-model",
+                          "coach": "test-model", "deep": "test-model"}
