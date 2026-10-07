@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { EveningWakeCard } from '../components/alarm/AlarmCards'
 import { PendingCheckins } from '../components/checkin/PendingCheckins'
 import { TodayCard } from '../components/checkin/TodayCard'
 import { QuickLogRow } from '../components/habits/QuickLogRow'
@@ -77,6 +78,7 @@ export default function Today() {
         <ErrorState message={errorText(week.error, 'Today’s plan did not load.')} onRetry={() => week.refetch()} />
       )}
       <TodayWorkout day={day} loading={week.isPending} />
+      <EveningWakeCard />
       <TodaySoFar />
       <WeatherCard />
       <section className="card">

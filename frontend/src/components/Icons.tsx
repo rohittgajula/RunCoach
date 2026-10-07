@@ -327,3 +327,17 @@ export const LungsIcon = (p: IconProps) => (
     <path d="M8.5 7.5C6 8 3.5 12 3.5 17c0 2 1 3 2.5 3 2.5 0 3.5-1.5 3.5-4V9.5c0-1-.4-2-1-2zM15.5 7.5c2.5.5 5 4.5 5 9.5 0 2-1 3-2.5 3-2.5 0-3.5-1.5-3.5-4V9.5c0-1 .4-2 1-2z" />
   </Svg>
 )
+
+export const AlarmIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="13" r="7.5" />
+    <path d="M12 9.5V13l2.5 1.8M4 5.5 6.5 3M20 5.5 17.5 3" />
+  </Svg>
+)
+
+export const WatchIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="6.5" y="6.5" width="11" height="11" rx="3" />
+    <path d="M9 6.5 9.5 3h5l.5 3.5M9 17.5l.5 3.5h5l.5-3.5M12 9.8V12l1.5 1" />
+  </Svg>
+)

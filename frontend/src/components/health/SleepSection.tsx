@@ -1,14 +1,15 @@
 import { Link } from 'react-router-dom'
 import { dur, parseDate } from '../../lib/format'
-import { errorText, useHealthSleep } from '../../lib/queries'
+import { errorText, useHealthSleep, useWakePlan } from '../../lib/queries'
 import type { HealthSleep, SleepNight } from '../../lib/types'
 import { ChartFrame } from '../ChartFrame'
 import { guideHref } from '../guides/guideData'
+import { WakePlannerCard, WatchAlarmsCard } from '../alarm/AlarmCards'
 import { CardHead, Delta, MetricTile, ToneChip } from '../Kit'
 import { MetricChart } from '../MetricChart'
 import { Empty, ErrorState, Skeleton } from '../States'
 import { clock } from '../weather/weatherUtil'
-import { useHealthRange } from './healthRange'
+import { FREQ_WORD, bucket, periodCaption, useHealthPeriod, withApiPeriod, type Period } from './healthRange'
 
 /** "YYYY-MM-DDTHH:MM" / "HH:MM" → minutes after 18:00 the evening before (so 01:00 = 420). */
 function eveningMinutes(t: string | null): number | null {
@@ -29,22 +30,31 @@ const dow = (iso: string) => parseDate(iso).toLocaleDateString(undefined, { week
 
 /** Health → Sleep: average + debt, stages timeline, regularity, SpO2, breathing, runs, tonight. */
 export function SleepSection() {
-  const [range] = useHealthRange<string>()
-  const sleep = useHealthSleep(range)
+  const { period: chosen } = useHealthPeriod()
+  const sleep = useHealthSleep(chosen.params)
   const s = sleep.data
+  const period = withApiPeriod(chosen, s?.period)
 
   if (sleep.isPending) return <div className="stack"><section className="card"><Skeleton height={220} /></section></div>
   if (sleep.isError && !s) return <ErrorState message={errorText(sleep.error, 'Sleep did not load.')} onRetry={() => sleep.refetch()} />
   if (!s || !s.nights.length) {
-    return <Empty title="No sleep data yet">Wear your watch to bed and sync — nights show up here with stages, debt and regularity.</Empty>
+    return (
+      <div className="stack">
+        <Empty title="No sleep data yet">Wear your watch to bed and sync — nights show up here with stages, debt and regularity.</Empty>
+        <WakePlannerCard />
+        <WatchAlarmsCard showFlags={false} />
+      </div>
+    )
   }
 
   return (
     <div className={`stack ${sleep.isPlaceholderData ? 'is-stale' : ''}`}>
       <SleepHero s={s} />
       <SleepTiles s={s} />
-      <SleepTrend nights={s.nights} need={s.debt?.need_s ?? s.averages?.need_s ?? null} />
+      <SleepTrend nights={s.series?.length ? s.series : s.nights} need={s.debt?.need_s ?? s.averages?.need_s ?? null} period={period} />
       <SleepVsRuns s={s} />
+      <WakePlannerCard />
+      <WatchAlarmsCard showFlags={false} />
       <Tonight s={s} />
     </div>
   )
@@ -150,15 +160,18 @@ function SleepTiles({ s }: { s: HealthSleep }) {
   return <div className="mt-grid">{tiles}</div>
 }
 
-function SleepTrend({ nights, need }: { nights: SleepNight[]; need: number | null }) {
-  const points = nights.map((n) => ({ date: n.date, value: n.sleep_s != null ? n.sleep_s / 3600 : null }))
-  if (points.filter((p) => p.value != null).length < 3) return null
+function SleepTrend({ nights, need, period }: { nights: Array<Pick<SleepNight, 'date' | 'sleep_s'>>; need: number | null; period: Period }) {
+  const points = bucket(nights.map((n) => ({ date: n.date, value: n.sleep_s != null ? n.sleep_s / 3600 : null })), period.freq, 'mean')
+  if (points.filter((p) => p.value != null).length < (period.freq === 'day' ? 3 : 2)) return null
   const h = (v: number) => `${Math.floor(v)}:${String(Math.round((v % 1) * 60)).padStart(2, '0')}`
   const band = need ? { low: need / 3600 - 0.5, high: need / 3600 + 0.5, label: 'your need' } : null
   return (
     <section className="card">
-      <ChartFrame title="Sleep per night" caption={need ? `Shaded band = within 30 min of the ${h(need / 3600)} h you need.` : 'Dashed line = your average.'}>
-        <MetricChart data={points} format={h} color="var(--sleep)" height={180} band={band} />
+      <ChartFrame
+        title={period.freq === 'day' ? 'Sleep per night' : `Sleep per night · ${FREQ_WORD[period.freq]} average`}
+        caption={<>{need ? `Shaded band = within 30 min of the ${h(need / 3600)} h you need.` : 'Dashed line = your average.'}<span className="block">{periodCaption(period)}</span></>}
+      >
+        <MetricChart data={points} format={h} color="var(--sleep)" height={180} band={band} freq={period.freq} />
       </ChartFrame>
     </section>
   )
@@ -198,8 +211,10 @@ function SleepVsRuns({ s }: { s: HealthSleep }) {
 
 function Tonight({ s }: { s: HealthSleep }) {
   const t = s.tonight
+  // The wake planner (R12) gives tonight's bedtime from tomorrow's run; don't repeat it.
+  const planned = !!useWakePlan().data?.bedtime
   const items: string[] = []
-  if (t?.bedtime && t.need_s) items.push(`In bed by ${clock(t.bedtime)} to get ${hm(t.need_s)}${t.wake_time ? ` before ${clock(t.wake_time)}` : ''}`)
+  if (!planned && t?.bedtime && t.need_s) items.push(`In bed by ${clock(t.bedtime)} to get ${hm(t.need_s)}${t.wake_time ? ` before ${clock(t.wake_time)}` : ''}`)
   items.push('Last caffeine before 2 pm, and no alcohol tonight')
   if ((s.regularity?.bedtime_sd_min ?? 0) > 45) items.push('Same bedtime every night helps more than a lie-in')
   return (

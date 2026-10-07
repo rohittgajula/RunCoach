@@ -3,14 +3,9 @@ import { errorText, useCompare, useCompareMetrics } from '../../lib/queries'
 import type { CompareMetric, CompareResult } from '../../lib/types'
 import { CardHead, ToneChip } from '../Kit'
 import { RangeSwitch } from '../RangeSwitch'
+import { FREQ_NOUN, periodCaption, useHealthPeriod, withApiPeriod, type Period } from './healthRange'
 import { Empty, ErrorState, Skeleton } from '../States'
 
-const RANGES = [
-  { value: '4w', label: '4w' },
-  { value: '3m', label: '3m' },
-  { value: '6m', label: '6m' },
-  { value: '1y', label: '1y' },
-]
 const LAGS = [
   { value: '0', label: 'Same day' },
   { value: '1', label: 'Next day' },
@@ -45,11 +40,11 @@ export function CompareSection() {
   const has = (k: string) => metrics.some((m) => m.key === k)
   const [x, setX] = useState('')
   const [y, setY] = useState('')
-  const [range, setRange] = useState('3m')
+  const { period: chosen } = useHealthPeriod()
   const [lag, setLag] = useState<'0' | '1'>('1')
   const xKey = x || (has('sleep_h') ? 'sleep_h' : metrics[0]?.key ?? '')
   const yKey = y || (has('easy_hr') ? 'easy_hr' : metrics.find((m) => m.key !== xKey)?.key ?? '')
-  const result = useCompare(xKey, yKey, range, lag === '1' ? 1 : 0)
+  const result = useCompare(xKey, yKey, chosen.params, lag === '1' ? 1 : 0)
 
   if (catalogue.isPending) return <section className="card"><Skeleton lines={4} /></section>
   if (!metrics.length) return <Empty title="Compare isn’t available yet">Sync some days of data and check back.</Empty>
@@ -63,19 +58,19 @@ export function CompareSection() {
           <Picker label="Against" value={yKey} onChange={setY} metrics={metrics} other={xKey} />
         </div>
         <div className="row-wrap">
-          <RangeSwitch compact value={range} onChange={setRange} options={RANGES} label="Range" />
-          <RangeSwitch compact value={lag} onChange={(v) => setLag(v as '0' | '1')} options={LAGS} label="Timing" />
+          <RangeSwitch compact value={lag} onChange={(v) => setLag(v as '0' | '1')} options={LAGS.map((o) => ({ ...o, label: o.label.replace('day', FREQ_NOUN[chosen.freq]) }))} label="Timing" />
         </div>
       </section>
 
       {result.isPending && <section className="card"><Skeleton height={240} /></section>}
       {result.isError && !result.data && <ErrorState message={errorText(result.error)} onRetry={() => result.refetch()} />}
-      {result.data && <CompareResultCard r={result.data} stale={result.isPlaceholderData} />}
+      {result.data && <CompareResultCard r={result.data} stale={result.isPlaceholderData} period={withApiPeriod(chosen, result.data.period)} />}
     </div>
   )
 }
 
-function CompareResultCard({ r, stale }: { r: CompareResult; stale: boolean }) {
+function CompareResultCard({ r, stale, period }: { r: CompareResult; stale: boolean; period: Period }) {
+  const unit = FREQ_NOUN[period.freq]
   return (
     <section className={`card stack ${stale ? 'is-stale' : ''}`}>
       <p className="compare-sentence">{r.sentence}</p>
@@ -86,7 +81,8 @@ function CompareResultCard({ r, stale }: { r: CompareResult; stale: boolean }) {
       </div>
       {r.points.length >= 2 ? <Scatter r={r} /> : <p className="muted small">Not enough days with both values yet.</p>}
       <p className="chart-caption">
-        Each dot is one {r.lag ? 'day (y = the day after)' : 'day'}. {r.trend ? 'Line = overall trend. ' : ''}{r.caveat}
+        Each dot is one {unit}{r.lag ? ` (y = the ${unit} after)` : ''}. {r.trend ? 'Line = overall trend. ' : ''}{r.caveat}
+        <span className="block">{periodCaption(period, { compare: false })}</span>
       </p>
     </section>
   )
@@ -132,7 +128,7 @@ function Scatter({ r }: { r: CompareResult }) {
       </svg>
       <div className="scatter-labels">
         <span>→ {r.x.label}{unit(r.x.unit)}</span>
-        <span>↑ {r.y.label}{unit(r.y.unit)}{r.lag ? ', next day' : ''}</span>
+        <span>↑ {r.y.label}{unit(r.y.unit)}{r.lag ? `, next ${r.period?.freq ? FREQ_NOUN[r.period.freq] : 'day'}` : ''}</span>
       </div>
     </div>
   )

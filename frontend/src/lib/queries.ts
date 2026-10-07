@@ -15,6 +15,7 @@ import type {
   LungRecovery, WeeklyReport, WeeklyReportListItem, CompareMetric, CompareResult,
   RemindersResponse, Reminder, Achievements, ReadinessForecast, HealthBody,
   HealthDay, DaySummary, DayTrends, ActivityRoute, WaterDay, WaterLog, Nudge,
+  WakePlan, MyAlarm, WatchAlarms,
 } from './types'
 
 export const errorText = (error: unknown, fallback = 'Something went wrong.'): string =>
@@ -22,7 +23,7 @@ export const errorText = (error: unknown, fallback = 'Something went wrong.'): s
 
 /** Everything that depends on the plan. Accepting/declining/moving touches all of it. */
 export function invalidatePlanData(client: QueryClient) {
-  for (const key of ['calendar', 'calendar-month', 'calendar-day', 'plan-active', 'plans', 'plan', 'profile-summary', 'diet-day', 'workout']) {
+  for (const key of ['calendar', 'calendar-month', 'calendar-day', 'plan-active', 'plans', 'plan', 'profile-summary', 'diet-day', 'workout', 'wake-plan']) {
     client.invalidateQueries({ queryKey: [key] })
   }
 }
@@ -430,19 +431,26 @@ export function useDeleteRace() {
 
 // --- insights (R6 §5) -------------------------------------------------------------
 
-export const useInsights = (range: InsightRange) =>
+/**
+ * R12: Health reads take a period — a preset (`'4w'`, sent as `range=4w`) or the full
+ * query from the range control (`range=4w&freq=day` / `start=…&end=…&freq=week`).
+ */
+export type PeriodQuery = string
+export const periodQs = (p: PeriodQuery) => (p.includes('=') ? p : `range=${p}`)
+
+export const useInsights = (range: PeriodQuery | InsightRange) =>
   useQuery({
-    queryKey: ['insights', range],
-    queryFn: () => api<Insights>(`/insights/?range=${range}`),
+    queryKey: ['insights', periodQs(range)],
+    queryFn: () => api<Insights>(`/insights/?${periodQs(range)}`),
     placeholderData: (previous) => previous,
   })
 
 /** Cached per day server-side; `refresh` rewrites today's overview. */
-export function useInsightsSummary(range: InsightRange) {
+export function useInsightsSummary(range: PeriodQuery | InsightRange) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (refresh: boolean) =>
-      api<NonNullable<Insights['summary']>>(`/insights/summary/?range=${range}${refresh ? '&refresh=1' : ''}`, { method: 'POST' }),
+      api<NonNullable<Insights['summary']>>(`/insights/summary/?${periodQs(range)}${refresh ? '&refresh=1' : ''}`, { method: 'POST' }),
     onSuccess: (summary) => {
       if (summary && 'markdown' in summary) {
         client.setQueriesData<Insights>({ queryKey: ['insights'] }, (old) => (old ? { ...old, summary } : old))
@@ -585,10 +593,10 @@ export type { PlanSummary }
 export const useHabitsToday = () =>
   useQuery({ queryKey: ['habits-today'], queryFn: () => api<HabitToday>('/habits/today/'), retry: false })
 
-export const useHabitSummary = (range: InsightRange) =>
+export const useHabitSummary = (range: PeriodQuery | InsightRange) =>
   useQuery({
-    queryKey: ['habits-summary', range],
-    queryFn: () => api<HabitSummary>(`/habits/summary/?range=${range}`),
+    queryKey: ['habits-summary', periodQs(range)],
+    queryFn: () => api<HabitSummary>(`/habits/summary/?${periodQs(range)}`),
     placeholderData: (previous) => previous,
     retry: false,
   })
@@ -658,17 +666,17 @@ export function useDeletePrivateLogs() {
 }
 
 /** AI explanation of the habit numbers; cached per day server-side. */
-export function useHabitSummaryText(range: InsightRange) {
+export function useHabitSummaryText(range: PeriodQuery | InsightRange) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (refresh: boolean) =>
-      api<HabitSummaryText | HabitSummary>(`/habits/summary/?range=${range}${refresh ? '&refresh=1' : ''}`, { method: 'POST' }),
+      api<HabitSummaryText | HabitSummary>(`/habits/summary/?${periodQs(range)}${refresh ? '&refresh=1' : ''}`, { method: 'POST' }),
     onSuccess: (data) => {
       const summary = data && 'smoke' in data ? data.summary : data
       if (summary && 'markdown' in summary) {
-        client.setQueryData<HabitSummary>(['habits-summary', range], (old) => (old ? { ...old, summary } : old))
+        client.setQueryData<HabitSummary>(['habits-summary', periodQs(range)], (old) => (old ? { ...old, summary } : old))
       }
-      client.invalidateQueries({ queryKey: ['habits-summary', range] })
+      client.invalidateQueries({ queryKey: ['habits-summary', periodQs(range)] })
     },
   })
 }
@@ -758,16 +766,16 @@ async function optional<T>(path: string): Promise<T | null> {
 const keep = <T,>(previous: T | undefined) => previous
 
 export const useHealthFitness = (range: string) =>
-  useQuery({ queryKey: ['health-fitness', range], queryFn: () => optional<HealthFitness>(`/health/fitness/?range=${range}`), placeholderData: keep, retry: false })
+  useQuery({ queryKey: ['health-fitness', periodQs(range)], queryFn: () => optional<HealthFitness>(`/health/fitness/?${periodQs(range)}`), placeholderData: keep, retry: false })
 
-export const useTrainingStatus = () =>
-  useQuery({ queryKey: ['training-status'], queryFn: () => optional<TrainingStatus>('/health/training-status/'), retry: false, staleTime: 5 * 60_000 })
+export const useTrainingStatus = (range?: PeriodQuery) =>
+  useQuery({ queryKey: ['training-status', range ? periodQs(range) : ''], queryFn: () => optional<TrainingStatus>(`/health/training-status/${range ? `?${periodQs(range)}` : ''}`), placeholderData: keep, retry: false, staleTime: 5 * 60_000 })
 
 export const useHealthSleep = (range: string) =>
-  useQuery({ queryKey: ['health-sleep', range], queryFn: () => optional<HealthSleep>(`/health/sleep/?range=${range}`), placeholderData: keep, retry: false })
+  useQuery({ queryKey: ['health-sleep', periodQs(range)], queryFn: () => optional<HealthSleep>(`/health/sleep/?${periodQs(range)}`), placeholderData: keep, retry: false })
 
 export const useHealthForm = (range: string) =>
-  useQuery({ queryKey: ['health-form', range], queryFn: () => optional<HealthForm>(`/health/form/?range=${range}`), placeholderData: keep, retry: false })
+  useQuery({ queryKey: ['health-form', periodQs(range)], queryFn: () => optional<HealthForm>(`/health/form/?${periodQs(range)}`), placeholderData: keep, retry: false })
 
 export const useRecords = () =>
   useQuery({ queryKey: ['health-records'], queryFn: () => optional<HealthRecords>('/health/records/'), retry: false })
@@ -818,8 +826,8 @@ export const useCompareMetrics = () =>
 
 export const useCompare = (x: string, y: string, range: string, lag: 0 | 1) =>
   useQuery({
-    queryKey: ['compare', x, y, range, lag],
-    queryFn: () => api<CompareResult>(`/health/compare/?x=${encodeURIComponent(x)}&y=${encodeURIComponent(y)}&range=${range}&lag=${lag}`),
+    queryKey: ['compare', x, y, periodQs(range), lag],
+    queryFn: () => api<CompareResult>(`/health/compare/?x=${encodeURIComponent(x)}&y=${encodeURIComponent(y)}&${periodQs(range)}&lag=${lag}`),
     enabled: !!x && !!y && x !== y,
     placeholderData: keep,
     retry: false,
@@ -903,7 +911,7 @@ export function useMarkBadgesSeen() {
 }
 
 export const useBody = (range = '6m') =>
-  useQuery({ queryKey: ['health-body', range], queryFn: () => optional<HealthBody>(`/health/body/?range=${range}`), retry: false })
+  useQuery({ queryKey: ['health-body', periodQs(range)], queryFn: () => optional<HealthBody>(`/health/body/?${periodQs(range)}`), retry: false })
 
 // --- R11 (docs/API_NOTES.md "R11") ------------------------------------------------------
 
@@ -927,7 +935,7 @@ export const useDaySummary = () =>
   useQuery({ queryKey: ['health-day-summary'], queryFn: () => optional<DaySummary>('/health/day/summary/'), retry: false, staleTime: 60_000 })
 
 export const useDayTrends = (range: string) =>
-  useQuery({ queryKey: ['health-day-trends', range], queryFn: () => optional<DayTrends>(`/health/day/trends/?range=${range}`), placeholderData: keep, retry: false })
+  useQuery({ queryKey: ['health-day-trends', periodQs(range)], queryFn: () => optional<DayTrends>(`/health/day/trends/?${periodQs(range)}`), placeholderData: keep, retry: false })
 
 export const useActivityRoute = (id: number | null) =>
   useQuery({
@@ -963,3 +971,45 @@ export function useDeleteWater() {
     onSuccess: (day) => storeWater(client, day),
   })
 }
+
+// --- R12 §B (docs/API_NOTES.md "R12"): wake planner, my alarm, watch alarms ---------------
+
+/** `date` = the morning to plan (default tomorrow; today..today+7). */
+export const useWakePlan = (date?: string, enabled = true) =>
+  useQuery({
+    queryKey: ['wake-plan', date ?? 'next'],
+    queryFn: async () => {
+      try {
+        return await optional<WakePlan>(`/health/wake-plan/${date ? `?date=${date}` : ''}`)
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 400) return null
+        throw error
+      }
+    },
+    enabled,
+    retry: false,
+    staleTime: 5 * 60_000,
+  })
+
+export const useMyAlarm = () =>
+  useQuery({ queryKey: ['alarm'], queryFn: () => optional<MyAlarm>('/alarm/'), retry: false })
+
+export type AlarmPatch = Partial<Pick<MyAlarm, 'time' | 'days' | 'enabled' | 'push' | 'run_time' | 'bedtime_reminder' | 'bedtime_lead_min'>>
+
+export function usePatchAlarm() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: AlarmPatch) => api<MyAlarm>('/alarm/', { method: 'PATCH', ...json(patch) }),
+    onMutate: (patch) => {
+      client.setQueryData<MyAlarm | null>(['alarm'], (old) => (old ? { ...old, ...patch } : old))
+    },
+    onSuccess: (data) => {
+      client.setQueryData(['alarm'], data)
+      client.invalidateQueries({ queryKey: ['wake-plan'] })
+    },
+    onError: () => client.invalidateQueries({ queryKey: ['alarm'] }),
+  })
+}
+
+export const useWatchAlarms = (enabled = true) =>
+  useQuery({ queryKey: ['watch-alarms'], queryFn: () => optional<WatchAlarms>('/health/watch-alarms/'), retry: false, enabled, staleTime: 30 * 60_000 })

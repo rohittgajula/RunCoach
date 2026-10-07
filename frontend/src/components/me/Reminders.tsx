@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { currentSubscription, isIOS, isStandalone, pushSupported, subscribe } from '../../lib/push'
 import { errorText, subscribePush, testPush, unsubscribePush, usePatchReminders, useReminders } from '../../lib/queries'
 import type { Nudge, Reminder, RemindersResponse } from '../../lib/types'
+import { AlarmRemindersCard } from '../alarm/AlarmCards'
 import { BellIcon, ChevronRight } from '../Icons'
 import { CardHead, Pill } from '../Kit'
 import { Empty, ErrorState, Skeleton } from '../States'
@@ -60,7 +61,12 @@ export function RemindersSection() {
   if (reminders.isPending) return <section className="card"><Skeleton lines={4} /></section>
   if (reminders.isError) return <ErrorState message={errorText(reminders.error)} onRetry={() => reminders.refetch()} />
   if (!data || !data.available) {
-    return <Empty icon={<BellIcon size={32} />} title="Reminders aren’t switched on here">Push notifications aren’t set up on this server yet.</Empty>
+    return (
+      <div className="stack">
+        <Empty icon={<BellIcon size={32} />} title="Reminders aren’t switched on here">Push notifications aren’t set up on this server yet.</Empty>
+        <AlarmRemindersCard />
+      </div>
+    )
   }
 
   const iosBlocked = isIOS() && !isStandalone()
@@ -142,6 +148,8 @@ export function RemindersSection() {
         ))}
         {patch.isError && <p className="bad small">{errorText(patch.error, 'Could not save that.')}</p>}
       </section>
+
+      <AlarmRemindersCard />
 
       {data.nudges && data.nudges.length > 0 && (
         <NudgesCard data={data} onPatch={(p) => patch.mutate(p)} />

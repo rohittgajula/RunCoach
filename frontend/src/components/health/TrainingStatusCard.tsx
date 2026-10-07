@@ -1,14 +1,22 @@
 import { useTrainingStatus } from '../../lib/queries'
+import { ChartFrame } from '../ChartFrame'
 import { CardHead, Pill, TargetBar } from '../Kit'
+import { MetricChart } from '../MetricChart'
+import { bucket, periodCaption, withApiPeriod, type Period } from './healthRange'
 
 const GOOD = new Set(['productive', 'peaking', 'maintaining', 'recovery'])
 const BAD = new Set(['unproductive', 'overreaching', 'strained', 'detraining'])
 const STATE: Record<string, string> = { below: 'low', in_range: 'in range', above: 'high' }
 
 /** Garmin training status + load focus (last 4 weeks vs target). Hidden without data. */
-export function TrainingStatusCard() {
-  const status = useTrainingStatus()
+export function TrainingStatusCard({ period: chosen }: { period?: Period }) {
+  const status = useTrainingStatus(chosen?.params)
   const s = status.data
+  // R12: with a period the history follows it (acute load per day/week/month).
+  const period = chosen ? withApiPeriod(chosen, s?.period) : null
+  const history = period && s?.history
+    ? bucket(s.history.map((h) => ({ date: h.date, value: h.acute_load })), period.freq, 'mean')
+    : []
   const items = s?.load_focus?.items ?? []
   if (!s || (!s.status && !items.length)) return null
   const key = s.status_key ?? ''
@@ -41,6 +49,11 @@ export function TrainingStatusCard() {
             </div>
           ))}
         </div>
+      )}
+      {period && history.filter((h) => h.value != null).length >= 3 && (
+        <ChartFrame title="Acute load" caption={periodCaption(period, { compare: false })}>
+          <MetricChart data={history} height={140} freq={period.freq} color="var(--run)" />
+        </ChartFrame>
       )}
       {(items.length > 0 || s.load_focus?.feedback) && (
         <p className="chart-caption" style={{ marginTop: 8 }}>

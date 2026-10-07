@@ -1,10 +1,13 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../lib/auth'
-import { addDays, todayISO } from '../../lib/format'
+import { todayISO } from '../../lib/format'
 import { errorText, progressParams, useProgress } from '../../lib/queries'
 import type { ProgressHighlight, ProgressQuery, ProgressWindow } from '../../lib/types'
 import { Bullets } from '../Bullets'
 import { Field } from '../Field'
+import { RangePill, RangeSheet, useSectionSelection } from '../health/RangeControl'
+import { fromSearch } from '../health/healthRange'
 import { RangeSwitch } from '../RangeSwitch'
 import { Empty, ErrorState, Skeleton } from '../States'
 import { BestsList } from './BestsList'
@@ -28,12 +31,7 @@ const MODES: Array<{ value: Mode; label: string }> = [
 const MAX_DAYS = 730
 
 type Dates = { start: string; end: string; compare: boolean; compare_start: string; compare_end: string }
-
-function defaultDates(): Dates {
-  const end = todayISO()
-  const start = addDays(end, -29)
-  return { start, end, compare: false, compare_start: addDays(start, -30), compare_end: addDays(start, -1) }
-}
+type CompareDates = Pick<Dates, 'compare' | 'compare_start' | 'compare_end'>
 
 function datesError(d: Dates): string | null {
   if (!d.start || !d.end) return 'Pick both dates.'
@@ -49,8 +47,19 @@ function datesError(d: Dates): string | null {
 
 /** Insights → Progress: 1 · 5 · 10 · 20 · Dates, summary bullets, table, chart, review. */
 export function ProgressSection() {
-  const [mode, setMode] = useState<Mode>('5')
-  const [dates, setDates] = useState<Dates>(defaultDates)
+  const [search] = useSearchParams()
+  const [mode, setMode] = useState<Mode>(() => (fromSearch(search) ? 'dates' : '5'))
+  // R12: "Dates" uses the shared Health range control (presets or custom, ≤ 2 years).
+  const [period, setSelection] = useSectionSelection(mode === 'dates' ? 'progress' : '', '4w')
+  const [rangeOpen, setRangeOpen] = useState(false)
+  const [cmp, setCmp] = useState<CompareDates | null>(null)
+  const dates: Dates = {
+    start: period.start,
+    end: period.end,
+    compare: cmp?.compare ?? false,
+    compare_start: cmp?.compare_start ?? period.compareStart,
+    compare_end: cmp?.compare_end ?? period.compareEnd,
+  }
   const invalid = mode === 'dates' ? datesError(dates) : null
 
   const query: ProgressQuery = mode === 'dates'
@@ -59,7 +68,8 @@ export function ProgressSection() {
   const progress = useProgress(query, !invalid)
   const data = progress.data
 
-  const setDate = (key: keyof Dates, value: string | boolean) => setDates((d) => ({ ...d, [key]: value }))
+  const setDate = (key: keyof CompareDates, value: string | boolean) =>
+    setCmp({ compare: dates.compare, compare_start: dates.compare_start, compare_end: dates.compare_end, [key]: value })
 
   if (progress.isError && progress.error instanceof ApiError && progress.error.status === 404) {
     return <Empty title="Progress isn’t available yet">Sync a few runs and check back.</Empty>
@@ -71,13 +81,12 @@ export function ProgressSection() {
 
       {mode === 'dates' ? (
         <section className="card stack dates-card">
-          <div className="grid-2 grid-2-even">
-            <Field label="From">
-              <input type="date" value={dates.start} max={dates.end || todayISO()} onChange={(e) => setDate('start', e.target.value)} />
-            </Field>
-            <Field label="To">
-              <input type="date" value={dates.end} min={dates.start} max={todayISO()} onChange={(e) => setDate('end', e.target.value)} />
-            </Field>
+          <div className="row-wrap" style={{ justifyContent: 'space-between' }}>
+            <span className="grow">
+              <strong className="block">Runs between</strong>
+              <span className="muted small">{period.days} days</span>
+            </span>
+            <RangePill period={period} freq={false} onClick={() => setRangeOpen(true)} />
           </div>
           <div className="switch-row">
             <span className="grow">
@@ -109,6 +118,7 @@ export function ProgressSection() {
         <p className="muted small centered-text">{windowText(Number(mode) as ProgressWindow)}</p>
       )}
       {mode === 'dates' && !invalid && <p className="muted small centered-text">{periodText(data?.period, dates)}</p>}
+      <RangeSheet open={rangeOpen} onClose={() => setRangeOpen(false)} period={period} onApply={setSelection} title="Progress dates" showFreq={false} />
 
       {!invalid && progress.isPending && <Skeleton height={240} />}
       {!invalid && progress.isError && !data && <ErrorState message={errorText(progress.error)} onRetry={() => progress.refetch()} />}

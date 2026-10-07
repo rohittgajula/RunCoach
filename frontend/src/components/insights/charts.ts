@@ -1,6 +1,7 @@
 import { dur, pace } from '../../lib/format'
 import type { Insights, SeriesPoint } from '../../lib/types'
 import type { Better } from '../chartUtil'
+import type { Agg } from '../health/healthRange'
 import type { Point } from '../MetricChart'
 import { clock } from '../StepsList'
 
@@ -68,6 +69,8 @@ export type ChartConfig = {
   delta?: (v: number) => string
   /** R10 topic colour for the chart. */
   topic?: 'run' | 'recovery' | 'sleep'
+  /** R12: how a week/month bucket is formed (default mean; levels like VO2max = last). */
+  agg?: Agg
 }
 
 export const CHARTS: Record<ChartKey, ChartConfig> = {
@@ -165,6 +168,7 @@ export const CHARTS: Record<ChartKey, ChartConfig> = {
   vo2max: {
     topic: 'run',
     better: 'higher',
+    agg: 'last',
     title: 'VO2max', unit: 'ml/kg/min, Garmin',
     format: (v) => v.toFixed(0),
     points: (i) => toPoints(i.vo2max?.series, ['value']),

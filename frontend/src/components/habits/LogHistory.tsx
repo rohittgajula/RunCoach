@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { addDays, dayMonth, localInputValue, timeOfDay, todayISO, weekday } from '../../lib/format'
+import { dayMonth, localInputValue, timeOfDay, weekday } from '../../lib/format'
 import { errorText, useDeleteHabitLog, useHabitLogs, useUpdateHabitLog } from '../../lib/queries'
-import type { HabitKind, HabitLog, InsightRange } from '../../lib/types'
+import type { HabitKind, HabitLog } from '../../lib/types'
 import { BottomSheet } from '../BottomSheet'
 import { Field } from '../Field'
 import { TrashIcon } from '../Icons'
@@ -9,18 +9,15 @@ import { InsightCard } from '../insights/Tile'
 import { Skeleton } from '../States'
 import { countText, habitMeta, lessQty, minQty, moreQty, type HabitMeta } from './habitUtil'
 
-const RANGE_DAYS: Record<InsightRange, number> = { '4w': 28, '12w': 84, '6m': 182 }
 const PAGE = 40
 
 const qtyText = (log: HabitLog) => (log.kind === 'private' ? `🌙 ×${log.quantity}` : countText(log.kind, log.quantity))
 
 /** Every log in the range, newest first, filter by habit; tap to edit or delete. */
-export function LogHistory({ range, kinds }: { range: InsightRange; kinds: HabitMeta[] }) {
+export function LogHistory({ start, end, kinds }: { start: string; end: string; kinds: HabitMeta[] }) {
   const [filter, setFilter] = useState<HabitKind | 'all'>('all')
   const [limit, setLimit] = useState(PAGE)
   const [editing, setEditing] = useState<HabitLog | null>(null)
-  const end = todayISO()
-  const start = addDays(end, -(RANGE_DAYS[range] - 1))
   const logs = useHabitLogs(filter === 'all' ? null : filter, start, end)
   const remove = useDeleteHabitLog()
   const [confirmId, setConfirmId] = useState<number | null>(null)

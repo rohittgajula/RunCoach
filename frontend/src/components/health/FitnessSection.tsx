@@ -6,18 +6,19 @@ import { CardHead, Delta, MetricTile, Pill } from '../Kit'
 import { MetricChart } from '../MetricChart'
 import { Sparkline } from '../Sparkline'
 import { Empty, ErrorState, Skeleton } from '../States'
-import { useHealthRange } from './healthRange'
+import { bucket, periodCaption, useHealthPeriod, withApiPeriod, type Period } from './healthRange'
 import { TrainingStatusCard } from './TrainingStatusCard'
 
-const RANGE_WORDS: Record<string, string> = { '7d': 'in 7 days', '4w': 'in 4 weeks', '3m': 'in 3 months', '6m': 'in 6 months', '1y': 'in a year' }
+const inWords = (p: Period) => (p.selection.kind === 'preset' ? `in ${p.selection.range === '1y' ? 'a year' : p.long}` : 'in this period')
 const one = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1))
 
 /** Health → Fitness: VO2max trend, fitness age, endurance, race times, LT + zones, status. */
 export function FitnessSection() {
-  const [range] = useHealthRange<string>()
-  const fitness = useHealthFitness(range)
+  const { period: chosen } = useHealthPeriod()
+  const fitness = useHealthFitness(chosen.params)
   const insights = useInsights('6m')
   const f = fitness.data
+  const period = withApiPeriod(chosen, f?.period)
 
   if (fitness.isPending) return <div className="stack"><section className="card"><Skeleton height={200} /></section><Skeleton lines={4} /></div>
   if (fitness.isError && !f) return <ErrorState message={errorText(fitness.error, 'Fitness did not load.')} onRetry={() => fitness.refetch()} />
@@ -30,11 +31,11 @@ export function FitnessSection() {
 
   return (
     <div className={`stack ${fitness.isPlaceholderData ? 'is-stale' : ''}`}>
-      {vo2?.current != null && <Vo2Card vo2={vo2} range={range} />}
-      <AgeEndurance f={f} range={range} />
+      {vo2?.current != null && <Vo2Card vo2={vo2} period={period} />}
+      <AgeEndurance f={f} period={period} />
       <RaceCard f={f} />
       <ThresholdCard f={f} />
-      <TrainingStatusCard />
+      <TrainingStatusCard period={chosen} />
       {!hasAnything && (
         <Empty title="No fitness data yet">Garmin adds VO2max, race predictions and your threshold after a few runs with heart rate. Sync and check back.</Empty>
       )}
@@ -42,8 +43,8 @@ export function FitnessSection() {
   )
 }
 
-function Vo2Card({ vo2, range }: { vo2: NonNullable<HealthFitness['vo2max']>; range: string }) {
-  const points = vo2.series.map((p) => ({ date: p.date, value: p.value }))
+function Vo2Card({ vo2, period }: { vo2: NonNullable<HealthFitness['vo2max']>; period: Period }) {
+  const points = bucket(vo2.series.map((p) => ({ date: p.date, value: p.value })), period.freq, 'last')
   const first = vo2.series[0]
   return (
     <section className="card">
@@ -52,11 +53,11 @@ function Vo2Card({ vo2, range }: { vo2: NonNullable<HealthFitness['vo2max']>; ra
           <span className="lbl">VO2max</span>
           <div className="big-num">{one(vo2.current!)}</div>
         </div>
-        <Delta value={vo2.change} better="higher" format={one} suffix={RANGE_WORDS[range]} />
+        <Delta value={vo2.change} better="higher" format={one} suffix={inWords(period)} />
       </div>
       {points.length >= 2 ? (
-        <ChartFrame caption={first ? `From ${one(first.value)} on ${dayMonth(first.date)} to ${one(vo2.current!)} now. Higher = more aerobic engine.` : null}>
-          <MetricChart data={points} format={one} height={170} step average={false} />
+        <ChartFrame caption={<>{first ? `From ${one(first.value)} on ${dayMonth(first.date)} to ${one(vo2.current!)} now. Higher = more aerobic engine.` : null}<span className="block">{periodCaption(period, { compare: false })}</span></>}>
+          <MetricChart data={points} format={one} height={170} step average={false} freq={period.freq} />
         </ChartFrame>
       ) : (
         <p className="chart-caption">Garmin estimates VO2max from runs with heart rate. A trend appears after a few.</p>
@@ -65,7 +66,7 @@ function Vo2Card({ vo2, range }: { vo2: NonNullable<HealthFitness['vo2max']>; ra
   )
 }
 
-function AgeEndurance({ f, range }: { f: HealthFitness | null | undefined; range: string }) {
+function AgeEndurance({ f, period }: { f: HealthFitness | null | undefined; period: Period }) {
   const age = f?.fitness_age
   const end = f?.endurance_score
   const tiles = []
@@ -81,7 +82,7 @@ function AgeEndurance({ f, range }: { f: HealthFitness | null | undefined; range
           <>You're {age.chronological_age} · <span className={diff >= 0 ? 'good-text' : 'bad'}>{Math.abs(Math.round(diff))} yrs {diff >= 0 ? 'younger' : 'older'}</span></>
         ) : age.achievable != null ? `Achievable: ${Math.round(age.achievable)}` : undefined}
       >
-        {age.series.length >= 2 && <Sparkline values={age.series.map((p) => -p.value)} height={32} color="var(--run)" />}
+        {age.series.length >= 2 && <Sparkline values={bucket(age.series, period.freq, 'last').map((p) => -(p.value ?? 0))} height={32} color="var(--run)" />}
       </MetricTile>,
     )
   }
@@ -92,9 +93,9 @@ function AgeEndurance({ f, range }: { f: HealthFitness | null | undefined; range
         label="Endurance"
         value={end.current.toLocaleString()}
         chip={<Delta value={end.change} better="higher" format={(v) => Math.round(v).toLocaleString()} />}
-        sub={end.level ?? RANGE_WORDS[range]}
+        sub={end.level ?? inWords(period)}
       >
-        {end.series.length >= 2 && <Sparkline values={end.series.map((p) => p.value)} height={32} color="var(--run)" />}
+        {end.series.length >= 2 && <Sparkline values={bucket(end.series, period.freq, 'last').map((p) => p.value ?? 0)} height={32} color="var(--run)" />}
       </MetricTile>,
     )
   }

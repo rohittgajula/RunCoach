@@ -2,6 +2,7 @@ import { useId } from 'react'
 import { Area, AreaChart, CartesianGrid, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { TIP, chartTip, num } from './ChartTip'
 import { monthTicks, tickDate } from './chartUtil'
+import { tickFor, ticksFor, tipFor, type Freq } from './health/healthRange'
 
 export type Point = { date: string; value: number | null }
 
@@ -12,7 +13,7 @@ export type Point = { date: string; value: number | null }
  */
 export function MetricChart({
   data, format = (v) => String(Math.round(v)), reversed = false, height = 240,
-  axis = 'right', step = false, domain, band, average = true, color = 'var(--run)',
+  axis = 'right', step = false, domain, band, average = true, color = 'var(--run)', freq,
 }: {
   data: Point[]
   format?: (value: number) => string
@@ -27,12 +28,17 @@ export function MetricChart({
   average?: boolean
   /** Topic colour (R10: colour by topic, never good/bad). */
   color?: string
+  /** R12: bucket size of `data` — sets the x labels ("Sep 14" weekly, "Oct" monthly). */
+  freq?: Freq
 }) {
   const gradient = useId().replace(/:/g, '')
-  const ticks = monthTicks(data.map((d) => d.date))
+  const dates = data.map((d) => d.date)
+  const ticks = freq ? ticksFor(dates, freq) : monthTicks(dates)
+  const tick = freq ? tickFor(freq) : tickDate
+  const tipTitle = freq ? tipFor(freq) : tickDate
   const values = data.map((d) => d.value).filter((v): v is number => v != null && Number.isFinite(v))
   const avg = average && values.length >= 3 ? values.reduce((a, b) => a + b, 0) / values.length : null
-  const Tip = chartTip((items, label) => ({ title: tickDate(label), lines: [{ text: format(num(items[0]?.value)), color }] }))
+  const Tip = chartTip((items, label) => ({ title: tipTitle(label), lines: [{ text: format(num(items[0]?.value)), color }] }))
   const showKey = avg != null || !!band?.label
   return (
     <div className="metric-chart">
@@ -65,7 +71,7 @@ export function MetricChart({
           <XAxis
             dataKey="date"
             ticks={ticks}
-            tickFormatter={tickDate}
+            tickFormatter={tick}
             axisLine={false}
             tickLine={false}
             interval="preserveStartEnd"
@@ -100,7 +106,7 @@ export function MetricChart({
             strokeLinejoin="round"
             fill={`url(#${gradient})`}
             connectNulls
-            dot={false}
+            dot={freq && freq !== 'day' && data.length <= 16 ? { r: 3, fill: color, strokeWidth: 0 } : false}
             activeDot={{ r: 5, fill: 'var(--card)', stroke: color, strokeWidth: 3 }}
             baseValue={reversed ? 'dataMax' : 'dataMin'}
             isAnimationActive={false}

@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { errorText, useDayTrends } from '../../lib/queries'
 import type { DayTrendAvg, DayTrends } from '../../lib/types'
@@ -6,17 +5,10 @@ import { ChartFrame } from '../ChartFrame'
 import { ChevronLeft } from '../Icons'
 import { CardHead, Delta, MetricTile, Pill } from '../Kit'
 import { MetricChart } from '../MetricChart'
-import { RangeSwitch } from '../RangeSwitch'
+import { FREQ_NOUN, FREQ_WORD, bucket, periodCaption, rangeText, useHealthPeriod, withApiPeriod, type Agg } from '../health/healthRange'
 import { Empty, ErrorState, Skeleton } from '../States'
 import { clock } from '../weather/weatherUtil'
 import { n0 } from './dayUtil'
-
-const RANGES = [
-  { value: '7d', label: '7d' },
-  { value: '4w', label: '4w' },
-  { value: '3m', label: '3m' },
-  { value: '6m', label: '6m' },
-]
 
 type Tile = { key: keyof DayTrendAvg; label: string; unit?: string; better: 'higher' | 'lower'; flat: number }
 const TILES: Tile[] = [
@@ -31,14 +23,17 @@ const TILES: Tile[] = [
 
 /** Health → Day → Trends: the day metrics over weeks, weekday pattern, day → night → run. */
 export function DayTrendsSection() {
-  const [range, setRange] = useState('4w')
-  const q = useDayTrends(range)
+  const { period: chosen } = useHealthPeriod()
+  const q = useDayTrends(chosen.params)
   const t = q.data
+  const period = withApiPeriod(chosen, t?.period)
+  const freq = period.freq
+  const per = freq === 'day' ? '' : ` per ${FREQ_NOUN[freq]}`
 
   const head = (
     <div className="row-wrap" style={{ justifyContent: 'space-between' }}>
       <Link to="/health/day" className="btn btn-secondary btn-sm"><ChevronLeft size={18} /> Day</Link>
-      <RangeSwitch compact value={range} onChange={setRange} options={RANGES} label="Range" />
+      <span className="muted small">{chosen.long}</span>
     </div>
   )
   if (q.isPending) return <div className="stack">{head}<section className="card"><Skeleton height={220} /></section></div>
@@ -52,8 +47,11 @@ export function DayTrendsSection() {
       </div>
     )
   }
-  const series = (k: keyof DayTrends['days'][number]) => t.days.map((d) => ({ date: d.date, value: (d[k] as number | null) ?? null }))
-  const enough = (k: keyof DayTrends['days'][number]) => t.days.filter((d) => d[k] != null).length >= 3
+  // R12 (server rule, applied again here for pre-R12 servers): steps summed, the rest averaged.
+  const series = (k: keyof DayTrends['days'][number], agg: Agg = 'mean') =>
+    bucket(t.days.map((d) => ({ date: d.date, value: (d[k] as number | null) ?? null })), freq, agg)
+  const enough = (k: keyof DayTrends['days'][number]) => series(k).filter((d) => d.value != null).length >= (freq === 'day' ? 3 : 2)
+  const when = periodCaption(period)
   const goals = t.days.map((d) => d.step_goal).filter((g): g is number => g != null)
   const goal = goals.length ? goals[goals.length - 1] : null
 
@@ -79,36 +77,36 @@ export function DayTrendsSection() {
 
       {enough('steps') && (
         <section className="card">
-          <ChartFrame title="Steps" chip={t.goal_streak > 1 ? <Pill topic="run">{t.goal_streak}-day streak</Pill> : undefined} caption={goal ? `Shaded = within 10% of your ${n0(goal)} goal.` : 'Dashed line = your average.'}>
-            <MetricChart data={series('steps')} color="var(--run)" height={180} format={(v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : String(Math.round(v)))} band={goal ? { low: goal * 0.9, high: goal * 1.1, label: 'goal' } : null} />
+          <ChartFrame title={`Steps${per}`} chip={t.goal_streak > 1 ? <Pill topic="run">{t.goal_streak}-day streak</Pill> : undefined} caption={<>{goal && freq === 'day' ? `Shaded = within 10% of your ${n0(goal)} goal.` : freq === 'day' ? 'Dashed line = your average.' : `Total steps each ${FREQ_NOUN[freq]}.`}<span className="block">{when}</span></>}>
+            <MetricChart data={series('steps', 'sum')} freq={freq} color="var(--run)" height={180} format={(v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : String(Math.round(v)))} band={goal && freq === 'day' ? { low: goal * 0.9, high: goal * 1.1, label: 'goal' } : null} />
           </ChartFrame>
         </section>
       )}
       {enough('active_min') && (
         <section className="card">
-          <ChartFrame title="Active minutes" caption="Walking, runs and anything that gets you moving.">
-            <MetricChart data={series('active_min')} color="var(--run)" height={160} />
+          <ChartFrame title={freq === 'day' ? 'Active minutes' : `Active minutes per day · ${FREQ_WORD[freq]} average`} caption={<>Walking, runs and anything that gets you moving.<span className="block">{when}</span></>}>
+            <MetricChart data={series('active_min')} freq={freq} color="var(--run)" height={160} />
           </ChartFrame>
         </section>
       )}
       {enough('stress_avg') && (
         <section className="card">
-          <ChartFrame title="Stress average" caption="0–25 rest · 26–50 low · 51–75 medium · 76–100 high.">
-            <MetricChart data={series('stress_avg')} color="var(--recovery)" height={160} />
+          <ChartFrame title="Stress average" caption={<>0–25 rest · 26–50 low · 51–75 medium · 76–100 high.<span className="block">{when}</span></>}>
+            <MetricChart data={series('stress_avg')} freq={freq} color="var(--recovery)" height={160} />
           </ChartFrame>
         </section>
       )}
       {enough('awake_hr_avg') && (
         <section className="card">
-          <ChartFrame title="Heart rate while awake" caption={t.awake_hr_trend.sentence || 'Not counting sleep and workouts.'}>
-            <MetricChart data={series('awake_hr_avg')} color="var(--recovery-ink)" height={160} />
+          <ChartFrame title="Heart rate while awake" caption={<>{t.awake_hr_trend?.sentence || 'Not counting sleep and workouts.'}<span className="block">{when}</span></>}>
+            <MetricChart data={series('awake_hr_avg')} freq={freq} color="var(--recovery-ink)" height={160} />
           </ChartFrame>
         </section>
       )}
       {enough('bb_at_bedtime') && (
         <section className="card">
-          <ChartFrame title="Body Battery at bedtime" caption="Going to bed with more left usually means a calmer day.">
-            <MetricChart data={series('bb_at_bedtime')} color="var(--sleep)" height={160} domain={[0, 100]} />
+          <ChartFrame title="Body Battery at bedtime" caption={<>Going to bed with more left usually means a calmer day.<span className="block">{when}</span></>}>
+            <MetricChart data={series('bb_at_bedtime')} freq={freq} color="var(--sleep)" height={160} domain={[0, 100]} />
           </ChartFrame>
         </section>
       )}
@@ -152,7 +150,7 @@ export function StressWeekdays({ t }: { t: DayTrends }) {
   const max = Math.max(1, ...rows.map((r) => r.stress_avg ?? 0))
   return (
     <div style={{ marginTop: 14 }}>
-      <p className="lbl">Stress by weekday · last {t.range}</p>
+      <p className="lbl">Stress by weekday · {t.range && t.range !== 'custom' ? `last ${t.range}` : t.start && t.end ? rangeText(t.start, t.end) : 'this period'}</p>
       <div className="week-pattern" role="img" aria-label={rows.map((r) => `${r.label} ${r.stress_avg ?? 'no data'}`).join(', ')}>
         {rows.map((r) => (
           <div key={r.weekday}>

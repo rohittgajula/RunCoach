@@ -2,10 +2,10 @@ import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { pace } from '../../lib/format'
 import { errorText, useInsights } from '../../lib/queries'
-import type { InsightRange, Insights } from '../../lib/types'
+import type { Insights } from '../../lib/types'
 import { Bullets } from '../Bullets'
 import { trendOf, type Trend } from '../chartUtil'
-import { useHealthRange } from '../health/healthRange'
+import { bucket, periodCaption, useHealthPeriod, withApiPeriod, type Freq, type Period } from '../health/healthRange'
 import { TrainingStatusCard } from '../health/TrainingStatusCard'
 import { ChevronRight, ReportIcon, ScatterIcon } from '../Icons'
 import { Arrow, Delta, MetricTile, TopicRing } from '../Kit'
@@ -18,10 +18,9 @@ import { InsightChartSheet } from './InsightChartSheet'
 import { CHARTS, type ChartKey } from './charts'
 import { HabitsTeaser, ProgressTeaser } from './Teasers'
 
-const PERIOD: Record<InsightRange, string> = { '4w': 'last month', '12w': 'the quarter before', '6m': 'earlier this year' }
-
-const values = (data: Insights, key: ChartKey) =>
-  CHARTS[key].points(data).map((p) => p.value).filter((v): v is number => v != null && Number.isFinite(v))
+/** The metric's series, bucketed to the chosen frequency (R12). */
+const values = (data: Insights, key: ChartKey, freq: Freq = 'day') =>
+  bucket(CHARTS[key].points(data), freq, CHARTS[key].agg).map((p) => p.value).filter((v): v is number => v != null && Number.isFinite(v))
 const lastOf = (v: number[]) => (v.length ? v[v.length - 1] : null)
 const halves = (v: number[]) => {
   if (v.length < 4) return null
@@ -32,11 +31,13 @@ const halves = (v: number[]) => {
 
 /** Health → Overview: summary + rings, metric tiles, status, what changed, tomorrow, links. */
 export function OverviewSection() {
-  const [range] = useHealthRange<InsightRange>()
+  const { period: chosen } = useHealthPeriod()
   const [chart, setChart] = useState<ChartKey | null>(null)
   const [fitnessOpen, setFitnessOpen] = useState(false)
-  const insights = useInsights(range)
+  const insights = useInsights(chosen.params)
   const data = insights.data
+  const period = withApiPeriod(chosen, data?.period)
+  const range = chosen.params
 
   return (
     <>
@@ -49,10 +50,10 @@ export function OverviewSection() {
 
       {data && (
         <div className={`stack ${insights.isPlaceholderData ? 'is-stale' : ''}`}>
-          <SummaryHero data={data} range={range} />
-          <Tiles data={data} onChart={setChart} />
-          <TrainingStatusCard />
-          <WhatChanged data={data} range={range} />
+          <SummaryHero data={data} freq={period.freq} />
+          <Tiles data={data} freq={period.freq} onChart={setChart} />
+          <TrainingStatusCard period={chosen} />
+          <WhatChanged data={data} period={period} />
           <ForecastCard detailed />
           <FocusCard focus={data.focus ?? []} hasRuns={(data.running?.runs ?? 0) > 0} />
           <LoadCard load={data.load} onOpen={() => setFitnessOpen(true)} />
@@ -64,7 +65,7 @@ export function OverviewSection() {
         </div>
       )}
 
-      <InsightChartSheet chart={chart} initialRange={range} onClose={() => setChart(null)} />
+      <InsightChartSheet chart={chart} onClose={() => setChart(null)} />
       <FitnessSheet view={fitnessOpen ? 'status' : null} onClose={() => setFitnessOpen(false)} />
     </>
   )
@@ -83,17 +84,17 @@ export function LinkRow({ to, icon, title, text }: { to: string; icon: ReactNode
   )
 }
 
-function SummaryHero({ data, range }: { data: Insights; range: InsightRange }) {
-  const hrv = trendOf(values(data, 'hrv'), 'higher')
-  const rhr = trendOf(values(data, 'rhr'), 'lower')
-  const sleep = trendOf(values(data, 'sleep'), 'higher', 1 / 6)
+function SummaryHero({ data, freq }: { data: Insights; freq: Freq }) {
+  const hrv = trendOf(values(data, 'hrv', freq), 'higher')
+  const rhr = trendOf(values(data, 'rhr', freq), 'lower')
+  const sleep = trendOf(values(data, 'sleep', freq), 'higher', 1 / 6)
   const recovery = [hrv, rhr].filter((t): t is Trend => !!t)
   const good = recovery.filter((t) => t.tone === 'good').length
   const bad = recovery.filter((t) => t.tone === 'bad').length
   const headline = !recovery.length
     ? 'Keep syncing — your trends build up over a few weeks'
     : bad === 0 && good > 0
-      ? `You're recovering better than ${PERIOD[range]}`
+      ? 'You’re recovering better than earlier in this period'
       : bad > 0 && good === 0
         ? 'Recovery has been under more strain lately'
         : 'Recovery is holding steady'
@@ -102,8 +103,8 @@ function SummaryHero({ data, range }: { data: Insights; range: InsightRange }) {
   const sub = [word(hrv, 'HRV', 'up', 'down'), word(rhr, 'resting HR', 'up', 'down'), word(sleep, 'sleep', 'longer', 'shorter')]
     .filter(Boolean).join(', ')
 
-  const sleepScore = trendOf(data.sleep?.series.map((p) => p.score) ?? [], 'higher')
-  const share = values(data, 'run_fraction')
+  const sleepScore = trendOf(bucket((data.sleep?.series ?? []).map((p) => ({ date: p.date, value: p.score ?? null })), freq).map((p) => p.value), 'higher')
+  const share = values(data, 'run_fraction', freq)
   const shareTrend = trendOf(share, 'higher')
   const rings: Array<{ key: string; name: string; caption?: string; topic: 'recovery' | 'sleep' | 'run'; value: number | null; trend: Trend | null; better: 'higher' | 'lower' }> = [
     { key: 'r', name: 'Readiness', topic: 'recovery', value: data.readiness?.score ?? null, trend: null, better: 'higher' },
@@ -136,7 +137,7 @@ function SummaryHero({ data, range }: { data: Insights; range: InsightRange }) {
   )
 }
 
-function Tiles({ data, onChart }: { data: Insights; onChart: (k: ChartKey) => void }) {
+function Tiles({ data, freq, onChart }: { data: Insights; freq: Freq; onChart: (k: ChartKey) => void }) {
   type Def = { key: ChartKey; label: string; value: string | null; unit?: string; bars?: boolean }
   const v = (k: ChartKey) => lastOf(values(data, k))
   const sleepAvg = data.sleep?.avg_s ?? null
@@ -159,7 +160,7 @@ function Tiles({ data, onChart }: { data: Insights; onChart: (k: ChartKey) => vo
     <div className="mt-grid">
       {shown.map((d) => {
         const cfg = CHARTS[d.key]
-        const vals = values(data, d.key)
+        const vals = values(data, d.key, freq)
         const t = trendOf(vals, cfg.better)
         const color = `var(--${cfg.topic ?? 'run'})`
         return (
@@ -196,7 +197,7 @@ export function MiniBars({ values, color }: { values: number[]; color: string })
 }
 
 /** "HRV averaged 45 ms, up from 41 ms" — the later half of the range vs the earlier half. */
-function WhatChanged({ data, range }: { data: Insights; range: InsightRange }) {
+function WhatChanged({ data, period }: { data: Insights; period: Period }) {
   const rows: Array<{ tone: string; text: string }> = []
   const add = (key: ChartKey, name: string, fmt: (v: number) => string, unit: string, flat: number) => {
     const h = halves(values(data, key))
@@ -220,9 +221,9 @@ function WhatChanged({ data, range }: { data: Insights; range: InsightRange }) {
   rows.sort((a, b) => (a.tone === 'good' ? 0 : a.tone === 'bad' ? 1 : 2) - (b.tone === 'good' ? 0 : b.tone === 'bad' ? 1 : 2))
   return (
     <section className="card">
-      <h2 className="kit-title" style={{ marginBottom: 10 }}>What changed {range === '4w' ? 'this month' : 'in this range'}</h2>
+      <h2 className="kit-title" style={{ marginBottom: 10 }}>What changed in this period</h2>
       <Bullets items={rows} />
-      <p className="chart-caption" style={{ marginTop: 8 }}>Second half of the range vs the first half.</p>
+      <p className="chart-caption" style={{ marginTop: 8 }}>{periodCaption(period, { compare: false, freq: false })} · second half vs first half.</p>
     </section>
   )
 }

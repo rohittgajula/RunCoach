@@ -6,6 +6,7 @@ import { ChartFrame, DeltaChip } from '../ChartFrame'
 import type { Trend } from '../chartUtil'
 import { HabitBarChart } from './HabitBarChart'
 import { type HabitMeta } from './habitUtil'
+import type { Freq } from '../health/healthRange'
 
 const n1 = (v: number | null | undefined) => (v == null ? '--' : v.toFixed(v >= 10 ? 0 : 1))
 
@@ -24,7 +25,7 @@ function amountText(meta: HabitMeta, entry: HabitReportHabit | undefined): strin
 
 /** One habit: status pill, headline, amount chart and the report's findings as bullets. */
 export function HabitCard({
-  meta, entry, points, chartTitle, sub, color, children, title, aside, className = '',
+  meta, entry, points, chartTitle, sub, color, children, title, aside, className = '', freq, period,
 }: {
   meta: HabitMeta
   entry?: HabitReportHabit
@@ -36,6 +37,9 @@ export function HabitCard({
   title?: string
   aside?: ReactNode
   className?: string
+  /** R12: bucket of `points` (x labels) and the period line under the chart. */
+  freq?: Freq
+  period?: string
 }) {
   const amount = amountText(meta, entry)
   const pct = entry?.amount?.change_pct
@@ -62,9 +66,9 @@ export function HabitCard({
         <ChartFrame
           title={<>{chartTitle}{sub && <span className="muted small"> · {sub}</span>}</>}
           chip={<DeltaChip trend={chip} format={(v) => `${Math.round(v)}%`} label="vs the previous range" />}
-          caption={amount ? `${amount}. Dashed line: your average.` : 'Dashed line: your average for this range.'}
+          caption={<>{amount ? `${amount}. Dashed line: your average.` : 'Dashed line: your average for this range.'}{period && <span className="block">{period}</span>}</>}
         >
-          <HabitBarChart data={points} color={color} unit={meta.units} />
+          <HabitBarChart data={points} color={color} unit={meta.units} freq={freq} />
         </ChartFrame>
       ) : (
         <>

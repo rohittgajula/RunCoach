@@ -1,4 +1,5 @@
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
+import { WatchAlarmsCard } from '../components/alarm/AlarmCards'
 import { BadgesSection, BadgesTeaser } from '../components/me/Badges'
 import { RemindersSection, RemindersTeaser } from '../components/me/Reminders'
 import { ShoesSection, ShoesTeaser } from '../components/me/Shoes'
@@ -52,6 +53,7 @@ function MeHome() {
 
       <ShoesTeaser />
       <RemindersTeaser />
+      <WatchAlarmsCard link />
       <BadgesTeaser />
 
       <button type="button" className="card link-card me-link" onClick={openSettings}>

@@ -385,12 +385,24 @@ export type SyncResult = { imported: number; skipped: number; failed: number; er
 
 // --- R6 §5: insights ------------------------------------------------------------------
 
+/** R12 §A: every ranged Health body carries the exact period it used. */
+export type ResponsePeriod = {
+  start: ISODate
+  end: ISODate
+  compare_start: ISODate | null
+  compare_end: ISODate | null
+  days?: number
+  freq: 'day' | 'week' | 'month'
+}
+
 export type InsightRange = '4w' | '12w' | '6m'
 
 /** Series items carry `date` plus one value field whose name varies (ms, s, value…). */
 export type SeriesPoint = { date: ISODate } & Record<string, number | string | null>
 
 export type Insights = {
+  /** R12: the period the server used (absent before R12). */
+  period?: ResponsePeriod | null
   readiness: { score: number | null; label: string; drivers: string[]; source: 'garmin' | 'computed' } | null
   hrv: {
     last_night_ms: number | null
@@ -545,6 +557,8 @@ export type HabitMilestone = { label: string; reached: boolean; at: ISODateTime 
 export type HabitSummaryText = { status: 'none' | 'ready'; markdown: string; generated_at?: ISODateTime | null }
 
 export type HabitSummary = {
+  /** R12: the period the server used (absent before R12). */
+  period?: ResponsePeriod | null
   range: InsightRange
   smoke: {
     series: HabitCountPoint[]
@@ -780,6 +794,8 @@ export type AthleteZones = {
 }
 
 export type HealthFitness = {
+  /** R12: the period the server used (absent before R12). */
+  period?: ResponsePeriod | null
   range: string
   start: ISODate
   end: ISODate
@@ -815,6 +831,8 @@ export type LoadFocusItem = {
 }
 
 export type TrainingStatus = {
+  /** R12: the period the server used (absent before R12). */
+  period?: ResponsePeriod | null
   date: ISODate | null
   status: string | null
   status_key: string | null
@@ -856,6 +874,8 @@ export type SleepAvg = {
 }
 
 export type HealthSleep = {
+  /** R12: the period the server used (absent before R12). */
+  period?: ResponsePeriod | null
   range: string
   start: ISODate
   end: ISODate
@@ -873,6 +893,8 @@ export type HealthSleep = {
     enough_data: boolean
     sentence: string | null
   } | null
+  /** R12: one point per bucket (= per night at freq=day), mean values. */
+  series?: Array<{ date: ISODate; n?: number; sleep_s: number | null; need_s: number | null; score: number | null; bedtime_h?: number | null; wake_h?: number | null }>
   tonight: { need_s: number | null; wake_time: string | null; bedtime: string | null } | null
 }
 
@@ -889,6 +911,8 @@ export type FormMetric = {
 }
 
 export type HealthForm = {
+  /** R12: the period the server used (absent before R12). */
+  period?: ResponsePeriod | null
   range: string
   start: ISODate
   end: ISODate
@@ -990,6 +1014,8 @@ export type WeeklyReportListItem = { id: number; week_start: ISODate; week_end: 
 export type CompareMetric = { key: string; label: string; unit: string; group: 'wellness' | 'day' | 'habits' | 'runs' | (string & {}); noun: string }
 
 export type CompareResult = {
+  /** R12: the period the server used (absent before R12). */
+  period?: ResponsePeriod | null
   x: { key: string; label: string; unit: string }
   y: { key: string; label: string; unit: string }
   range: string
@@ -1057,6 +1083,8 @@ export type ReadinessForecast = {
 }
 
 export type HealthBody = {
+  /** R12: the period the server used (absent before R12). */
+  period?: ResponsePeriod | null
   range: string
   start: ISODate
   end: ISODate
@@ -1139,6 +1167,8 @@ export type DnrGroup = {
   high_label: string; low_label: string; n_high: number; n_low: number; rows: DnrRow[]
 }
 export type DayTrends = {
+  /** R12: the period the server used (absent before R12). */
+  period?: ResponsePeriod | null
   range: string; start: ISODate; end: ISODate
   days: DayTrendRow[]; averages: DayTrendAvg; previous: DayTrendAvg
   weeks: Array<{ week_start: ISODate; n: number; steps_avg: number | null; active_min_avg: number | null; stress_avg: number | null; awake_hr_avg: number | null }>
@@ -1167,4 +1197,57 @@ export type ActivityRoute = {
   elevation: { gain_m: number; loss_m: number; min_m: number; max_m: number } | null
   km_markers: Array<{ km: number; lat: number; lon: number; index: number }>
   points: RoutePoint[]
+}
+
+// --- R12 §B: wake planner, my alarm, watch alarms (docs/API_NOTES.md "R12") ----------
+
+/** 0 = Monday … 6 = Sunday. */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6
+
+export type MyAlarm = {
+  time: string | null
+  days: number[]
+  enabled: boolean
+  /** Push notification at the alarm time — a notification, not a real alarm. */
+  push: boolean
+  run_time: string | null
+  bedtime_reminder: boolean
+  bedtime_lead_min: number
+  push_available: boolean
+  note: string
+}
+
+export type WatchAlarm = { time: string; days: number[]; once: boolean; enabled: boolean; label: string | null; device: string | null }
+
+export type WatchAlarms = {
+  available: boolean
+  checked_on: ISODate | null
+  alarms: WatchAlarm[]
+  summary: string | null
+}
+
+export type WakeFlag = {
+  kind: 'watch_alarm_after_run' | 'no_watch_alarm_for_run' | 'my_alarm_after_run' | 'no_alarm_for_run' | string
+  text: string
+}
+
+export type WakePlan = {
+  date: ISODate
+  weekday: number
+  run: {
+    planned: boolean; workout_id: number | null; title: string | null; kind: string | null
+    run_time: string | null; run_time_source: 'setting' | 'history' | null
+  } | null
+  need_s: number | null
+  need_source: 'garmin' | 'default' | null
+  wake_time: string | null
+  wake_source: 'run' | 'habit' | 'default' | null
+  bedtime: string | null
+  bedtime_reminder_at: string | null
+  my_alarm: MyAlarm | null
+  my_alarm_on_date: string | null
+  watch: WatchAlarms | null
+  flags: WakeFlag[]
+  android_intent: string | null
+  sentence: string | null
 }

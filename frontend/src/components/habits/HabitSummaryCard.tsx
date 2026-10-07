@@ -1,11 +1,11 @@
 import { dateTime } from '../../lib/format'
 import { errorText, useHabitSummaryText } from '../../lib/queries'
-import type { HabitSummaryText, InsightRange } from '../../lib/types'
+import type { HabitSummaryText } from '../../lib/types'
 import { SparkIcon } from '../Icons'
 import { Markdown } from '../Markdown'
 
 /** AI explanation of the habit numbers, on demand (cached per day on the server). */
-export function HabitSummaryCard({ summary, range }: { summary: HabitSummaryText | null; range: InsightRange }) {
+export function HabitSummaryCard({ summary, range }: { summary: HabitSummaryText | null; range: string }) {
   const generate = useHabitSummaryText(range)
   const ready = summary?.status === 'ready' && !!summary.markdown
   return (

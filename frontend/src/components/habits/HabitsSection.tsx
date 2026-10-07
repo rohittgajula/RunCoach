@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { ApiError } from '../../lib/auth'
 import { errorText, useHabitSummary, useLogHabit } from '../../lib/queries'
-import type { HabitKind, HabitReportHabit, HabitSummary, InsightRange } from '../../lib/types'
+import type { HabitKind, HabitReportHabit, HabitSummary } from '../../lib/types'
 import { InsightCard } from '../insights/Tile'
-import { useHealthRange } from '../health/healthRange'
+import { FREQ_NOUN, bucket, periodCaption, useHealthPeriod, withApiPeriod, type Freq } from '../health/healthRange'
 import { Empty, ErrorState, Skeleton } from '../States'
 import { HabitCard } from './HabitCard'
 import { HabitSummaryCard } from './HabitSummaryCard'
@@ -18,15 +18,18 @@ import { HABITS, PRIVATE_HABIT, PRIVATE_SHOWN_KEY, habitMeta, readFlag, writeFla
 
 const fmt = (v: number | null | undefined, digits = 1) => (v == null ? '--' : v.toFixed(digits))
 const COLORS: Record<HabitKind, string> = { smoke: 'var(--habits)', alcohol: 'var(--habits)', sugar: 'var(--habits)', private: 'var(--habits)' }
-const RANGE_LABEL: Record<InsightRange, string> = { '4w': '4 weeks', '12w': '12 weeks', '6m': '6 months' }
 
 /** Insights → Habits: range, health report, a card per habit, since-quit, impact, AI, history. */
 export function HabitsPage() {
   const { athlete } = useAuth()
-  const [range] = useHealthRange<InsightRange>()
+  const { period: chosen } = useHealthPeriod()
   const [privateShown, setPrivateShown] = useState(() => readFlag(PRIVATE_SHOWN_KEY))
+  const range = chosen.params
   const summary = useHabitSummary(range)
   const data = summary.data
+  const period = withApiPeriod(chosen, data?.period)
+  const freq = period.freq
+  const caption = periodCaption(period)
 
   if (summary.isError && summary.error instanceof ApiError && summary.error.status === 404) {
     return <Empty title="Habits aren’t available yet">Check back after the next update.</Empty>
@@ -59,7 +62,7 @@ export function HabitsPage() {
 
       {data && (
         <div className={`stack ${summary.isPlaceholderData ? 'is-stale' : ''}`}>
-          <HealthReportCard report={report} rangeLabel={RANGE_LABEL[range]} />
+          <HealthReportCard report={report} rangeLabel={chosen.selection.kind === 'preset' ? chosen.long : `${period.days} days`} />
 
           {visible.map((h) => (
             <HabitCard
@@ -67,8 +70,10 @@ export function HabitsPage() {
               meta={h}
               title={h.kind === 'smoke' ? 'Smoking' : h.kind === 'alcohol' ? 'Alcohol' : 'Sugar'}
               entry={entry(h.kind)}
-              points={pointsOf(data, h.kind)}
-              chartTitle={h.kind === 'alcohol' ? 'Drinks per week' : h.kind === 'smoke' ? 'Cigarettes per day' : 'Servings per day'}
+              points={pointsOf(data, h.kind, freq)}
+              chartTitle={`${h.kind === 'alcohol' ? 'Drinks' : h.kind === 'smoke' ? 'Cigarettes' : 'Servings'} per ${h.kind === 'alcohol' && freq === 'day' ? 'week' : FREQ_NOUN[freq]}`}
+              freq={h.kind === 'alcohol' && freq === 'day' ? 'week' : freq}
+              period={caption}
               sub={subOf(data, h.kind)}
               color={COLORS[h.kind]}
             >
@@ -105,7 +110,7 @@ export function HabitsPage() {
             <HabitSummaryCard summary={data.summary} range={range} />
           </section>
 
-          <LogHistory range={range} kinds={historyKinds} />
+          <LogHistory start={period.start} end={period.end} kinds={historyKinds} />
         </div>
       )}
     </div>
@@ -117,14 +122,18 @@ function totalOf(data: HabitSummary, kind: HabitKind): number {
   return data[kind]?.total ?? 0
 }
 
-function pointsOf(data: HabitSummary, kind: HabitKind) {
+/** Counts per bucket (sums). Alcohol stays per week at daily frequency, as before R12. */
+function pointsOf(data: HabitSummary, kind: HabitKind, freq: Freq) {
+  const sum = (pts: Array<{ date: string; value: number }>, f: Freq) =>
+    bucket(pts, f, 'sum').map((p) => ({ date: p.date, value: p.value ?? 0 }))
   if (kind === 'alcohol') {
-    return data.weekly?.length
-      ? data.weekly.map((w) => ({ date: w.week_start, value: w.drinks }))
-      : data.alcohol.series.map((p) => ({ date: p.date, value: p.count }))
+    const daily = data.alcohol.series.map((p) => ({ date: p.date, value: p.count }))
+    const weekly = data.weekly?.map((w) => ({ date: w.week_start, value: w.drinks })) ?? []
+    if (freq === 'month') return sum(daily.length ? daily : weekly, 'month')
+    return weekly.length ? weekly : sum(daily, 'week')
   }
   const series = kind === 'private' ? data.private?.series ?? [] : data[kind].series
-  return series.map((p) => ({ date: p.date, value: p.count }))
+  return sum(series.map((p) => ({ date: p.date, value: p.count })), freq)
 }
 
 function subOf(data: HabitSummary, kind: HabitKind): string {
@@ -176,7 +185,7 @@ function PrivateCard({
       className="private-card"
       meta={PRIVATE_HABIT}
       entry={entry}
-      points={pointsOf(data, 'private')}
+      points={pointsOf(data, 'private', 'day')}
       chartTitle="Per day"
       sub={subOf(data, 'private')}
       color={COLORS.private}

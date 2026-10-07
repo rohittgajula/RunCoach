@@ -1,6 +1,6 @@
 import { dateTime } from '../../lib/format'
 import { errorText, useInsightsSummary } from '../../lib/queries'
-import type { InsightRange, Insights } from '../../lib/types'
+import type { Insights } from '../../lib/types'
 import { SparkIcon } from '../Icons'
 import { GuideLink } from '../guides/GuideLink'
 import { Markdown } from '../Markdown'
@@ -52,7 +52,7 @@ export function LoadCard({ load, onOpen }: { load: Insights['load']; onOpen: () 
 }
 
 /** "Are you running well?" — AI paragraph over the numbers above, generated on demand. */
-export function SummaryCard({ summary, range }: { summary: Insights['summary']; range: InsightRange }) {
+export function SummaryCard({ summary, range }: { summary: Insights['summary']; range: string }) {
   const generate = useInsightsSummary(range)
   const ready = summary?.status === 'ready' && !!summary.markdown
   return (
