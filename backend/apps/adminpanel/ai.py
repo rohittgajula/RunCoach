@@ -162,7 +162,7 @@ def config(request):
         if not isinstance(item, dict) or item.get("tier") not in ai.TIERS:
             return Response({"detail": f"tier must be one of {', '.join(ai.TIERS)}."}, status=400)
         if item.get("reset"):
-            changes.append((item["tier"], None, None))
+            changes.append((item["tier"], None, None, None))
             continue
         provider, model = item.get("provider"), item.get("model")
         problem = _route_problem(provider, model)
