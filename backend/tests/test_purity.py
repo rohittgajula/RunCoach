@@ -40,6 +40,10 @@ PURE_MODULES = [
     "analysis.weekly_report",
     "analysis.achievements",
     "analysis.forecast",
+    # R11
+    "analysis.day",
+    "analysis.day_trends",
+    "analysis.route",
     "planning",
     "planning.calendar",
     "planning.prediction",

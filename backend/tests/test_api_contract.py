@@ -127,9 +127,12 @@ def test_diet_day_shape(api, athlete, active):
     assert r.status_code == 201, r.content
     assert set(r.json()) == MEAL_KEYS and r.json()["kcal"] == 180
     body = api.get("/api/diet/day/", {"date": str(day)}).json()
-    # R8 §D added weather_tips and targets.water_bonus_ml (0 without weather).
+    # R8 §D added weather_tips and targets.water_bonus_ml (0 without weather);
+    # R11 §D added the hydration log (water).
     assert set(body) == {"date", "targets", "eaten", "burn", "meals", "fueling",
-                         "missing_profile", "weather_tips"}
+                         "missing_profile", "weather_tips", "water"}
+    assert set(body["water"]) == {"date", "target_ml", "bonus_ml", "drunk_ml", "remaining_ml",
+                                  "pct", "quick_add", "logs"}
     assert set(body["targets"]) == {"kcal", "carbs_g", "protein_g", "fat_g", "water_ml",
                                     "water_bonus_ml", "rationale"}
     assert set(body["eaten"]) == {"kcal", "carbs_g", "protein_g", "fat_g"}

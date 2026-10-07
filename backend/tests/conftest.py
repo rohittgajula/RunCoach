@@ -101,3 +101,22 @@ def fake_ai_models(settings):
     """
     settings.AI_MODELS = {"lite": "test-model", "fast": "test-model",
                           "coach": "test-model", "deep": "test-model"}
+
+
+@pytest.fixture(autouse=True)
+def no_real_garmin_queue(monkeypatch):
+    """R11: the Garmin tasks queued after a sync (slow + intraday fetch) and by the
+    backfill command never reach the real broker from a test — the dev stack's garmin
+    worker would run them against the dev database. Queued calls are recorded instead."""
+    from apps.ingest import tasks
+
+    queued: list = []
+
+    def recorder(name):
+        def apply_async(args=(), kwargs=None, countdown=0, **kw):
+            queued.append((name, tuple(args), dict(kwargs or {}), countdown))
+        return apply_async
+
+    for name in ("sync_slow_one", "sync_intraday_one", "backfill_intraday", "backfill_r10"):
+        monkeypatch.setattr(getattr(tasks, name), "apply_async", recorder(name))
+    return queued
