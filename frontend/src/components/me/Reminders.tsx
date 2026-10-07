@@ -4,7 +4,7 @@ import { currentSubscription, isIOS, isStandalone, pushSupported, subscribe } fr
 import { errorText, subscribePush, testPush, unsubscribePush, usePatchReminders, useReminders } from '../../lib/queries'
 import type { Nudge, Reminder, RemindersResponse } from '../../lib/types'
 import { AlarmRemindersCard } from '../alarm/AlarmCards'
-import { BellIcon, ChevronRight } from '../Icons'
+import { BellIcon, ChevronRight, WatchIcon } from '../Icons'
 import { CardHead, Pill } from '../Kit'
 import { Empty, ErrorState, Skeleton } from '../States'
 
@@ -19,14 +19,20 @@ function useDeviceSubscribed(): [boolean | undefined, (v: boolean) => void] {
   return [on, setOn]
 }
 
+/** R15 §C: the run summary push is what a Garmin watch mirrors. */
+const WATCH_NOTE = 'Shows on your Garmin if Garmin Connect → Notifications lets Chrome/RunCoach notifications through.'
+
 function ReminderRow({ r, onPatch, disabled }: { r: Reminder; onPatch: (patch: Partial<Reminder>) => void; disabled: boolean }) {
   const [time, setTime] = useState(r.time)
   useEffect(() => setTime(r.time), [r.time])
+  const watch = r.key === 'run_summary'
+  const label = watch ? 'Run summary on watch' : r.label
   return (
     <div className="reminder-row">
       <span className="grow">
-        <strong>{r.label}</strong>
+        <strong>{label}</strong>
         <span className="muted small block">{r.description}</span>
+        {watch && <span className="small block" style={{ marginTop: 4, color: 'var(--run-ink)' }}><WatchIcon size={14} style={{ verticalAlign: '-2px' }} /> {WATCH_NOTE}</span>}
       </span>
       {/* R13: event reminders (run_reviewed) have no time. */}
       {r.time !== null && (
@@ -43,7 +49,7 @@ function ReminderRow({ r, onPatch, disabled }: { r: Reminder; onPatch: (patch: P
         type="button"
         role="switch"
         aria-checked={r.enabled}
-        aria-label={r.label}
+        aria-label={label}
         disabled={disabled}
         className={`switch ${r.enabled ? 'is-on' : ''}`}
         onClick={() => onPatch({ enabled: !r.enabled })}

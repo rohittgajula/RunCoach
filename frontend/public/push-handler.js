@@ -8,13 +8,18 @@ self.addEventListener('push', (event) => {
     data = { body: event.data ? event.data.text() : '' }
   }
   const title = data.title || 'RunCoach'
+  // R15 run summary: "/activities/{id}" has no page of its own; the run is on Today.
+  const url = /^\/activities\/\d+\/?$/.test(data.url || '') ? '/today' : data.url || '/today'
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || '',
       tag: data.tag || undefined,
+      // A newer summary for the same run replaces the old one and still buzzes (so the
+      // watch mirrors it). Never silent.
+      renotify: !!(data.tag && data.kind === 'run_summary'),
       icon: '/icon-192.png',
       badge: '/icon-192.png',
-      data: { url: data.url || '/today' },
+      data: { url },
     }),
   )
 })
