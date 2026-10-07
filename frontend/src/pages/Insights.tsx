@@ -1,18 +1,21 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { DaySection } from '../components/day/DaySection'
-import { DayTrendsSection } from '../components/day/DayTrendsSection'
-import { GuidesSection } from '../components/guides/GuidesSection'
-import { HabitsPage } from '../components/habits/HabitsSection'
-import { CompareSection } from '../components/health/CompareSection'
 import { RangeContext, type Preset, type RangeValue } from '../components/health/healthRange'
 import { RangePill, RangeSheet, useSectionSelection } from '../components/health/RangeControl'
-import { FitnessSection } from '../components/health/FitnessSection'
-import { ReportsSection } from '../components/health/ReportsSection'
-import { SleepSection } from '../components/health/SleepSection'
 import { OverviewSection } from '../components/insights/OverviewSection'
 import { PageHeader } from '../components/PageHeader'
-import { ProgressSection } from '../components/progress/ProgressSection'
+import { Skeleton } from '../components/States'
+
+// R13 §16: each Health section is its own chunk; Overview stays with the tab.
+const DaySection = lazy(() => import('../components/day/DaySection').then((m) => ({ default: m.DaySection })))
+const DayTrendsSection = lazy(() => import('../components/day/DayTrendsSection').then((m) => ({ default: m.DayTrendsSection })))
+const GuidesSection = lazy(() => import('../components/guides/GuidesSection').then((m) => ({ default: m.GuidesSection })))
+const HabitsPage = lazy(() => import('../components/habits/HabitsSection').then((m) => ({ default: m.HabitsPage })))
+const CompareSection = lazy(() => import('../components/health/CompareSection').then((m) => ({ default: m.CompareSection })))
+const FitnessSection = lazy(() => import('../components/health/FitnessSection').then((m) => ({ default: m.FitnessSection })))
+const ReportsSection = lazy(() => import('../components/health/ReportsSection').then((m) => ({ default: m.ReportsSection })))
+const SleepSection = lazy(() => import('../components/health/SleepSection').then((m) => ({ default: m.SleepSection })))
+const ProgressSection = lazy(() => import('../components/progress/ProgressSection').then((m) => ({ default: m.ProgressSection })))
 
 /**
  * Section chips, in order. `range` = that section's default for the shared range
@@ -73,6 +76,7 @@ export default function Health() {
         </nav>
       </div>
       <RangeContext.Provider value={value}>
+        <Suspense fallback={<section className="card"><Skeleton lines={5} /></section>}>
         <Routes>
           <Route index element={<OverviewSection />} />
           <Route path="day" element={<DaySection />} />
@@ -87,6 +91,7 @@ export default function Health() {
           <Route path="reports/:week" element={<ReportsSection />} />
           <Route path="*" element={<Navigate to="/health" replace />} />
         </Routes>
+        </Suspense>
       </RangeContext.Provider>
       <RangeSheet open={sheet && !!key} onClose={() => setSheet(false)} period={period} onApply={setSelection} title={section ? `${section.label} range` : 'Range'} />
     </div>
