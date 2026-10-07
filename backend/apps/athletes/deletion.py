@@ -25,6 +25,12 @@ R13: WorkoutAdjustment and StrengthSession (planning), PainReport, MoodLog, Mont
 and MorningBriefing (health), CravingLog (habits), RunReview (activities) and DataExport
 (athletes) all cascade with the Athlete. Export ZIPs on disk (media/exports/athlete_<id>/)
 are removed with the other files.
+
+R14: WeatherSuggestion, CalendarFeed (the ICS token) and CalendarFeedItem (planning),
+Experiment, Goal (+ GoalEntry) (health) cascade with the Athlete; ActivityWeather and
+RunHeartStats cascade with each Activity. `today_layout`, `weather_auto_apply` and the
+admin-set `ai_call_budget` live on the Athlete row. AIRequestLog rows cascade as before
+(only an admin's test prompts have no athlete).
 """
 
 import logging

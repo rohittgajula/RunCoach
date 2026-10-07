@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 
 from .calendar_views import calendar
 from .plan_views import (
@@ -8,7 +8,7 @@ from .plan_views import (
 from .checkin_views import today, today_apply, today_explain
 from .garmin_views import plan_garmin, workout_garmin
 from .month_views import calendar_month
-from . import r13_views
+from . import calendar_feed, r13_views, r14_views
 from .views import (
     RaceDetail, RaceList, plan_weeks, predictions, today_mode, today_session_view,
 )
@@ -50,4 +50,16 @@ urlpatterns = [
     path("strength/", r13_views.strength_list, name="strength"),
     path("strength/<int:pk>/", r13_views.strength_detail, name="strength-detail"),
     path("strength/<int:pk>/garmin/", r13_views.strength_garmin, name="strength-garmin"),
+    # R14
+    path("plan/weather-suggestions/", r14_views.weather_suggestions,
+         name="weather-suggestions"),
+    path("plan/weather-suggestions/check/", r14_views.weather_suggestion_check,
+         name="weather-suggestions-check"),
+    path("plan/weather-suggestions/<int:pk>/apply/", r14_views.weather_suggestion_apply,
+         name="weather-suggestion-apply"),
+    path("plan/weather-suggestions/<int:pk>/dismiss/", r14_views.weather_suggestion_dismiss,
+         name="weather-suggestion-dismiss"),
+    path("calendar-feed/", calendar_feed.feed_view, name="calendar-feed"),
+    re_path(r"^cal/(?P<token>[A-Za-z0-9_-]{20,100})\.ics$", calendar_feed.feed_ics,
+            name="calendar-feed-ics"),
 ]

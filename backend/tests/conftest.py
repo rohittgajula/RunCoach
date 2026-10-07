@@ -129,6 +129,7 @@ def no_real_r13_queue(monkeypatch):
     workers would run them against the dev database). Queued calls are recorded; tests
     call the services directly or run `.apply()` themselves."""
     from apps.athletes import tasks as athlete_tasks
+    from apps.health import tasks as health_tasks
     from apps.planning import tasks as planning_tasks
 
     queued: list = []
@@ -145,7 +146,10 @@ def no_real_r13_queue(monkeypatch):
                          (planning_tasks, "after_checkin_task"),
                          (planning_tasks, "after_pain_task"),
                          (planning_tasks, "garmin_strength_push_task"),
-                         (athlete_tasks, "build_export")):
+                         (athlete_tasks, "build_export"),
+                         # R14
+                         (health_tasks, "heart_weather_task"),
+                         (planning_tasks, "weather_check_task")):
         delay, apply_async = recorder(name)
         task = getattr(module, name)
         monkeypatch.setattr(task, "delay", delay)

@@ -12,3 +12,12 @@ from .weather_services import weather_today
 @permission_classes([IsAuthenticated])
 def weather_today_view(request):
     return Response(weather_today(request.user.athlete))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def weather_report_view(request):
+    """R14 §3. Always 200 (`available: false` + reason without weather)."""
+    from .weather_report import report
+
+    return Response(report(request.user.athlete))

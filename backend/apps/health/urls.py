@@ -4,6 +4,7 @@ from . import (
     achievements, briefing, compare_views, day_views, forecast_views, garmin_views, injury,
     monthly, mood, reports, wake_views,
 )
+from . import experiments, goals, heart
 
 urlpatterns = [
     path("health/fitness/", garmin_views.fitness, name="health-fitness"),
@@ -43,4 +44,15 @@ urlpatterns = [
     path("reports/monthly/", monthly.monthly, name="monthly-report"),
     path("reports/monthly/list/", monthly.monthly_list, name="monthly-report-list"),
     path("reports/monthly/ai/", monthly.monthly_ai, name="monthly-report-ai"),
+    # R14
+    path("experiments/", experiments.experiments, name="experiments"),
+    path("experiments/templates/", experiments.templates, name="experiment-templates"),
+    path("experiments/active/", experiments.experiment_active, name="experiment-active"),
+    path("experiments/<int:pk>/", experiments.experiment_detail, name="experiment"),
+    path("experiments/<int:pk>/stop/", experiments.experiment_stop, name="experiment-stop"),
+    path("goals/", goals.goals, name="goals"),
+    path("goals/chip/", goals.goal_chip, name="goal-chip"),
+    path("goals/<int:pk>/", goals.goal_detail, name="goal"),
+    path("goals/<int:pk>/values/", goals.goal_values, name="goal-values"),
+    path("health/heart/", heart.heart, name="health-heart"),
 ]

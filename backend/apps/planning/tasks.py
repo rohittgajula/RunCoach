@@ -206,3 +206,33 @@ def strength_topup() -> dict:
 
             logging.getLogger(__name__).exception("strength top-up failed for %s", athlete.pk)
     return {"athletes": done}
+
+
+# R14 §3: the daily weather check, the evening before (18:xx local), for the next 3 days.
+WEATHER_CHECK_HOUR = 18
+
+
+@shared_task(name="planning.weather_checks")
+def weather_checks() -> dict:
+    """Hourly. Athletes with an active plan whose local time is 18:xx."""
+    from .models import TrainingPlan
+
+    ids = TrainingPlan.objects.filter(status=TrainingPlan.Status.ACTIVE) \
+        .values_list("athlete_id", flat=True)
+    queued = 0
+    for athlete in Athlete.objects.filter(pk__in=list(ids)):
+        if athlete.local_now.hour != WEATHER_CHECK_HOUR:
+            continue
+        weather_check_task.delay(athlete.pk)
+        queued += 1
+    return {"queued": queued}
+
+
+@shared_task(name="planning.weather_check")
+def weather_check_task(athlete_id: int) -> dict:
+    from .weather_swap import check
+
+    athlete = Athlete.objects.filter(pk=athlete_id).first()
+    if athlete is None:
+        return {"skipped": "gone"}
+    return {"athlete": athlete_id, "created": len(check(athlete))}

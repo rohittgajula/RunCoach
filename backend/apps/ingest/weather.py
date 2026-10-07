@@ -136,3 +136,22 @@ def hour_at(fc: dict | None, day, hour: int) -> dict | None:
     return {"time": wanted, "temp": get("temperature_2m"), "feels_like": get("apparent_temperature"),
             "humidity": get("relative_humidity_2m"), "dew_point": get("dew_point_2m"),
             "precip_prob": get("precipitation_probability"), "wind": get("wind_speed_10m")}
+
+
+# --- R14 §3: the Weather report (7-day forecast + 5-day air quality) --------------------
+REPORT_DAILY = ("temperature_2m_max,temperature_2m_min,apparent_temperature_max,"
+                "precipitation_probability_max,precipitation_sum,weather_code,uv_index_max,"
+                "sunrise,sunset")
+REPORT_CURRENT = CURRENT + ",uv_index"
+
+
+def forecast_report(lat: float, lon: float, tz: str) -> dict | None:
+    params = {"latitude": lat, "longitude": lon, "hourly": HOURLY, "current": REPORT_CURRENT,
+              "daily": REPORT_DAILY, "timezone": tz, "forecast_days": 7}
+    return _cached("fc7", lat, lon, tz, lambda: _get_json(FORECAST_URL, params))
+
+
+def air_quality_report(lat: float, lon: float, tz: str) -> dict | None:
+    params = {"latitude": lat, "longitude": lon, "hourly": "pm2_5,us_aqi",
+              "current": "pm2_5,us_aqi", "timezone": tz, "forecast_days": 5}
+    return _cached("aq5", lat, lon, tz, lambda: _get_json(AIR_URL, params))

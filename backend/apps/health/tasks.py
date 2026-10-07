@@ -105,3 +105,16 @@ def morning_briefings() -> dict:
         except Exception:  # noqa: BLE001 — one athlete must not stop the rest
             logger.exception("briefing failed for %s", athlete.pk)
     return {"built": built}
+
+
+@shared_task(name="health.heart_weather")
+def heart_weather_task(athlete_id: int) -> dict:
+    """R14 §9: the weather at the start of runs that have none yet (Open-Meteo archive)."""
+    from apps.athletes.models import Athlete
+
+    from .heart import fill_weather
+
+    athlete = Athlete.objects.filter(pk=athlete_id).first()
+    if athlete is None:
+        return {"skipped": "gone"}
+    return {"athlete": athlete_id, "stored": fill_weather(athlete)}

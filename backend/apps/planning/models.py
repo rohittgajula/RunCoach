@@ -264,3 +264,67 @@ class StrengthSession(OwnedByAthlete):
 
     class Meta:
         ordering = ["date", "id"]
+
+
+class WeatherSuggestion(OwnedByAthlete):
+    """R14 §3: "Weather: move Thu run to Fri?" — a proposed move (or swap with an
+    optional walk) of one planned run away from a bad-weather day. Nothing moves until
+    the athlete taps Move, unless `weather_auto_apply` is on."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPLIED = "applied", "Applied"
+        DISMISSED = "dismissed", "Dismissed"
+        EXPIRED = "expired", "Expired"
+
+    workout = models.ForeignKey(PlannedWorkout, on_delete=models.SET_NULL, null=True,
+                                blank=True, related_name="weather_suggestions")
+    swap_workout = models.ForeignKey(PlannedWorkout, on_delete=models.SET_NULL, null=True,
+                                     blank=True, related_name="weather_swaps")
+    workout_title = models.CharField(max_length=120)
+    workout_kind = models.CharField(max_length=12)
+    duration_s = models.PositiveIntegerField(default=0)
+    from_date = models.DateField()
+    to_date = models.DateField()
+    action = models.CharField(max_length=5)                 # move | swap
+    text = models.CharField(max_length=120)
+    reason = models.CharField(max_length=300)
+    reasons = models.JSONField(default=list)
+    from_weather = models.JSONField(default=dict)
+    to_weather = models.JSONField(default=dict)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING,
+                              db_index=True)
+    auto_applied = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [models.UniqueConstraint(fields=["workout", "from_date"],
+                                               name="uniq_weather_suggestion")]
+
+
+class CalendarFeed(OwnedByAthlete):
+    """R14 §5: the private ICS subscription. The token is the only credential (a
+    capability URL): unguessable, regenerated or revoked from Me → Calendar sync."""
+
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_fetched_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["athlete"], name="one_feed_per_athlete")]
+
+
+class CalendarFeedItem(OwnedByAthlete):
+    """What each calendar event looked like when last served, so its SEQUENCE goes up
+    (and LAST-MODIFIED moves) only when the event really changed."""
+
+    uid = models.CharField(max_length=80)
+    content_hash = models.CharField(max_length=64)
+    sequence = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["athlete", "uid"],
+                                               name="uniq_feed_item_uid")]

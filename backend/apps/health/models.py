@@ -109,3 +109,85 @@ class MorningBriefing(OwnedByAthlete):
         ordering = ["-date"]
         constraints = [models.UniqueConstraint(fields=["athlete", "date"],
                                                name="uniq_athlete_briefing_day")]
+
+
+class Experiment(OwnedByAthlete):
+    """R14 §7: a self-experiment — one rule kept for 7–42 days, judged from the logs."""
+
+    class Status(models.TextChoices):
+        SCHEDULED = "scheduled", "Scheduled"
+        ACTIVE = "active", "Active"
+        COMPLETED = "completed", "Completed"
+        STOPPED = "stopped", "Stopped"
+
+    kind = models.CharField(max_length=20)
+    title = models.CharField(max_length=80)
+    start = models.DateField()
+    end = models.DateField()
+    rule = models.JSONField(default=dict)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
+    decision = models.CharField(max_length=4, blank=True, default="")      # keep | stop
+    created_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-start", "-id"]
+
+
+class Goal(OwnedByAthlete):
+    """R14 §8: a long-term goal with progress from the athlete's own data."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        ACHIEVED = "achieved", "Achieved"
+        ABANDONED = "abandoned", "Abandoned"
+
+    kind = models.CharField(max_length=16)
+    title = models.CharField(max_length=80)
+    unit = models.CharField(max_length=12, blank=True, default="")
+    target = models.FloatField()
+    target_date = models.DateField(null=True, blank=True)
+    start_value = models.FloatField(null=True, blank=True)
+    start_date = models.DateField()
+    distance_km = models.FloatField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
+    achieved_on = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+
+class GoalEntry(models.Model):
+    """A value posted by hand for a custom goal."""
+
+    goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name="entries")
+    date = models.DateField()
+    value = models.FloatField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["date", "id"]
+
+
+class ActivityWeather(models.Model):
+    """R14 §9: the weather at a run's start (Open-Meteo archive), for heat flags."""
+
+    activity = models.OneToOneField("activities.Activity", on_delete=models.CASCADE,
+                                    related_name="weather")
+    temp_c = models.FloatField(null=True, blank=True)
+    feels_like_c = models.FloatField(null=True, blank=True)
+    dew_point_c = models.FloatField(null=True, blank=True)
+    humidity = models.FloatField(null=True, blank=True)
+    source = models.CharField(max_length=10, default="archive")     # archive | none
+    fetched_at = models.DateTimeField(auto_now=True)
+
+
+class RunHeartStats(models.Model):
+    """R14 §9: one run's heart-adaptation numbers, cached (they read every record)."""
+
+    activity = models.OneToOneField("activities.Activity", on_delete=models.CASCADE,
+                                    related_name="heart_stats")
+    key = models.CharField(max_length=80)       # algorithm + segmentation + reference values
+    payload = models.JSONField(default=dict)
+    computed_at = models.DateTimeField(auto_now=True)
