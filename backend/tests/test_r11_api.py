@@ -345,7 +345,8 @@ def test_water_nudge(athlete):
     now = at_local(athlete, 11, 0)
     msg, state = nudges.check(athlete, row, "water", now)
     assert msg["tag"] == "water" and state["count"] == 1
-    WaterLog.objects.create(athlete=athlete, at=timezone.now() - dt.timedelta(minutes=30),
+    # A drink 30 min before the 13:00 check (not "now", which may be later in the day).
+    WaterLog.objects.create(athlete=athlete, at=at_local(athlete, 12, 30),
                             local_date=athlete.local_today, ml=250)
     assert nudges.check(athlete, row, "water", at_local(athlete, 13, 0))[0] is None
 

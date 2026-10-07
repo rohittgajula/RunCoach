@@ -92,7 +92,9 @@ def test_caffeine_logging_today_and_report(api, other_api, athlete):
     r = api.post("/api/habits/logs/", {"kind": "caffeine", "quantity": 2, "subtype": "tea",
                                        "at": at(athlete, 1, 15).isoformat()}, format="json")
     assert r.status_code == 201 and r.json()["subtype"] == "tea"
-    r = api.post("/api/habits/logs/", {"kind": "caffeine"}, format="json")
+    # Explicit early-morning time: a "now" log after 14:00 local would count as late.
+    r = api.post("/api/habits/logs/", {"kind": "caffeine", "at": at(athlete, 0, 0).isoformat()},
+                 format="json")
     assert r.json()["subtype"] == "coffee"
     assert api.post("/api/habits/logs/", {"kind": "smoke", "subtype": "tea"},
                     format="json").status_code == 400
