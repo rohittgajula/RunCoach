@@ -1310,3 +1310,31 @@ Watch = { available: bool,              # false: no device / the call failed —
 Fetched once a day with the R10 slow fetch: `get_devices()` then
 `get_device_settings(deviceId)` per device (≤ 3), each through the spaced runner and the
 breaker; only `alarms` is read. Device settings are never written.
+
+### R12 backend choices (and where the spec was silent)
+- **Default freq changes old responses**: with no `freq`, a 6m / 1y preset (fitness and
+  body default to 6m) now returns weekly points with `n`. Pass `freq=day` for the R10/R11
+  daily series. Week/month buckets are calendar buckets, so the first one can start
+  before `start` (its `date` is the Monday / the 1st) and only holds days in the period.
+- `1y` (and `7d`, `3m`) are now accepted by insights and habits summary too; `12w` only
+  there. `/health/training-status/` gained `range/start/end/period`; its "current" fields
+  stay the latest values whatever the period.
+- Habits / insights with a custom period: the AI summaries get the same payload (now
+  with `period`); the habits previous-period label for custom / 7d / 3m / 1y periods
+  reads "the previous N days".
+- Compare with week/month: buckets are summed for `steps`, the habits, `run_km` and
+  `training_load`, averaged otherwise; the sentence says "Weeks with more …" / "the next
+  week"; `MIN_N` (8) applies to buckets.
+- **Watch alarms**: `get_device_alarms` exists in 0.3.10 but loops `get_devices` +
+  `get_device_settings` internally with no pause, so the slow fetch makes those calls
+  itself through the spaced runner (≤ 3 devices). The alarm payload was not probed on a
+  live account for R12; parsing accepts `alarmTime` as minutes (or seconds, or "HH:MM"),
+  `alarmDays` as full / short weekday names, `DAILY`, `ONCE`, and `alarmMode` ON/OFF.
+  A device without an `alarms` key counts as "checked, none set"; no device or a failed
+  call → `available: false`.
+- Bedtime reminder time comes from tomorrow's wake plan (evening) or, when it falls after
+  midnight, today's plan. Alarm / bedtime pushes are evaluated in the existing 5-minute
+  `reminders.send_due` beat; no new beat entry.
+- **Deploy**: migrations `ingest.0006_r12_watch_alarms`, `reminders.0003_r12_alarm`;
+  restart worker, garmin worker and beat. No new env vars or dependencies. Watch alarms
+  appear after the next daily slow fetch.
