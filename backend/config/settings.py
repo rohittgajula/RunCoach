@@ -82,6 +82,10 @@ INSTALLED_APPS = [
     "apps.journal",
     "apps.diet",
     "apps.habits",
+    # R10
+    "apps.gear",
+    "apps.health",
+    "apps.reminders",
 ]
 
 MIDDLEWARE = [
@@ -258,6 +262,9 @@ CELERY_TASK_ROUTES = {
     "activities.*": {"queue": "metrics"},
     "coaching.*": {"queue": "ai"},
     "planning.*": {"queue": "planning"},
+    # R10: report cards, badges and reminders are light database work (and push sends).
+    "health.*": {"queue": "metrics"},
+    "reminders.*": {"queue": "metrics"},
 }
 
 from celery.schedules import crontab  # noqa: E402
@@ -291,6 +298,23 @@ CELERY_BEAT_SCHEDULE = {
         "task": "coaching.weekly_reviews",
         "schedule": crontab(hour=18, minute=0, day_of_week=0),
     },
+    # R10 §C10: hourly; the task builds last week's report for athletes whose local
+    # time is Monday 06:xx (idempotent per athlete and week).
+    "weekly-reports-monday-morning": {
+        "task": "health.weekly_reports",
+        "schedule": crontab(minute=2),
+    },
+    # R10 §C13: badges are also awarded on read and after each sync; this catches the
+    # rest (smoke-free days tick over with no other activity).
+    "award-achievements": {
+        "task": "health.award_all",
+        "schedule": crontab(minute=40),
+    },
+    # R10 §C12: every 5 minutes; each reminder goes once per local day at its time.
+    "send-reminders": {
+        "task": "reminders.send_due",
+        "schedule": crontab(minute="*/5"),
+    },
 }
 
 # Queue separation matters from the start: a stuck AI call must not block the next
@@ -301,6 +325,18 @@ CELERY_TASK_QUEUES_NAMES = ["garmin", "metrics", "ai", "planning"]
 # Only the refreshable OAuth token is ever written here. The password is used once
 # to obtain it and is never persisted, logged, or echoed back.
 GARMIN_TOKEN_DIR = os.environ.get("GARMIN_TOKEN_DIR", "/app/.garmin")
+
+# R10 §B: pause between the slow-changing Garmin calls (endurance score, PRs, gear …),
+# so one athlete's daily fetch never arrives as a burst from this IP.
+GARMIN_SLOW_PAUSE_S = float(os.environ.get("GARMIN_SLOW_PAUSE_S", "1.5"))
+
+# --- Web push (R10 §C12) -----------------------------------------------------------
+# All three or the reminders feature hides itself. Generate the key pair once with the
+# one-liner in docs/API_NOTES.md (R10 §C12). The private key never leaves the server;
+# the public key is handed to browsers by GET /api/reminders/.
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "")
 
 # --- AI ----------------------------------------------------------------------
 # One provider is active at a time. Operations name a TIER, never a model ID, so
@@ -344,6 +380,8 @@ AI_MODEL_TIERS = {
     # R8: habits explanation and the progress review are the coach's voice.
     "habits_summary": "coach",
     "progress_review": "coach",
+    # R10 §C10: the optional paragraph on the weekly report card.
+    "weekly_report": "coach",
 }
 
 # Per athlete per month, every model call counted. Read by coaching/services.py.

@@ -113,6 +113,17 @@ class DailyMetrics(OwnedByAthlete):
     race_pred_half_s = models.IntegerField(null=True, blank=True)
     race_pred_marathon_s = models.IntegerField(null=True, blank=True)
 
+    # R10 §B: sleep details, fitness trend and load focus. Null when the watch or the
+    # account does not provide them.
+    restless_moments = models.IntegerField(null=True, blank=True)
+    sleep_spo2_avg = models.FloatField(null=True, blank=True)
+    sleep_spo2_low = models.FloatField(null=True, blank=True)
+    endurance_score = models.IntegerField(null=True, blank=True)
+    endurance_level = models.CharField(max_length=20, blank=True)
+    fitness_age = models.FloatField(null=True, blank=True)
+    # {feedback, items: [{key, label, value, target_min, target_max, state}]}
+    load_focus = models.JSONField(null=True, blank=True)
+
     # Verbatim payloads, so a field nobody thought to map can be backfilled from
     # history later without re-fetching from Garmin.
     raw = models.JSONField(default=dict, blank=True)
@@ -137,3 +148,72 @@ class DailyMetrics(OwnedByAthlete):
         if self.acute_load and self.chronic_load:
             return round(self.acute_load / self.chronic_load, 2)
         return None
+
+
+class GarminProfile(OwnedByAthlete):
+    """R10 §B: the slow-changing Garmin data, fetched at most once a day per athlete.
+
+    The verbatim payloads are kept (like DailyMetrics.raw) so a field nobody mapped can
+    be re-read later without asking Garmin again.
+    """
+
+    slow_synced_on = models.DateField(null=True, blank=True)
+    backfilled_on = models.DateField(null=True, blank=True)
+    user_profile_pk = models.BigIntegerField(null=True, blank=True)
+    chronological_age = models.IntegerField(null=True, blank=True)
+    achievable_fitness_age = models.FloatField(null=True, blank=True)
+    raw = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["athlete"],
+                                               name="uniq_garmin_profile_athlete")]
+
+
+class PersonalRecord(OwnedByAthlete):
+    """R10 §B6: Garmin's own personal records (1 km … marathon, longest run)."""
+
+    key = models.CharField(max_length=20)
+    value = models.FloatField(help_text="Seconds, or metres for longest_run.")
+    achieved_on = models.DateField(null=True, blank=True)
+    garmin_activity_id = models.BigIntegerField(null=True, blank=True)
+    raw = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["key"]
+        constraints = [models.UniqueConstraint(fields=["athlete", "key"],
+                                               name="uniq_athlete_pr_key")]
+
+
+class BodyComposition(OwnedByAthlete):
+    """R10 §B7: one weigh-in day from Garmin (scale or manual entry in Connect)."""
+
+    measured_on = models.DateField(db_index=True)
+    weight_kg = models.FloatField(null=True, blank=True)
+    body_fat_pct = models.FloatField(null=True, blank=True)
+    bmi = models.FloatField(null=True, blank=True)
+    muscle_mass_kg = models.FloatField(null=True, blank=True)
+    raw = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["measured_on"]
+        constraints = [models.UniqueConstraint(fields=["athlete", "measured_on"],
+                                               name="uniq_athlete_body_day")]
+
+
+class LactateThreshold(OwnedByAthlete):
+    """R10 §B3: Garmin's running lactate threshold, one row per date it changed."""
+
+    measured_on = models.DateField(db_index=True)
+    heart_rate = models.PositiveSmallIntegerField(null=True, blank=True)
+    speed_mps = models.FloatField(null=True, blank=True)
+    pace_s_per_km = models.PositiveSmallIntegerField(null=True, blank=True)
+    raw = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["measured_on"]
+        constraints = [models.UniqueConstraint(fields=["athlete", "measured_on"],
+                                               name="uniq_athlete_lt_day")]

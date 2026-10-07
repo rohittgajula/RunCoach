@@ -1,0 +1,41 @@
+"""R10 §C12: web-push subscriptions and the athlete's reminder choices."""
+
+import datetime as dt
+
+from django.db import models
+
+from apps.athletes.models import OwnedByAthlete
+
+
+class PushSubscription(OwnedByAthlete):
+    """One browser/device. The endpoint is a capability URL issued by the browser's
+    push service; the keys encrypt the payload end to end."""
+
+    endpoint = models.URLField(max_length=1000, unique=True)
+    p256dh = models.CharField(max_length=200)
+    auth = models.CharField(max_length=100)
+    user_agent = models.CharField(max_length=300, blank=True, default="")
+    failures = models.PositiveSmallIntegerField(default=0)
+    last_success_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ReminderSettings(OwnedByAthlete):
+    """Per-reminder toggle and local time. All off until the athlete turns one on."""
+
+    morning_checkin = models.BooleanField(default=False)
+    morning_checkin_time = models.TimeField(default=dt.time(7, 0))
+    habit_log = models.BooleanField(default=False)
+    habit_log_time = models.TimeField(default=dt.time(21, 0))
+    best_run_time = models.BooleanField(default=False)
+    best_run_time_time = models.TimeField(default=dt.time(6, 0))
+    weekly_report = models.BooleanField(default=False)
+    weekly_report_time = models.TimeField(default=dt.time(7, 0))
+    # {reminder key: "YYYY-MM-DD" last sent, local date} — once a day each.
+    last_sent = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "reminder settings"
+        constraints = [models.UniqueConstraint(fields=["athlete"],
+                                               name="uniq_reminder_settings_athlete")]

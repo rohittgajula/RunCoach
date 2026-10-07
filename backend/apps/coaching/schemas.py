@@ -136,3 +136,9 @@ class ProgressReview(BaseModel):
     improve: list[str] = Field(description="1-3 short points to work on.")
     check: list[str] = Field(description="0-2 things worth checking (heat, sleep, kit).")
     markdown: str = Field(description="A short markdown review, 60-140 words.")
+
+
+class WeeklyReportSummary(BaseModel):
+    """R10 §C10: the optional paragraph on the weekly report card."""
+
+    markdown: str = Field(description="One short markdown paragraph, 60-120 words.")

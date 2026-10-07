@@ -65,6 +65,7 @@ class AIAnalysis(OwnedByAthlete):
         CHECKIN = "checkin", "Morning check-in explanation"
         HABITS = "habits", "Habits summary"
         PROGRESS = "progress", "Progress review"
+        WEEKLY_CARD = "weekly_card", "Weekly report card"
 
     kind = models.CharField(max_length=12, choices=Kind.choices, db_index=True)
     activity = models.ForeignKey(

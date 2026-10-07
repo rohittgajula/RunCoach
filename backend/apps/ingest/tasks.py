@@ -63,6 +63,8 @@ def sync_one(self, athlete_id: int) -> dict:
 
     if any("rate-limited" in e for e in result.get("errors", [])):
         trip_breaker("rate limited mid-sync")
+    else:
+        queue_slow(athlete)
     # New runs may change last week's picture: adapt the active plan (idempotent per
     # ISO week, so this is a no-op after the first run of the week).
     try:
@@ -113,4 +115,80 @@ def sync_wellness_one(athlete_id: int) -> dict:
         return {"error": "auth"}
     if result.get("rate_limited"):
         trip_breaker("rate limited during morning wellness sync")
+    return {"athlete": athlete_id, **result}
+
+
+# --- R10 §B: slow-changing Garmin data (once a day per athlete) ------------------------
+
+def queue_slow(athlete) -> bool:
+    """Queue today's slow fetch unless it already ran. Never raises."""
+    from .models import GarminProfile
+
+    done = GarminProfile.objects.filter(athlete=athlete,
+                                        slow_synced_on=athlete.local_today).exists()
+    if done or garmin_blocked():
+        return False
+    try:
+        sync_slow_one.apply_async((athlete.pk,), countdown=30)
+        return True
+    except Exception:  # noqa: BLE001 — no broker in a one-off script
+        logger.debug("could not queue the slow garmin fetch for %s", athlete.pk)
+        return False
+
+
+def _slow_client(athlete_id: int):
+    from .garmin import _client
+
+    athlete = Athlete.objects.filter(pk=athlete_id, garmin_connected=True).first()
+    if athlete is None:
+        return None, None
+    return athlete, _client(athlete)
+
+
+@shared_task(name="ingest.sync_slow_one")
+def sync_slow_one(athlete_id: int, force: bool = False) -> dict:
+    """Endurance score, fitness age, LT, PRs, body composition and gear — at most once
+    a day (garmin queue, breaker applies)."""
+    from .garmin_slow import sync_slow
+    from .garmin_wellness import RateLimited
+
+    if garmin_blocked():
+        return {"skipped": "rate_limited"}
+    try:
+        athlete, client = _slow_client(athlete_id)
+        if athlete is None:
+            return {"skipped": "not_connected"}
+        result = sync_slow(athlete, client, force=force)
+    except (GarminRateLimited, RateLimited) as exc:
+        trip_breaker(str(exc))
+        return {"skipped": "rate_limited"}
+    except GarminAuthError as exc:
+        logger.warning("garmin auth failed for %s: %s", athlete_id, exc)
+        return {"error": "auth"}
+    if result.get("rate_limited"):
+        trip_breaker("rate limited during the slow garmin fetch")
+    return {"athlete": athlete_id, **result}
+
+
+@shared_task(name="ingest.backfill_r10")
+def backfill_r10(athlete_id: int, days: int = 180) -> dict:
+    """R10 history backfill (manage.py garmin_backfill_r10). Breaker applies."""
+    from .garmin_slow import backfill
+    from .garmin_wellness import RateLimited
+
+    if garmin_blocked():
+        return {"skipped": "rate_limited"}
+    try:
+        athlete, client = _slow_client(athlete_id)
+        if athlete is None:
+            return {"skipped": "not_connected"}
+        result = backfill(athlete, client, days=days)
+    except (GarminRateLimited, RateLimited) as exc:
+        trip_breaker(str(exc))
+        return {"skipped": "rate_limited"}
+    except GarminAuthError as exc:
+        logger.warning("garmin auth failed for %s: %s", athlete_id, exc)
+        return {"error": "auth"}
+    if result.get("rate_limited"):
+        trip_breaker("rate limited during the R10 backfill")
     return {"athlete": athlete_id, **result}

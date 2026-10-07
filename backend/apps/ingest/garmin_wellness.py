@@ -134,6 +134,10 @@ def fields_from_raw(raw: dict) -> dict:
             sleep_end_local=_local_dt(daily.get("sleepEndTimestampLocal")),
             hrv_overnight_avg=_int(_dig(sleep, "avgOvernightHrv")),
             respiration_sleep_avg=_float(daily.get("averageRespirationValue")),
+            # R10 §B4
+            restless_moments=_int(sleep.get("restlessMomentsCount")),
+            sleep_spo2_avg=_float(daily.get("averageSpO2Value")),
+            sleep_spo2_low=_float(daily.get("lowestSpO2Value")),
         )
 
     readiness = raw.get("training_readiness")
@@ -165,6 +169,19 @@ def fields_from_raw(raw: dict) -> dict:
             out["chronic_load"] = chronic
         # Deliberately NOT derived from acwrPercent when Garmin omits chronic: on this
         # account it was the acute value with the decimal point moved, every day.
+
+        # R10 §B2: load focus (Garmin's 4-week training load balance).
+        from analysis.training_status import load_focus
+
+        balances = _dig(status, "mostRecentTrainingLoadBalance",
+                        "metricsTrainingLoadBalanceDTOMap", default={}) or {}
+        if isinstance(balances, dict) and balances:
+            chosen = next((b for b in balances.values()
+                           if isinstance(b, dict) and b.get("primaryTrainingDevice")),
+                          next(iter(balances.values())))
+            focus = load_focus(chosen)
+            if focus:
+                out["load_focus"] = focus
 
     hrv = raw.get("hrv")
     if hrv:
@@ -226,6 +243,23 @@ def fields_from_raw(raw: dict) -> dict:
             race_pred_half_s=_int(_dig(first, "timeHalfMarathon")),
             race_pred_marathon_s=_int(_dig(first, "timeMarathon")),
         )
+
+    # R10 §B1: endurance score (the single-day payload) and fitness age.
+    endurance = raw.get("endurance_score")
+    if isinstance(endurance, dict) and endurance:
+        from analysis.training_status import ENDURANCE_LEVELS
+
+        score = _int(endurance.get("overallScore"))
+        if score:
+            out["endurance_score"] = score
+            out["endurance_level"] = ENDURANCE_LEVELS.get(
+                _int(endurance.get("classification")), "")
+
+    fitness_age = raw.get("fitness_age")
+    if isinstance(fitness_age, dict) and fitness_age:
+        value = _float(fitness_age.get("fitnessAge"))
+        if value:
+            out["fitness_age"] = round(value, 1)
 
     # Drop empties so an existing row is never overwritten with None by a day where
     # one endpoint happened to fail.

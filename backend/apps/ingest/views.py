@@ -82,7 +82,12 @@ def garmin_sync_view(request):
         limit = 20
 
     try:
-        return Response(sync_athlete(request.user.athlete, limit=limit).as_dict())
+        result = sync_athlete(request.user.athlete, limit=limit).as_dict()
+        if not any("rate-limited" in e for e in result.get("errors", [])):
+            from .tasks import queue_slow
+
+            queue_slow(request.user.athlete)          # R10 §B: on the garmin queue
+        return Response(result)
     except GarminRateLimited as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
     except GarminAuthError as exc:

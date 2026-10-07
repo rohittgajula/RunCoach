@@ -58,10 +58,14 @@ class Zone:
 
 @dataclass(frozen=True)
 class Zones:
-    resting_hr: int
+    resting_hr: int | None
     max_hr: int
     max_source: str        # how the maximum was arrived at — shown, never hidden
     zones: list[Zone]
+    # R10 §B3: where the bounds came from, and whether the easy-zone safety cap bit.
+    source: str = "heart_rate_reserve"
+    lt_hr: int | None = None
+    capped: bool = False
 
     def of(self, heart_rate: int | None) -> ZoneName | None:
         if heart_rate is None:
@@ -117,3 +121,75 @@ def time_in_zones(
         totals[key] += gap
 
     return {name: round(seconds) for name, seconds in totals.items()}
+
+
+# --- R10 §B3: zones from the lactate threshold ------------------------------------
+# Fractions of lactate-threshold heart rate (Friel, running). Z5 runs to max HR.
+LT_BOUNDS: dict[ZoneName, tuple[float, float]] = {
+    "Z1": (0.65, 0.85),
+    "Z2": (0.85, 0.89),
+    "Z3": (0.89, 0.94),
+    "Z4": (0.94, 1.00),
+    "Z5": (1.00, None),
+}
+LT_MIN_HR, LT_MAX_HR = 120, 210
+LT_MAX_FACTOR = 1.06       # max HR estimate when none is known (Z5's top only)
+EASY = ("Z1", "Z2")
+
+
+def lt_plausible(lt_hr: int | None, max_hr: int | None = None) -> bool:
+    if lt_hr is None or not LT_MIN_HR <= lt_hr <= LT_MAX_HR:
+        return False
+    return max_hr is None or lt_hr < max_hr
+
+
+def from_lactate_threshold(lt_hr: int, *, max_hr: int | None = None,
+                           resting_hr: int | None = None,
+                           reserve: Zones | None = None,
+                           hr_ceiling: int | None = None) -> Zones | None:
+    """Zones from Garmin's lactate threshold, with the easy-zone safety rule.
+
+    **Easy zones never get harder.** Every Z1/Z2 bound is the minimum of the LT value,
+    the heart-rate-reserve value (when those zones exist) and the athlete's HR ceiling,
+    so an easy run never targets a higher heart rate than it did before the LT arrived.
+    Z3 starts at Z2's (possibly lowered) top; the harder zones come from the LT alone.
+    None for an implausible threshold.
+    """
+    if not lt_plausible(lt_hr, max_hr):
+        return None
+    top = max_hr or round(lt_hr * LT_MAX_FACTOR)
+    raw: dict[str, tuple[int, int]] = {}
+    for name, (low, high) in LT_BOUNDS.items():
+        raw[name] = (round(lt_hr * low), top if high is None else round(lt_hr * high))
+
+    capped = False
+    for name in EASY:
+        low, high = raw[name]
+        limits_low, limits_high = [low], [high]
+        if reserve is not None:
+            band = reserve.band(name)
+            limits_low.append(band.low)
+            limits_high.append(band.high)
+        if hr_ceiling:
+            limits_low.append(hr_ceiling)
+            limits_high.append(hr_ceiling)
+        new = (min(limits_low), min(limits_high))
+        if new != (low, high):
+            capped = True
+        raw[name] = new
+    # Keep the zones contiguous and ordered after the cap.
+    z1_low, z1_high = raw["Z1"]
+    z2_low, z2_high = raw["Z2"]
+    z2_low = min(max(z2_low, z1_high), z2_high)
+    z1_high = min(z1_high, z2_low)
+    z1_low = min(z1_low, z1_high)
+    raw["Z1"], raw["Z2"] = (z1_low, z1_high), (z2_low, z2_high)
+    z3_low, z3_high = raw["Z3"]
+    raw["Z3"] = (z2_high, max(z3_high, z2_high))
+
+    zones = [Zone(name=name, label=ZONE_LABEL[name], low=low, high=high,
+                  purpose=ZONE_PURPOSE[name]) for name, (low, high) in raw.items()]
+    return Zones(resting_hr=resting_hr, max_hr=top,
+                 max_source=(reserve.max_source if reserve and max_hr else
+                             "measured" if max_hr else "lactate_threshold_estimate"),
+                 zones=zones, source="lactate_threshold", lt_hr=lt_hr, capped=capped)

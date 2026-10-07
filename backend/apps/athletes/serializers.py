@@ -72,6 +72,13 @@ class AthleteSerializer(serializers.ModelSerializer):
             "resting_hr": zones.resting_hr,
             "max_hr": zones.max_hr,
             "max_source": zones.max_source,
+            # R10 §B3
+            "source": zones.source,
+            "lt_hr": zones.lt_hr,
+            "lt_date": athlete.lt_date if zones.source == "lactate_threshold" else None,
+            "updated_at": (athlete.zones_updated_at
+                           if zones.source == "lactate_threshold" else None),
+            "capped": zones.capped,
             "zones": [
                 {"name": z.name, "label": z.label, "low": z.low, "high": z.high,
                  "purpose": z.purpose}

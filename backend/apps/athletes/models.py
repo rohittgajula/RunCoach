@@ -120,6 +120,20 @@ class Athlete(models.Model):
     private_goal = models.CharField(max_length=6, choices=ReduceGoal.choices,
                                     default=ReduceGoal.NONE)
 
+    # R10 §B3: Garmin's lactate threshold. Zones switch to it only when present, and
+    # the easy zones can never get harder (analysis.zones.from_lactate_threshold).
+    class ZonesSource(models.TextChoices):
+        RESERVE = "heart_rate_reserve", "Heart-rate reserve"
+        LT = "lactate_threshold", "Lactate threshold"
+
+    lt_hr = models.PositiveSmallIntegerField(null=True, blank=True)
+    lt_pace_s = models.PositiveSmallIntegerField(null=True, blank=True,
+                                                 help_text="Threshold pace, sec/km.")
+    lt_date = models.DateField(null=True, blank=True)
+    zones_source = models.CharField(max_length=20, choices=ZonesSource.choices,
+                                    default=ZonesSource.RESERVE)
+    zones_updated_at = models.DateTimeField(null=True, blank=True)
+
     # R8 §D: where the athlete runs, rounded to 2 decimals (~1 km) — never finer.
     class LocationSource(models.TextChoices):
         RUNS = "runs", "From runs"
@@ -229,9 +243,15 @@ class Athlete(models.Model):
             )["peak"]
             source = "observed"
 
-        if not resting or not maximum:
-            return None
-        return build(resting, maximum, max_source=source)
+        reserve = build(resting, maximum, max_source=source) if resting and maximum else None
+        if self.zones_source == self.ZonesSource.LT and self.lt_hr:
+            from analysis.zones import from_lactate_threshold
+
+            lt = from_lactate_threshold(self.lt_hr, max_hr=maximum, resting_hr=resting,
+                                        reserve=reserve, hr_ceiling=self.hr_ceiling)
+            if lt is not None:
+                return lt
+        return reserve
 
     @property
     def token_dir(self) -> str:

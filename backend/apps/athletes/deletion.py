@@ -8,6 +8,11 @@ R8: habit logs (HabitLog) cascade with the athlete, and so do the stored locatio
 fields (they live on the Athlete row). Per-activity cache entries (progress' fastest
 1 km) are dropped explicitly. The weather cache is keyed by a rounded place, not a
 person, and expires within the hour.
+
+R10: every new table hangs off the Athlete and cascades with it — GarminProfile,
+PersonalRecord, BodyComposition, LactateThreshold (ingest), Shoe and ShoeAssignment
+(gear), WeeklyReport and Achievement (health), PushSubscription and ReminderSettings
+(reminders). The LT and zone source fields live on the Athlete row itself.
 """
 
 import logging
