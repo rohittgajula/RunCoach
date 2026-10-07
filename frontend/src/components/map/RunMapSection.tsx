@@ -21,7 +21,11 @@ export function RunMapSection({ activityId }: { activityId: number }) {
     return (
       <section className="detail-section">
         <h3>Map</h3>
-        <div className="map-empty">{'No GPS route for this run — indoor, or the watch didn’t record location.'}</div>
+        <div className="map-empty">
+          {r.reason === 'too_short'
+            ? 'Too short to map with start and finish hidden. Turn off “Hide start/end on maps” in Settings to see it.'
+            : 'No GPS route for this run — indoor, or the watch didn’t record location.'}
+        </div>
       </section>
     )
   }
