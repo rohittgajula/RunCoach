@@ -4,8 +4,10 @@ import { ApiError } from '../../lib/auth'
 import { dur } from '../../lib/format'
 import { errorText, useApplyToday, useToday } from '../../lib/queries'
 import type { TodayCheckin } from '../../lib/types'
+import { QuickLogRow } from '../habits/QuickLogRow'
 import { CheckIcon } from '../Icons'
 import { Skeleton } from '../States'
+import { WeatherChip } from '../weather/WeatherChip'
 import { WorkoutBar } from '../WorkoutBar'
 import { keptPlan, markKept, missingLine, unmarkKept } from './checkinUtil'
 import { SignalChips, VerdictPill } from './SignalChips'
@@ -17,8 +19,16 @@ export function TodayCard({ compact = false }: { compact?: boolean }) {
   if (today.isPending) return compact ? null : <section className="card today-card"><Skeleton lines={3} /></section>
   // Endpoint not there yet / no athlete data: the calendar works without this card.
   if (today.isError) {
-    if (today.error instanceof ApiError && today.error.status === 404) return null
-    return compact ? null : <p className="muted small centered-text">{errorText(today.error, 'Morning check-in unavailable.')}</p>
+    if (compact) return null
+    // Weather + habit logging still belong on today, check-in or not.
+    return (
+      <>
+        {!(today.error instanceof ApiError && today.error.status === 404) && (
+          <p className="muted small centered-text">{errorText(today.error, 'Morning check-in unavailable.')}</p>
+        )}
+        <section className="card today-card today-tools-only"><TodayTools /></section>
+      </>
+    )
   }
   return compact ? <CompactToday data={today.data} /> : <FullToday data={today.data} />
 }
@@ -72,6 +82,7 @@ function FullToday({ data }: { data: TodayCheckin }) {
         </div>
       )}
       {apply.isError && <p className="bad small">{errorText(apply.error, 'Could not adjust today’s workout.')}</p>}
+      <TodayTools />
     </section>
   )
 }
@@ -90,5 +101,15 @@ function CompactToday({ data }: { data: TodayCheckin }) {
       <TodayExplanation today={data} />
       <SignalChips reasons={data.reasons} max={3} />
     </section>
+  )
+}
+
+/** R8: weather chip and the 🚬 🍺 🍫 quick-log row at the foot of today's card. */
+function TodayTools() {
+  return (
+    <div className="today-tools">
+      <WeatherChip />
+      <QuickLogRow />
+    </div>
   )
 }

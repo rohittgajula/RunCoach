@@ -338,7 +338,15 @@ export type Macros = { kcal: number; carbs_g: number; protein_g: number; fat_g: 
 
 export type DietDay = {
   date: ISODate
-  targets: Macros & { water_ml: number; rationale: string }
+  targets: Macros & {
+    water_ml: number
+    rationale: string
+    /** R8 §D — included in water_ml when the forecast is warm. */
+    water_bonus_ml?: number | null
+    water_note?: string | null
+  }
+  /** R8 §D — hot-day food tips from the forecast (empty on cool days / no location). */
+  weather_tips?: string[]
   eaten: Macros
   burn: { bmr: number; non_exercise: number; exercise: number; exercise_source: 'garmin' | 'planned' | 'none' }
   meals: Meal[]
@@ -411,7 +419,7 @@ export type Insights = {
 // --- R7: morning check-in, post-run check-in, easy-day guard -------------------------
 
 export type Verdict = 'go' | 'easy' | 'swap' | 'rest' | 'no_plan'
-export type SignalKey = 'sleep' | 'hrv' | 'rhr' | 'body_battery' | 'readiness' | 'pain' | 'illness' | 'load' | 'stress'
+export type SignalKey = 'sleep' | 'hrv' | 'rhr' | 'body_battery' | 'readiness' | 'pain' | 'illness' | 'load' | 'stress' | 'alcohol' | 'heat' | 'air'
 export type SignalStatus = 'good' | 'watch' | 'bad'
 
 export type SignalReason = {
@@ -482,4 +490,185 @@ export type GarminSendResult = {
   detail?: string
   garmin_workout_id?: string | number | null
   synced_at?: ISODateTime | null
+}
+
+// --- R8 §B: habits (smoking, alcohol, sugar) ----------------------------------------
+
+export type HabitKind = 'smoke' | 'alcohol' | 'sugar'
+
+export type HabitLog = {
+  id: number
+  kind: HabitKind
+  at: ISODateTime
+  local_date: ISODate
+  quantity: number
+  note: string
+}
+
+export type HabitToday = {
+  date: ISODate
+  counts: Record<HabitKind, number>
+  last_at: Partial<Record<HabitKind, ISODateTime | null>>
+}
+
+export type HabitCountPoint = { date: ISODate; count: number }
+
+export type HabitImpact = {
+  habit: HabitKind
+  metric: string
+  label: string
+  with_avg: number | null
+  without_avg: number | null
+  diff: number | null
+  diff_pct: number | null
+  n_with: number
+  n_without: number
+  direction: 'worse' | 'better' | 'no_clear_difference'
+  enough_data: boolean
+  /** Optional: unit for the metric ("ms", "bpm"); dose rows may carry a dose label. */
+  unit?: string
+  dose?: string
+}
+
+export type HabitMilestone = { label: string; reached: boolean; at: ISODateTime | ISODate | null }
+
+export type HabitSummaryText = { status: 'none' | 'ready'; markdown: string; generated_at?: ISODateTime | null }
+
+export type HabitSummary = {
+  range: InsightRange
+  smoke: {
+    series: HabitCountPoint[]
+    total: number
+    per_day_avg: number | null
+    trend_per_week: number | null
+    streak: { current_days: number; best_days: number }
+    since_quit: { days: number; cigarettes_avoided: number | null; money_saved: number | null } | null
+    milestones: HabitMilestone[]
+  }
+  alcohol: { series: HabitCountPoint[]; total: number; per_week_avg: number | null; drink_days: number }
+  sugar: { series: HabitCountPoint[]; total: number; per_day_avg: number | null }
+  impact: HabitImpact[]
+  weekly: Array<{
+    week_start: ISODate
+    cigarettes: number
+    drinks: number
+    sugar: number
+    hrv_avg: number | null
+    rhr_avg: number | null
+    sleep_score_avg: number | null
+    easy_pace_s_per_km: number | null
+    efficiency: number | null
+  }>
+  summary: HabitSummaryText | null
+}
+
+export type HabitLogBody = { kind: HabitKind; quantity?: number; at?: ISODateTime; note?: string }
+
+// --- R8 §C: progress comparison -------------------------------------------------------
+
+export type ProgressWindow = 1 | 5 | 10 | 20
+
+export type ProgressMetric = {
+  key: string
+  label: string
+  current: number | null
+  previous: number | null
+  delta: number | null
+  delta_pct: number | null
+  better: boolean | null
+  unit: string
+}
+
+export type ProgressBucket = {
+  bucket: string
+  runs?: number
+  label: string
+  current_n?: number
+  previous_n?: number
+  metrics: ProgressMetric[]
+}
+
+/** One best as the API sends it, keyed by name in `bests`. */
+export type ProgressBestRaw = { value: number | null; date: ISODate | null; activity_id?: number | null; new: boolean } | null
+
+export type ProgressBest = {
+  key: string
+  label: string
+  value: number | null
+  unit: string
+  date: ISODate | null
+  is_new: boolean
+  activity_id?: number | null
+}
+
+export type ProgressPoint = {
+  date: ISODate
+  run_km: number | null
+  pace: number | null
+  avg_hr: number | null
+  efficiency: number | null
+  cadence: number | null
+  total_km?: number | null
+  bucket?: string | null
+  activity_id?: number
+}
+
+export type ProgressFocus = { key?: string; kind?: 'improve' | 'check' | string; title: string; why?: string; how?: string }
+
+export type ProgressReview = { status?: 'none' | 'ready'; went_well: string[]; improve: string[]; check: string[]; markdown: string; generated_at?: ISODateTime | null }
+
+export type Progress = {
+  window: ProgressWindow
+  sport?: string
+  current_n?: number
+  previous_n?: number
+  metrics: ProgressMetric[]
+  runs?: number
+  distance_buckets: ProgressBucket[]
+  /** fastest_1k_s · longest_run_km · longest_continuous_s · lowest_easy_hr */
+  bests: Record<string, ProgressBestRaw>
+  series: ProgressPoint[]
+  focus: ProgressFocus[]
+  review?: ProgressReview | null
+}
+
+// --- R8 §D: weather -------------------------------------------------------------------
+
+export type WeatherHour = {
+  time: ISODateTime
+  temp: number | null
+  feels_like: number | null
+  humidity?: number | null
+  dew_point?: number | null
+  precip_prob?: number | null
+  wind?: number | null
+  uv?: number | null
+  aqi?: number | null
+}
+
+export type WeatherAdvisory = { level: 'info' | 'caution' | 'warning' | 'bad' | string; text: string }
+
+export type WeatherToday = {
+  /** false with a `reason` (no_location, fetch_failed…) — then `now` is null. */
+  available?: boolean
+  reason?: string | null
+  heat?: string | null
+  pace_slowdown_pct?: number
+  location_name: string | null
+  source: 'runs' | 'city' | 'none'
+  now: {
+    temp: number | null
+    feels_like: number | null
+    humidity: number | null
+    dew_point: number | null
+    aqi: number | null
+    pm25: number | null
+    condition: string
+  } | null
+  hourly: WeatherHour[]
+  best_window: { start: string; end: string; reason: string } | null
+  advisories: WeatherAdvisory[]
+  hydration: { before_ml: number | string; during_ml_per_h: number | string | null; after_note: string; electrolytes: boolean } | null
+  food: string[]
+  daily_water_bonus_ml: number
 }

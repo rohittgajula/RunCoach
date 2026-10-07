@@ -11,6 +11,8 @@ import { FocusCard, LoadCard, SummaryCard } from '../components/insights/AdviceC
 import { INSIGHT_RANGES, InsightChartSheet } from '../components/insights/InsightChartSheet'
 import { BreathingCard, FitnessCard, RecoveryCard } from '../components/insights/RecoveryCards'
 import { ReadinessCard, RunningCard } from '../components/insights/RunningCards'
+import { HabitsSection } from '../components/habits/HabitsSection'
+import { ProgressCard } from '../components/progress/ProgressCard'
 import type { ChartKey } from '../components/insights/charts'
 import { errorText, useInsights } from '../lib/queries'
 import type { InsightRange } from '../lib/types'
@@ -47,11 +49,13 @@ export default function Insights() {
         <div className={`stack ${insights.isPlaceholderData ? 'is-stale' : ''}`}>
           <ReadinessCard data={data} />
           <RunningCard data={data} onChart={setChart} />
+          <ProgressCard />
           <RecoveryCard data={data} onChart={setChart} />
           <BreathingCard data={data} onChart={setChart} />
           <FitnessCard data={data} onChart={setChart} />
           <LoadCard load={data.load} onOpen={() => setFitnessOpen(true)} />
           <FocusCard focus={data.focus ?? []} hasRuns={(data.running?.runs ?? 0) > 0} />
+          <HabitsSection range={range} />
           <SummaryCard summary={data.summary} range={range} />
         </div>
       )}

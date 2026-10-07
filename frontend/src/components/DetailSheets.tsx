@@ -14,6 +14,7 @@ import { ReviewIcon } from './Icons'
 import { PhasePill } from './PhasePill'
 import { Loading } from './States'
 import { StepsList } from './StepsList'
+import { WeatherBlock } from './weather/WeatherBlock'
 import { WorkoutBar } from './WorkoutBar'
 import { useCoachLaunch } from './useCoachLaunch'
 
@@ -121,6 +122,8 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
               <FuelRows {...w.fueling} />
             </section>
           )}
+
+          {!done && w.status === 'planned' && <WeatherBlock date={w.date} durationS={w.duration_s} />}
 
           {mode === 'move' && (
             <div className="inline-form">

@@ -13,7 +13,7 @@ export const VERDICT: Record<Verdict, { word: string; tone: string }> = {
 const SIGNAL_NAME: Record<string, string> = {
   sleep: 'Sleep', hrv: 'HRV', rhr: 'Resting HR', body_battery: 'Body battery',
   readiness: 'Readiness', pain: 'Pain', illness: 'Illness', load: 'Load', stress: 'Stress',
-  rpe: 'Last run effort',
+  rpe: 'Last run effort', alcohol: 'Alcohol', heat: 'Heat', air: 'Air quality',
 }
 
 export const signalName = (signal: string) => SIGNAL_NAME[signal] ?? signal.replace(/_/g, ' ')
@@ -36,6 +36,7 @@ const MISSING: Record<string, string> = {
   sleep: 'No sleep data last night', hrv: 'No HRV last night', rhr: 'No resting HR last night',
   body_battery: 'No body battery', readiness: 'No Garmin readiness today', stress: 'No stress data',
   load: 'Not enough training history for load', rpe: 'No check-in after the last run',
+  heat: 'No forecast', air: 'No air-quality data',
 }
 
 export const missingLine = (missing: string[]) =>

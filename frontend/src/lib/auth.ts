@@ -147,11 +147,37 @@ export type Athlete = {
   diet_goal?: 'maintain' | 'lose' | 'gain'
   diet_rate_kg_per_week?: number
   threshold_pace_s?: number | null
+  // R8 §A — runs per week (null = coach default).
+  runs_per_week?: number | null
+  runs_per_week_recommended?: number | null
+  runs_per_week_effective?: number | null
+  // R8 §B — habits.
+  smoke_goal?: 'quit' | 'reduce' | 'none'
+  smoke_quit_date?: string | null
+  smoke_baseline_per_day?: number | null
+  cigarette_price?: number | null
+  alcohol_goal?: 'reduce' | 'none'
+  sugar_goal?: 'reduce' | 'none'
+  daily_limits?: Record<string, number> | null
+  // R8 §D — location for weather.
+  location_lat?: number | null
+  location_lon?: number | null
+  location_name?: string
+  location_source?: 'runs' | 'city' | 'none'
+  location_city?: string
   // Only on a PATCH response: what changing the training days did to the active plan.
   plan_reflow?: PlanReflow | null
 }
 
-export type PlanReflow = { moved: number; dropped: number; watch_updated: number; watch_removed: number }
+export type PlanReflow = {
+  moved: number
+  dropped: number
+  watch_updated: number
+  watch_removed: number
+  /** R8 §A — sessions rebuilt for a new runs-per-week count, and why some weeks differ. */
+  regenerated?: number
+  notes?: string[]
+}
 
 export type Session = { user: User; athlete: Athlete; access?: string }
 

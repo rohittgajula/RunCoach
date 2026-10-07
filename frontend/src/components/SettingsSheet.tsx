@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
-import { ApiError, type Athlete, type PlanReflow } from '../lib/auth'
+import { ApiError } from '../lib/auth'
 import { errorText, invalidatePlanData } from '../lib/queries'
 import { installState, promptInstall, type InstallState } from '../lib/install'
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme'
@@ -10,48 +10,10 @@ import { BottomSheet } from './BottomSheet'
 import { DayPicker } from './DayPicker'
 import { Field } from './Field'
 import { GarminConnect } from './GarminConnect'
-
-type Draft = {
-  display_name: string
-  sex: '' | 'male' | 'female'
-  date_of_birth: string
-  height_cm: string
-  timezone: string
-  available_days: Record<string, boolean>
-  long_run_day: number
-  max_hr: string
-  resting_hr: string
-  diet_goal: 'maintain' | 'lose' | 'gain'
-  diet_rate_kg_per_week: number
-}
-
-// "Upcoming workouts moved to your new days (2 updated on your watch)."
-function reflowText(reflow: PlanReflow | null | undefined): string {
-  if (!reflow) return ''
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
-  const extras: string[] = []
-  if (reflow.dropped) extras.push(`${plural(reflow.dropped, 'easy session')} dropped to fit`)
-  if (reflow.watch_updated) extras.push(`${reflow.watch_updated} updated on your watch`)
-  if (reflow.watch_removed) extras.push(`${reflow.watch_removed} removed from your watch`)
-  const head = reflow.moved ? 'Upcoming workouts moved to your new days' : 'Your plan now fits your new days'
-  return `${head}${extras.length ? ` (${extras.join(', ')})` : ''}.`
-}
-
-const toDraft = (a: Athlete): Draft => ({
-  display_name: a.display_name ?? '',
-  sex: a.sex ?? '',
-  date_of_birth: a.date_of_birth ?? '',
-  height_cm: a.height_cm != null ? String(a.height_cm) : '',
-  timezone: a.timezone ?? '',
-  available_days: a.available_days ?? {},
-  long_run_day: a.long_run_day ?? 6,
-  max_hr: a.max_hr != null ? String(a.max_hr) : '',
-  resting_hr: a.resting_hr != null ? String(a.resting_hr) : '',
-  diet_goal: a.diet_goal ?? 'maintain',
-  diet_rate_kg_per_week: a.diet_rate_kg_per_week ?? 0.25,
-})
-
-const num = (text: string) => (text.trim() === '' ? null : Number(text))
+import { HabitSettings } from './settings/HabitSettings'
+import { LocationSettings } from './settings/LocationSettings'
+import { RunsPerWeek } from './settings/RunsPerWeek'
+import { reflowText, toDraft, toPatch, type Draft } from './settings/settingsDraft'
 
 function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
   const { deleteAccount } = useAuth()
@@ -134,6 +96,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
   // Changing training days re-flows the active plan on the server (future workouts move
   // to the new days, watch copies are replaced); this is the note about what moved.
   const [reflowNote, setReflowNote] = useState('')
+  const [reflowNotes, setReflowNotes] = useState<string[]>([])
   const [install, setInstall] = useState<InstallState>({ kind: 'unsupported' })
 
   // Reset the form when the sheet OPENS — not whenever `athlete` changes. Saving
@@ -145,6 +108,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
       setErrors({})
       setSaved(false)
       setReflowNote('')
+      setReflowNotes([])
       setInstall(installState())
     }
     wasOpen.current = open
@@ -164,27 +128,17 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
     setBusy(true)
     setErrors({})
     try {
-      const updated = await updateAthlete({
-        display_name: draft.display_name,
-        sex: draft.sex || null,
-        date_of_birth: draft.date_of_birth || null,
-        height_cm: num(draft.height_cm),
-        timezone: draft.timezone,
-        available_days: draft.available_days,
-        long_run_day: draft.long_run_day,
-        max_hr: num(draft.max_hr),
-        resting_hr: num(draft.resting_hr),
-        diet_goal: draft.diet_goal,
-        diet_rate_kg_per_week: draft.diet_rate_kg_per_week,
-      })
+      if (!athlete) return
+      const updated = await updateAthlete(toPatch(draft, athlete))
       setSaved(true)
       setReflowNote(reflowText(updated.plan_reflow))
+      setReflowNotes(updated.plan_reflow?.notes ?? [])
       if (updated.plan_reflow) {
         invalidatePlanData(client)
         client.invalidateQueries({ queryKey: ['today'] })
       }
       // Targets, plan and profile all read these fields.
-      for (const key of ['diet-day', 'profile-summary', 'calendar']) client.invalidateQueries({ queryKey: [key] })
+      for (const key of ['diet-day', 'profile-summary', 'calendar', 'weather-today', 'habits-summary', 'today']) client.invalidateQueries({ queryKey: [key] })
     } catch (caught) {
       setErrors(caught instanceof ApiError ? caught.fieldErrors() : { detail: 'Could not save.' })
     } finally {
@@ -207,7 +161,15 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
         dirty || reflowNote ? (
           <div className="settings-footer">
             {reflowNote && !dirty ? (
-              <p className="small">{reflowNote}</p>
+              <div className="reflow-note">
+                <p className="small">{reflowNote}</p>
+                {reflowNotes.length > 0 && (
+                  <ul className="small muted">
+                    {reflowNotes.slice(0, 3).map((n, i) => <li key={i}>{n}</li>)}
+                    {reflowNotes.length > 3 && <li>…and {reflowNotes.length - 3} more {reflowNotes.length - 3 === 1 ? 'week' : 'weeks'} like this.</li>}
+                  </ul>
+                )}
+              </div>
             ) : (
               <div className="settings-dirty">
                 <span className="small">Unsaved changes</span>
@@ -264,11 +226,12 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
             onLongRunDayChange={(day) => set('long_run_day', day)}
           />
           <p className="muted small">
-            Tick every day you <em>could</em> run. The plan picks up to 4 run days (5 once your
-            volume grows), spreads them out with rest between, and makes the others optional walks.
+            Tick every day you <em>could</em> run. The plan spreads your runs across them with rest
+            between, and makes the others optional walks.
           </p>
           {errors.available_days && <p className="field-error">{errors.available_days}</p>}
           {errors.long_run_day && <p className="field-error">{errors.long_run_day}</p>}
+          {athlete && <RunsPerWeek draft={draft} set={set} athlete={athlete} error={errors.runs_per_week} />}
         </Section>
 
         <Section title="Diet goal">
@@ -302,6 +265,14 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               />
             </Field>
           )}
+        </Section>
+
+        <Section title="Habits">
+          <HabitSettings draft={draft} set={set} errors={errors} />
+        </Section>
+
+        <Section title="Location">
+          {athlete && <LocationSettings draft={draft} set={set} athlete={athlete} errors={errors} />}
         </Section>
 
         {errors.detail && <p className="bad">{errors.detail}</p>}

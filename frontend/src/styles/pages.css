@@ -325,3 +325,123 @@ button.metric-cell { cursor: pointer; }
 }
 .settings-footer { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .settings-dirty { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* ---------- R8: today tools (weather chip + quick log) ---------- */
+.today-tools { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 2px; }
+.today-tools:empty { display: none; }
+.today-tools-only .today-tools { border-top: none; padding-top: 0; margin-top: 0; }
+.weather-chip {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--card-2); border-radius: var(--radius-sm); padding: 10px 12px;
+}
+.weather-temp { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.weather-meta { display: flex; flex-direction: column; font-size: 14px; line-height: 1.3; flex: 1; min-width: 0; }
+.weather-meta > span:first-child { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weather-best { display: flex; flex-direction: column; align-items: flex-end; font-size: 14px; line-height: 1.3; }
+.weather-advice { flex-basis: 100%; font-size: 13px; margin: 0; }
+.weather-advice.is-warn { color: var(--warn); }
+.weather-advice.is-bad { color: var(--bad); }
+.aqi-ok { color: var(--ok); }
+.aqi-warn { color: var(--warn); }
+.aqi-bad { color: var(--bad); }
+.advisories { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.advisory { font-size: 14px; padding: 8px 10px; border-radius: 10px; background: var(--card-2); border-left: 3px solid var(--accent); }
+.advisory.is-warn { border-left-color: var(--warn); }
+.advisory.is-bad { border-left-color: var(--bad); }
+.weather-block { display: flex; flex-direction: column; gap: 10px; }
+
+.quicklog { display: flex; align-items: center; gap: 10px; }
+.quicklog-label { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; flex: 1; min-width: 0; white-space: nowrap; }
+.quicklog-buttons { display: flex; align-items: center; gap: 6px; }
+.quicklog-btn {
+  display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 10px;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  cursor: pointer; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
+}
+.quicklog-btn:active { transform: scale(0.94); }
+.quicklog-btn.has-count { background: var(--card-2); border-color: transparent; }
+.quicklog-emoji { font-size: 18px; line-height: 1; }
+.quicklog-count { min-width: 1ch; color: var(--muted); }
+.quicklog-btn.has-count .quicklog-count { color: var(--fg); }
+.quicklog-more { width: 36px; height: 36px; }
+.toast-action { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
+.toast-btn { background: none; border: none; color: inherit; font-weight: 700; font-size: 14px; cursor: pointer; padding: 0; text-decoration: underline; }
+.habit-qty { display: flex; align-items: center; justify-content: center; gap: 24px; }
+.habit-qty .chip { font-size: 22px; }
+.habit-qty-value { display: flex; flex-direction: column; align-items: center; min-width: 90px; }
+
+/* ---------- R8: habits (Insights) ---------- */
+.habits .quicklog { margin-bottom: 12px; }
+.habit-sub { font-size: 17px; font-weight: 700; }
+.streak { display: flex; align-items: center; gap: 14px; }
+.streak-num { font-size: 52px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; color: var(--ok); font-variant-numeric: tabular-nums; }
+.streak-label { font-size: 18px; font-weight: 700; }
+.habit-charts { display: flex; flex-direction: column; gap: 14px; }
+.habit-chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.habit-chart-title { font-weight: 600; font-size: 15px; }
+.since-quit { display: flex; flex-direction: column; gap: 8px; }
+.kv-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.milestones { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.milestone { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
+.milestone.is-reached { color: var(--fg); }
+.milestone-mark { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; }
+.milestone.is-reached .milestone-mark { background: var(--ok); border-color: var(--ok); color: #fff; }
+.impact-wrap { display: flex; flex-direction: column; gap: 8px; }
+.impacts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.impact { background: var(--card-2); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; border-left: 3px solid var(--faint); }
+.impact.is-worse { border-left-color: var(--bad); }
+.impact.is-better { border-left-color: var(--ok); }
+.impact-head { display: flex; align-items: center; gap: 8px; }
+.impact-label { font-weight: 700; flex: 1; min-width: 0; }
+.impact-text { font-size: 15px; }
+.habit-ai { border-top: 1px solid var(--line); padding-top: 12px; }
+.habit-ai .card-head { margin-bottom: 6px; }
+
+/* ---------- R8: progress ---------- */
+.progress-card .segmented { align-self: flex-start; margin-bottom: 4px; }
+.pm-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.pm-table th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: 6px 4px; }
+.pm-table td { padding: 8px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
+.pm-table th:not(:first-child), .pm-num { text-align: right; white-space: nowrap; }
+.pm-delta { font-weight: 600; color: var(--muted); }
+.pm-delta.is-better { color: var(--ok); }
+.pm-delta.is-worse { color: var(--bad); }
+.pm-arrow { font-size: 10px; vertical-align: 1px; }
+.pm-arrow.is-flat { color: var(--faint); }
+.progress-new { margin-top: 10px; font-size: 14px; font-weight: 600; }
+.progress-open { margin-top: 12px; display: flex; justify-content: center; align-items: center; gap: 4px; }
+.bests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.best { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.best:first-child { border-top: none; }
+.best-value { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.best-date { min-width: 64px; text-align: right; }
+.progress-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; line-height: 1.6; }
+.progress-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.legend-dash { display: inline-block; width: 16px; border-top: 2px dashed var(--hard); }
+.progress-review { display: flex; flex-direction: column; gap: 8px; }
+.progress-review .card-head { margin-bottom: 0; }
+.review-list-title { font-weight: 700; font-size: 14px; }
+.review-list ul { margin: 4px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; }
+.review-list.is-good .review-list-title { color: var(--ok); }
+.review-list.is-improve .review-list-title { color: var(--accent); }
+.review-list.is-check .review-list-title { color: var(--warn); }
+.focus-num.is-check { background: var(--warn); }
+
+/* ---------- R8: diet water + settings ---------- */
+.water { flex-wrap: wrap; }
+.water-bonus { font-size: 12px; }
+.hot-tip { background: color-mix(in srgb, var(--warn) 12%, transparent); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 14px; }
+.hot-tip-title { font-weight: 700; color: var(--warn); }
+.hot-tip ul { margin: 4px 0 0; padding-left: 18px; }
+.runs-head { margin-bottom: 0; }
+.warn-text { color: var(--warn); }
+.reflow-note ul { margin: 4px 0 0; padding-left: 18px; }
+.grid-2-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.tag-plain { text-transform: none; }
+.habit-sheet-kinds .segmented-option { white-space: nowrap; }
+.pm-unit { color: var(--muted); font-size: 12px; }
+.pm-table td:first-child { line-height: 1.25; }
+.chips-row-sm { gap: 6px; }
+.chips-row-sm .pill-btn { padding: 6px 12px; font-size: 14px; }

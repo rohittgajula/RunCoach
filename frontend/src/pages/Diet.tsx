@@ -3,7 +3,7 @@ import { Bar, CartesianGrid, Cell, ComposedChart, Line, ResponsiveContainer, Too
 import { ChipButton } from '../components/ChipButton'
 import { monthTicks, tickDate } from '../components/chartUtil'
 import { FuelRows } from '../components/DetailSheets'
-import { ChevronLeft, ChevronRight, DietIcon, DropIcon, GearIcon, MoreVIcon, PlusIcon, RunIcon } from '../components/Icons'
+import { ChevronLeft, ChevronRight, DietIcon, GearIcon, MoreVIcon, PlusIcon, RunIcon } from '../components/Icons'
 import { KcalRing } from '../components/KcalRing'
 import { LogMealSheet, MEAL_TYPES } from '../components/LogMealSheet'
 import { MacroBar } from '../components/MacroBar'
@@ -11,6 +11,7 @@ import { MealSummary } from '../components/MealCard'
 import { PageHeader } from '../components/PageHeader'
 import { RangeSwitch } from '../components/RangeSwitch'
 import { useShell } from '../components/Shell'
+import { WaterTarget } from '../components/weather/WaterTarget'
 import { Empty, ErrorState, Skeleton } from '../components/States'
 import { addDays, parseDate, signed, todayISO } from '../lib/format'
 import { errorText, useDeleteMeal, useDietDay, useDietTrend } from '../lib/queries'
@@ -125,9 +126,7 @@ function TargetsCard({ day }: { day: DietDay }) {
         </div>
       </div>
       <div className="targets-foot">
-        <span className="water">
-          <DropIcon size={16} /> {(targets.water_ml / 1000).toFixed(1)} L water
-        </span>
+        <WaterTarget day={day} />
         {targets.rationale && <p className="rationale">{targets.rationale}</p>}
         <p className="muted small">
           Burn: {Math.round(burn.bmr)} BMR · {Math.round(burn.non_exercise)} daily life · {Math.round(burn.exercise)} exercise

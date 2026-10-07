@@ -9,7 +9,8 @@ import type {
   Plan, PlanSummary, ProfileSummary, Race, Range, SendResult, Thread, ThreadListItem,
   Workout, AttachmentRef, SyncResult, CoachReview, InsightRange, Insights, MonthResponse,
   WorkoutActual, Compliance, TodayCheckin, PendingCheckin, CheckinBody, CheckinEntry,
-  GarminSendResult,
+  GarminSendResult, HabitKind, HabitLog, HabitLogBody, HabitSummary, HabitSummaryText,
+  HabitToday, Progress, ProgressReview, ProgressWindow, WeatherToday,
 } from './types'
 
 export const errorText = (error: unknown, fallback = 'Something went wrong.'): string =>
@@ -556,3 +557,114 @@ export const useGarminStatus = () =>
   useQuery({ queryKey: ['garmin-status'], queryFn: () => api<GarminStatus>('/garmin/status/'), retry: false })
 
 export type { PlanSummary }
+
+// --- R8 §B: habits ---------------------------------------------------------------------
+
+export const useHabitsToday = () =>
+  useQuery({ queryKey: ['habits-today'], queryFn: () => api<HabitToday>('/habits/today/'), retry: false })
+
+export const useHabitSummary = (range: InsightRange) =>
+  useQuery({
+    queryKey: ['habits-summary', range],
+    queryFn: () => api<HabitSummary>(`/habits/summary/?range=${range}`),
+    placeholderData: (previous) => previous,
+    retry: false,
+  })
+
+function invalidateHabits(client: QueryClient) {
+  client.invalidateQueries({ queryKey: ['habits-today'] })
+  client.invalidateQueries({ queryKey: ['habits-summary'] })
+  client.invalidateQueries({ queryKey: ['today'] })
+}
+
+/** Bump today's count straight away so a tap feels instant; the server confirms. */
+function bumpToday(client: QueryClient, kind: HabitKind, by: number) {
+  client.setQueryData<HabitToday>(['habits-today'], (old) =>
+    old ? { ...old, counts: { ...old.counts, [kind]: Math.max(0, (old.counts[kind] ?? 0) + by) } } : old)
+}
+
+export function useLogHabit() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: HabitLogBody) => api<HabitLog>('/habits/logs/', { method: 'POST', ...json(body) }),
+    onMutate: (body) => {
+      // Only today's logs move today's counts.
+      if (!body.at || body.at.slice(0, 10) === todayISO()) bumpToday(client, body.kind, body.quantity ?? 1)
+    },
+    onSettled: () => invalidateHabits(client),
+  })
+}
+
+export function useDeleteHabitLog() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (log: Pick<HabitLog, 'id' | 'kind' | 'quantity' | 'local_date'>) =>
+      api(`/habits/logs/${log.id}/`, { method: 'DELETE' }),
+    onMutate: (log) => {
+      if (log.local_date === todayISO()) bumpToday(client, log.kind, -log.quantity)
+    },
+    onSettled: () => invalidateHabits(client),
+  })
+}
+
+export const useHabitLogs = (kind: HabitKind | null, start: string, end: string) =>
+  useQuery({
+    queryKey: ['habit-logs', kind, start, end],
+    queryFn: () => api<HabitLog[]>(`/habits/logs/?${kind ? `kind=${kind}&` : ''}start=${start}&end=${end}`),
+    enabled: kind != null,
+  })
+
+/** AI explanation of the habit numbers; cached per day server-side. */
+export function useHabitSummaryText(range: InsightRange) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (refresh: boolean) =>
+      api<HabitSummaryText | HabitSummary>(`/habits/summary/?range=${range}${refresh ? '&refresh=1' : ''}`, { method: 'POST' }),
+    onSuccess: (data) => {
+      const summary = data && 'smoke' in data ? data.summary : data
+      if (summary && 'markdown' in summary) {
+        client.setQueryData<HabitSummary>(['habits-summary', range], (old) => (old ? { ...old, summary } : old))
+      }
+      client.invalidateQueries({ queryKey: ['habits-summary', range] })
+    },
+  })
+}
+
+// --- R8 §C: progress -------------------------------------------------------------------
+
+export const useProgress = (window: ProgressWindow) =>
+  useQuery({
+    queryKey: ['progress', window],
+    queryFn: () => api<Progress>(`/progress/?window=${window}&sport=running`),
+    placeholderData: (previous) => previous,
+    retry: false,
+  })
+
+export function useProgressReview(window: ProgressWindow) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api<ProgressReview | Progress>(`/progress/review/?window=${window}`, { method: 'POST' }),
+    onSuccess: (data) => {
+      const review = 'metrics' in data ? data.review : data
+      if (review) client.setQueryData<Progress>(['progress', window], (old) => (old ? { ...old, review } : old))
+    },
+  })
+}
+
+// --- R8 §D: weather --------------------------------------------------------------------
+
+/** No weather is not an error: 404/503 → null and the UI simply hides the chip. */
+export const useWeatherToday = () =>
+  useQuery({
+    queryKey: ['weather-today'],
+    queryFn: async () => {
+      try {
+        return await api<WeatherToday>('/weather/today/')
+      } catch (error) {
+        if (error instanceof ApiError && [404, 502, 503, 504].includes(error.status)) return null
+        throw error
+      }
+    },
+    staleTime: 15 * 60_000,
+    retry: false,
+  })
