@@ -106,6 +106,26 @@ export async function api<T = unknown>(path: string, init: RequestInit = {}): Pr
 
 export const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) })
 
+/**
+ * R13 §15: an authenticated file download (the export ZIP is served by the backend with
+ * auth, never as a public link). `path` may be an absolute /api/... URL from the server.
+ */
+export async function apiBlob(path: string): Promise<Blob> {
+  const url = /^https?:|^\/api\//.test(path) ? path : `${BASE}${path}`
+  const send = () =>
+    fetch(url, { credentials: 'include', headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} })
+  let response = await send()
+  if (response.status === 401) {
+    const token = await refreshAccess()
+    if (token) response = await send()
+  }
+  if (!response.ok) {
+    const detail = await response.json().catch(() => response.statusText)
+    throw new ApiError(response.status, detail)
+  }
+  return response.blob()
+}
+
 /** Called once on load: turns the httpOnly refresh cookie into a live session. */
 export async function restoreSession(): Promise<boolean> {
   return (await refreshAccess()) !== null
@@ -171,6 +191,16 @@ export type Athlete = {
   location_city?: string
   // R11 §E — trim the first/last 200 m of every run map (default on).
   map_hide_endpoints?: boolean
+  // R13 — auto-adjust, strength, caffeine tile, daily pain check, savings goal.
+  auto_adjust_plan?: boolean
+  strength_per_week?: number
+  strength_per_week_suggested?: number
+  caffeine_on_today?: boolean
+  pain_daily_check?: boolean
+  savings_goal_name?: string
+  savings_goal_amount?: number | null
+  // Only on a PATCH that changed strength_per_week.
+  strength_reflow?: { created: number; removed: number }
   // Only on a PATCH response: what changing the training days did to the active plan.
   plan_reflow?: PlanReflow | null
 }

@@ -6,6 +6,7 @@ import type { Badge } from '../../lib/types'
 import { ChevronRight, LockIcon, MedalIcon } from '../Icons'
 import { CardHead, Pill } from '../Kit'
 import { Empty, ErrorState, Skeleton } from '../States'
+import { ShareButton } from '../share/ShareButton'
 
 const GROUP: Record<string, string> = {
   smoke_free: 'Smoke-free', consistency: 'Consistency', distance: 'Distance', records: 'Records',
@@ -17,6 +18,13 @@ function BadgeCell({ b }: { b: Badge }) {
   const pct = p && p.target ? Math.min(100, (p.current / p.target) * 100) : 0
   return (
     <div className={`badge-cell ${b.earned ? '' : 'is-locked'}`} title={b.description}>
+      {b.earned && (
+        <ShareButton
+          className="badge-share"
+          label={`Share the ${b.label} badge`}
+          card={() => ({ kind: 'badge', label: b.label, description: b.description, date: b.earned_on ? dayMonth(b.earned_on) : null })}
+        />
+      )}
       <span className="badge-medal">{b.earned ? <MedalIcon size={26} /> : <LockIcon size={22} />}</span>
       <span className="badge-name">{b.label}</span>
       {b.earned ? (

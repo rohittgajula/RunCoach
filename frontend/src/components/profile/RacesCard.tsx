@@ -5,7 +5,8 @@ import { useDeleteRace, useRaces, useSaveRace } from '../../lib/queries'
 import type { Race } from '../../lib/types'
 import { BottomSheet } from '../BottomSheet'
 import { Field } from '../Field'
-import { PlusIcon } from '../Icons'
+import { FlagIcon, PlusIcon } from '../Icons'
+import { RacePlanSheet } from '../race/RacePlanSheet'
 import { ErrorState, Skeleton } from '../States'
 
 const DISTANCES = [
@@ -16,7 +17,23 @@ const DISTANCES = [
 ]
 
 type Draft = Omit<Race, 'id'> & { id?: number }
-const blank = (): Draft => ({ name: '', date: '', distance_km: 10, is_target: false, notes: '' })
+const blank = (): Draft => ({ name: '', date: '', distance_km: 10, is_target: false, notes: '', goal_time_s: null, start_time: null })
+
+/** "1:58:00" / "52:30" → seconds; '' → null; junk → NaN. */
+export function parseClock(text: string): number | null {
+  const t = text.trim()
+  if (!t) return null
+  const parts = t.split(':').map((p) => Number(p))
+  if (parts.some((n) => !Number.isFinite(n) || n < 0) || parts.length > 3) return Number.NaN
+  return parts.reduce((acc, n) => acc * 60 + n, 0) * (parts.length === 1 ? 60 : 1)
+}
+export function clockText(s: number | null | undefined): string {
+  if (s == null) return ''
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`
+}
 
 export function RacesCard() {
   const races = useRaces()
@@ -24,17 +41,25 @@ export function RacesCard() {
   const remove = useDeleteRace()
   const [editing, setEditing] = useState<Draft | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [goalText, setGoalText] = useState('')
+  const [planFor, setPlanFor] = useState<number | null>(null)
 
   const open = (draft: Draft) => {
     setErrors({})
     save.reset()
+    setGoalText(clockText(draft.goal_time_s))
     setEditing(draft)
   }
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (!editing) return
-    save.mutate(editing, {
+    const goal = parseClock(goalText)
+    if (goal != null && (Number.isNaN(goal) || goal < 600)) {
+      setErrors({ goal_time_s: 'Use h:mm:ss or mm:ss, e.g. 58:30 or 1:58:00.' })
+      return
+    }
+    save.mutate({ ...editing, goal_time_s: goal }, {
       onSuccess: () => setEditing(null),
       onError: (caught) => setErrors(caught instanceof ApiError ? caught.fieldErrors() : { detail: 'Could not save.' }),
     })
@@ -57,7 +82,7 @@ export function RacesCard() {
       {races.data?.length === 0 && <p className="muted">No races yet. Add one and the coach builds towards it.</p>}
       <ul className="races">
         {[...upcoming, ...past].map((race) => (
-          <li key={race.id}>
+          <li key={race.id} className="race-row">
             <button type="button" className={`race ${race.date < today ? 'is-past' : ''}`} onClick={() => open({ ...race })}>
               <span className="race-date">
                 <span>{parseDate(race.date).toLocaleDateString(undefined, { month: 'short' })}</span>
@@ -70,9 +95,15 @@ export function RacesCard() {
                 </span>
                 <span className="muted small">
                   {race.distance_km} km · {parseDate(race.date).getFullYear()}
+                  {race.goal_time_s ? ` · goal ${clockText(race.goal_time_s)}` : ''}
                 </span>
               </span>
             </button>
+            {race.date >= today && (
+              <button type="button" className="btn btn-secondary btn-sm race-plan-btn" onClick={() => setPlanFor(race.id)}>
+                <FlagIcon size={16} /> Race plan
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -97,6 +128,14 @@ export function RacesCard() {
                 <datalist id="race-distances">
                   {DISTANCES.map((d) => <option key={d.km} value={d.km}>{d.label}</option>)}
                 </datalist>
+              </Field>
+            </div>
+            <div className="grid-2">
+              <Field label="Goal time (optional)" hint="h:mm:ss or mm:ss" error={errors.goal_time_s}>
+                <input inputMode="numeric" placeholder="58:30" value={goalText} onChange={(e) => setGoalText(e.target.value)} />
+              </Field>
+              <Field label="Start time" hint="For race morning" error={errors.start_time}>
+                <input type="time" value={editing.start_time ?? ''} onChange={(e) => setEditing({ ...editing, start_time: e.target.value || null })} />
               </Field>
             </div>
             <div className="chips-row">
@@ -145,6 +184,7 @@ export function RacesCard() {
           </form>
         )}
       </BottomSheet>
+      <RacePlanSheet raceId={planFor} onClose={() => setPlanFor(null)} />
     </section>
   )
 }

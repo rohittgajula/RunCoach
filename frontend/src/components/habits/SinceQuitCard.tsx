@@ -1,6 +1,7 @@
 import { parseDate } from '../../lib/format'
 import type { HabitSummary } from '../../lib/types'
 import { CheckIcon } from '../Icons'
+import { ShareButton } from '../share/ShareButton'
 
 const rupees = (v: number) => `₹${Math.round(v).toLocaleString('en-IN')}`
 
@@ -17,7 +18,15 @@ export function SinceQuit({ smoke, title = true }: { smoke: HabitSummary['smoke'
   if (!since) return null
   return (
     <div className="since-quit">
-      {title && <h3 className="habit-sub">Since you quit</h3>}
+      <div className="since-quit-head">
+        {title && <h3 className="habit-sub grow">Since you quit</h3>}
+        {since.days > 0 && (
+          <ShareButton
+            label="Share smoke-free days"
+            card={() => ({ kind: 'smoke_free', days: since.days, saved: since.money_saved != null ? rupees(since.money_saved) : null })}
+          />
+        )}
+      </div>
       <dl className="kv kv-row kv-row-3">
         <div><dt>Days</dt><dd>{since.days}</dd></div>
         <div><dt>Not smoked</dt><dd>{since.cigarettes_avoided != null ? Math.round(since.cigarettes_avoided) : '--'}</dd></div>

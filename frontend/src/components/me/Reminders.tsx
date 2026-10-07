@@ -28,14 +28,17 @@ function ReminderRow({ r, onPatch, disabled }: { r: Reminder; onPatch: (patch: P
         <strong>{r.label}</strong>
         <span className="muted small block">{r.description}</span>
       </span>
-      <input
-        type="time"
-        aria-label={`${r.label} time`}
-        value={time}
-        disabled={disabled || !r.enabled}
-        onChange={(e) => setTime(e.target.value)}
-        onBlur={() => time && time !== r.time && onPatch({ time })}
-      />
+      {/* R13: event reminders (run_reviewed) have no time. */}
+      {r.time !== null && (
+        <input
+          type="time"
+          aria-label={`${r.label} time`}
+          value={time ?? ''}
+          disabled={disabled || !r.enabled}
+          onChange={(e) => setTime(e.target.value)}
+          onBlur={() => time && time !== r.time && onPatch({ time })}
+        />
+      )}
       <button
         type="button"
         role="switch"

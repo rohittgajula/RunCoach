@@ -13,7 +13,10 @@ export const HABITS: HabitMeta[] = [
 /** R9 §B — only ever "🌙 Private"; no other wording anywhere. */
 export const PRIVATE_HABIT: HabitMeta = { kind: 'private', emoji: '🌙', label: 'Private', unit: 'time', units: 'times' }
 
-const ALL = [...HABITS, PRIVATE_HABIT]
+/** R13 §9 — caffeine (cups). Its own tile, off by default (Settings → Habits). */
+export const CAFFEINE_HABIT: HabitMeta = { kind: 'caffeine', emoji: '☕', label: 'Caffeine', unit: 'cup', units: 'cups' }
+
+const ALL = [...HABITS, PRIVATE_HABIT, CAFFEINE_HABIT]
 
 export const habitMeta = (kind: HabitKind) => ALL.find((h) => h.kind === kind) ?? HABITS[0]
 
@@ -21,8 +24,19 @@ export const habitMeta = (kind: HabitKind) => ALL.find((h) => h.kind === kind) ?
 export function loggableHabits(athlete: Athlete | null | undefined, where: 'today' | 'any' = 'any'): HabitMeta[] {
   const enabled = !!athlete?.private_habit_enabled
   const show = where === 'today' ? enabled && !!athlete?.private_on_today : enabled
-  return show ? ALL : HABITS
+  const out = show ? [...HABITS, PRIVATE_HABIT] : [...HABITS]
+  // R13 §9: the caffeine tile is opt-in (Settings → Habits).
+  if (athlete?.caffeine_on_today) out.push(CAFFEINE_HABIT)
+  return out
 }
+
+export const CAFFEINE_TYPES = [
+  { key: 'coffee', label: 'Coffee', emoji: '☕' },
+  { key: 'tea', label: 'Tea', emoji: '🍵' },
+  { key: 'energy', label: 'Energy drink', emoji: '⚡' },
+  { key: 'other', label: 'Other', emoji: '🥤' },
+] as const
+export type CaffeineType = (typeof CAFFEINE_TYPES)[number]['key']
 
 export const countText = (kind: HabitKind, n: number) => {
   const m = habitMeta(kind)

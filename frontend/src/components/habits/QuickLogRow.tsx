@@ -5,6 +5,7 @@ import { errorText, useDeleteHabitLog, useHabitsToday, useLogHabit } from '../..
 import type { HabitKind, HabitLog } from '../../lib/types'
 import { MoreHIcon } from '../Icons'
 import { HabitLogSheet } from './HabitLogSheet'
+import { CravingButton } from '../quit/CravingButton'
 import { habitMeta, loggableHabits, loggedText } from './habitUtil'
 
 const LONG_PRESS_MS = 500
@@ -79,16 +80,17 @@ export function QuickLogRow({ label = 'Log', aside }: { label?: string; aside?: 
       <div className="quicklog-head">
         <span className="quicklog-label">{label}</span>
         {aside && <span className="quicklog-aside">{aside}</span>}
+        {(athlete?.smoke_goal === 'quit' || athlete?.smoke_goal === 'reduce') && <CravingButton className="quicklog-craving" />}
       </div>
       <div className="quicklog-buttons" style={{ gridTemplateColumns: `repeat(${habits.length}, minmax(0, 1fr)) 44px` }}>
         {habits.map((h) => {
-          const n = counts?.[h.kind] ?? 0
+          const n = (h.kind === 'caffeine' ? today.data?.caffeine?.count ?? counts?.caffeine : counts?.[h.kind]) ?? 0
           return (
             <button
               key={h.kind}
               type="button"
               className={`quicklog-btn ${n > 0 ? 'has-count' : ''}`}
-              aria-label={h.kind === 'private' ? `Log 🌙 Private now (${n} today). Long-press for more options.` : `Log one ${h.unit} now (${n} today). Long-press for more options.`}
+              aria-label={h.kind === 'private' ? `Log 🌙 Private now (${n} today). Long-press for more options.` : h.kind === 'caffeine' ? `Log one cup of coffee now (${n} today). Long-press for tea or energy drinks.` : `Log one ${h.unit} now (${n} today). Long-press for more options.`}
               onClick={() => tap(h.kind)}
               onPointerDown={() => pressStart(h.kind)}
               onPointerUp={pressEnd}

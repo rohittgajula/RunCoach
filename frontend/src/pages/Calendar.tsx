@@ -5,6 +5,7 @@ import { ChipButton } from '../components/ChipButton'
 import { MonthView } from '../components/calendar/MonthView'
 import { ActivitySheet, WorkoutSheet } from '../components/DetailSheets'
 import { WeekGarminMenu } from '../components/workout/WeekGarminMenu'
+import { StrengthCard } from '../components/strength/StrengthCard'
 import { CalendarIcon, ChevronDown, ChevronRight, RefreshIcon } from '../components/Icons'
 import { PageHeader } from '../components/PageHeader'
 import { PhasePill } from '../components/PhasePill'
@@ -346,6 +347,8 @@ function DayRow({
               onOpen={() => onWorkout(item.workout)}
               onGuide={() => onGuide(item.workout)}
             />
+          ) : item.type === 'strength' ? (
+            <StrengthCard key={`s${item.strength.id}`} session={item.strength} />
           ) : (
             <ActivityCardView
               key={`a${item.activity.id}`}

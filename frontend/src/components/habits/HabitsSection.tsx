@@ -14,10 +14,12 @@ import { LogHistory } from './LogHistory'
 import { LungRecoveryCard } from './LungRecoveryCard'
 import { QuickLogRow } from './QuickLogRow'
 import { SinceQuit } from './SinceQuitCard'
+import { CaffeineCard } from './CaffeineCard'
+import { CravingPatternsCard, SavingsGoalCard } from '../quit/QuitCards'
 import { HABITS, PRIVATE_HABIT, PRIVATE_SHOWN_KEY, habitMeta, readFlag, writeFlag } from './habitUtil'
 
 const fmt = (v: number | null | undefined, digits = 1) => (v == null ? '--' : v.toFixed(digits))
-const COLORS: Record<HabitKind, string> = { smoke: 'var(--habits)', alcohol: 'var(--habits)', sugar: 'var(--habits)', private: 'var(--habits)' }
+const COLORS: Record<HabitKind, string> = { smoke: 'var(--habits)', alcohol: 'var(--habits)', sugar: 'var(--habits)', private: 'var(--habits)', caffeine: 'var(--habits)' }
 
 /** Insights → Habits: range, health report, a card per habit, since-quit, impact, AI, history. */
 export function HabitsPage() {
@@ -100,7 +102,12 @@ export function HabitsPage() {
             </InsightCard>
           )}
 
+          {(quitting || athlete?.smoke_goal === 'reduce') && <CravingPatternsCard range={range} />}
+          <SavingsGoalCard />
+
           <LungRecoveryCard enabled={!!athlete?.smoke_quit_date} />
+
+          <CaffeineCard range={range} freq={freq} period={caption} />
 
           <InsightCard title="Impact detail">
             <ImpactCards impact={data.impact ?? []} hidePrivate={!privateShown} title={false} />
@@ -119,6 +126,7 @@ export function HabitsPage() {
 
 function totalOf(data: HabitSummary, kind: HabitKind): number {
   if (kind === 'private') return data.private?.total ?? 0
+  if (kind === 'caffeine') return 0
   return data[kind]?.total ?? 0
 }
 
@@ -132,6 +140,7 @@ function pointsOf(data: HabitSummary, kind: HabitKind, freq: Freq) {
     if (freq === 'month') return sum(daily.length ? daily : weekly, 'month')
     return weekly.length ? weekly : sum(daily, 'week')
   }
+  if (kind === 'caffeine') return []
   const series = kind === 'private' ? data.private?.series ?? [] : data[kind].series
   return sum(series.map((p) => ({ date: p.date, value: p.count })), freq)
 }
@@ -141,6 +150,7 @@ function subOf(data: HabitSummary, kind: HabitKind): string {
     const d = data.alcohol.drink_days
     return `avg ${fmt(data.alcohol.per_week_avg)}/week · ${d} drink ${d === 1 ? 'day' : 'days'}`
   }
+  if (kind === 'caffeine') return ''
   const avg = kind === 'private' ? data.private?.per_day_avg : data[kind].per_day_avg
   return `avg ${fmt(avg)}/day`
 }

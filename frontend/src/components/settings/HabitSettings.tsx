@@ -10,7 +10,7 @@ const REDUCE = [
   { value: 'reduce' as const, label: 'Reduce' },
 ]
 
-function Toggle({ label, hint, on, onChange }: { label: string; hint?: string; on: boolean; onChange: (v: boolean) => void }) {
+export function Toggle({ label, hint, on, onChange }: { label: string; hint?: string; on: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="switch-row">
       <span className="grow">
@@ -59,6 +59,13 @@ export function HabitSettings({ draft, set, errors }: { draft: Draft; set: SetDr
       <Field label="Sugar" error={errors.sugar_goal}>
         <Segmented label="Sugar goal" value={draft.sugar_goal} onChange={(v) => set('sugar_goal', v)} options={REDUCE} />
       </Field>
+
+      <Toggle
+        label="☕ Caffeine tile"
+        hint="Adds ☕ to Log now, and a caffeine vs sleep card to Health → Habits."
+        on={draft.caffeine_on_today}
+        onChange={(v) => set('caffeine_on_today', v)}
+      />
 
       <div className="private-settings">
         <Toggle

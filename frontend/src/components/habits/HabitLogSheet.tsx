@@ -5,7 +5,7 @@ import type { HabitKind, HabitLog } from '../../lib/types'
 import { BottomSheet } from '../BottomSheet'
 import { Field } from '../Field'
 import { TrashIcon } from '../Icons'
-import { HABITS, countText, habitMeta, lessQty, minQty, moreQty, type HabitMeta } from './habitUtil'
+import { CAFFEINE_TYPES, HABITS, countText, habitMeta, lessQty, minQty, moreQty, type CaffeineType, type HabitMeta } from './habitUtil'
 
 /** Long-press / ⋯ on the quick-log row: quantity, time and a note. */
 export function HabitLogSheet({
@@ -26,17 +26,18 @@ function HabitLogForm({
   const [quantity, setQuantity] = useState(1)
   const [at, setAt] = useState(() => localInputValue(new Date()))
   const [note, setNote] = useState('')
+  const [subtype, setSubtype] = useState<CaffeineType>('coffee')
   const meta = habitMeta(kind)
 
   const save = () =>
     log.mutate(
-      { kind, quantity, at: new Date(at).toISOString(), note: note.trim() || undefined },
+      { kind, quantity, at: new Date(at).toISOString(), note: note.trim() || undefined, ...(kind === 'caffeine' ? { subtype } : {}) },
       { onSuccess: (saved) => { onLogged(saved); onClose() } },
     )
 
   return (
     <div className="stack">
-      <div className={`segmented segmented-full habit-sheet-kinds ${kinds.length > 3 ? 'is-4' : ''}`} role="radiogroup" aria-label="What">
+      <div className={`segmented segmented-full habit-sheet-kinds ${kinds.length > 4 ? 'is-5' : kinds.length > 3 ? 'is-4' : ''}`} role="radiogroup" aria-label="What">
         {kinds.map((h) => (
           <button
             key={h.kind}
@@ -61,6 +62,18 @@ function HabitLogForm({
       <p className="muted small centered-text">To remove an entry, delete it below.</p>
       {kind === 'alcohol' && <p className="muted small centered-text">1 standard drink ≈ a small beer, a glass of wine or a single shot.</p>}
       {kind === 'sugar' && <p className="muted small centered-text">1 serving ≈ a chocolate bar, a dessert or a sugary drink.</p>}
+      {kind === 'caffeine' && (
+        <>
+          <div className="chips-row caffeine-types" role="radiogroup" aria-label="What kind">
+            {CAFFEINE_TYPES.map((t) => (
+              <button key={t.key} type="button" role="radio" aria-checked={subtype === t.key} className={`pill-btn ${subtype === t.key ? 'is-active' : ''}`} onClick={() => setSubtype(t.key)}>
+                <span aria-hidden="true">{t.emoji}</span> {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="muted small centered-text">1 cup ≈ a coffee, two teas or a can of energy drink. After 14:00 counts as late.</p>
+        </>
+      )}
       <Field label="When">
         <input type="datetime-local" value={at} max={localInputValue(new Date())} onChange={(e) => setAt(e.target.value)} />
       </Field>

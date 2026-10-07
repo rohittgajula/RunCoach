@@ -50,6 +50,9 @@ export type Race = {
   distance_km: number
   is_target: boolean
   notes: string
+  /** R13 §2 */
+  goal_time_s?: number | null
+  start_time?: string | null
 }
 
 export type PlanStatus = 'proposed' | 'active' | 'archived' | 'declined'
@@ -102,7 +105,9 @@ export type Workout = {
   compliance?: Compliance | null
   review?: CoachReview | null
   /** R7 §1 — set when the morning check-in rewrote today's steps. */
-  adjusted_by?: 'checkin' | string | null
+  adjusted_by?: 'checkin' | 'auto' | 'kept' | string | null
+  /** R13 §1 — the applied auto-adjustment, if any. */
+  auto_adjustment?: import('./r13').Adjustment | null
   original_steps?: Step[] | null
   /** R7 §3 — easy/long/run-walk only. */
   guard?: WorkoutGuard | null
@@ -189,6 +194,7 @@ export type ActivityCard = {
 export type CalItem =
   | { type: 'workout'; workout: Workout }
   | { type: 'activity'; activity: ActivityCard }
+  | { type: 'strength'; strength: import('./r13').Strength }
 
 export type CalDay = {
   date: ISODate
@@ -465,6 +471,9 @@ export type TodayCheckin = {
   explanation: { status: 'none' | 'ready'; text: string } | null
   /** Recovery note / movement suggestion (no_plan), else null. */
   note?: string | null
+  /** R13 §3 / §10 */
+  injury?: { risk: import('./r13').InjuryRisk; flags: import('./r13').InjuryFlag[] } | null
+  mood?: import('./r13').Mood | null
 }
 
 export type WorkoutGuard = {
@@ -515,7 +524,7 @@ export type GarminSendResult = {
 // --- R8 §B: habits (smoking, alcohol, sugar) ----------------------------------------
 
 /** R9 §B — `private` is shown only as 🌙 Private. */
-export type HabitKind = 'smoke' | 'alcohol' | 'sugar' | 'private'
+export type HabitKind = 'smoke' | 'alcohol' | 'sugar' | 'private' | 'caffeine'
 
 export type HabitLog = {
   id: number
@@ -524,6 +533,8 @@ export type HabitLog = {
   local_date: ISODate
   quantity: number
   note: string
+  /** R13 §9 — caffeine only. */
+  subtype?: 'coffee' | 'tea' | 'energy' | 'other' | null
 }
 
 export type HabitToday = {
@@ -531,6 +542,8 @@ export type HabitToday = {
   /** `private` is omitted entirely while the private habit is disabled. */
   counts: Partial<Record<HabitKind, number>>
   last_at: Partial<Record<HabitKind, ISODateTime | null>>
+  /** R13 §9 */
+  caffeine?: { count: number; last_at: ISODateTime | null; on_today: boolean }
 }
 
 export type HabitCountPoint = { date: ISODate; count: number }
@@ -621,7 +634,7 @@ export type HabitReport = {
   habits: HabitReportHabit[]
 }
 
-export type HabitLogBody = { kind: HabitKind; quantity?: number; at?: ISODateTime; note?: string }
+export type HabitLogBody = { kind: HabitKind; quantity?: number; at?: ISODateTime; note?: string; subtype?: 'coffee' | 'tea' | 'energy' | 'other' }
 
 // --- R8 §C: progress comparison -------------------------------------------------------
 
@@ -1007,6 +1020,8 @@ export type WeeklyReport = {
   to_improve: string[]
   goal: string
   ai: { status: 'none' | 'ready'; markdown: string; generated_at: ISODateTime | null } | null
+  /** R13 §10 */
+  mood?: { mood_avg: number | null; energy_avg: number | null; days: number; previous_mood_avg: number | null; previous_energy_avg: number | null } | null
 }
 
 export type WeeklyReportListItem = { id: number; week_start: ISODate; week_end: ISODate; runs_done: number; km: number; generated_at: ISODateTime }
@@ -1033,7 +1048,7 @@ export type CompareResult = {
   caveat: string
 }
 
-export type Reminder = { key: string; label: string; description: string; enabled: boolean; time: string }
+export type Reminder = { key: string; label: string; description: string; enabled: boolean; time: string | null }
 export type RemindersResponse = {
   available: boolean; public_key: string | null; subscriptions: number; ios_note: string; reminders: Reminder[]
   /** R11 §C — move / breathing / water nudges (absent on an older server). */

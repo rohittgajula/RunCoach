@@ -7,6 +7,7 @@ import { Bullets } from '../Bullets'
 import { trendOf, type Trend } from '../chartUtil'
 import { bucket, periodCaption, useHealthPeriod, withApiPeriod, type Freq, type Period } from '../health/healthRange'
 import { TrainingStatusCard } from '../health/TrainingStatusCard'
+import { InjuryCard } from '../injury/InjuryCard'
 import { InfoButton } from '../health/InfoButton'
 import type { GlossaryKey } from '../health/glossary'
 import { ChevronRight, ReportIcon, ScatterIcon } from '../Icons'
@@ -57,6 +58,7 @@ export function OverviewSection() {
           <TrainingStatusCard period={chosen} />
           <WhatChanged data={data} period={period} />
           <ForecastCard detailed />
+          <InjuryCard />
           <FocusCard focus={data.focus ?? []} hasRuns={(data.running?.runs ?? 0) > 0} />
           <LoadCard load={data.load} onOpen={() => setFitnessOpen(true)} />
           <SummaryCard summary={data.summary} range={range} />

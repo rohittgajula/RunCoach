@@ -39,7 +39,8 @@ export function MonthView({ today, ...handlers }: { today: string } & Handlers) 
       if (full.items.length === 1) {
         const item = full.items[0]
         if (item.type === 'workout') handlers.onWorkout(item.workout)
-        else handlers.onActivity(item.activity)
+        else if (item.type === 'activity') handlers.onActivity(item.activity)
+        else setOpenDay(full)
       } else {
         setOpenDay(full)
       }

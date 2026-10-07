@@ -11,6 +11,8 @@ import { clock, groupSteps } from '../StepsList'
 import { useCoachLaunch } from '../useCoachLaunch'
 import { GarminSendButton } from '../workout/GarminSendButton'
 import { BUILD_PLAN_PROMPT } from '../../lib/prompts'
+import { AdjustedChip } from '../adjust/AdjustedChip'
+import { StrengthCard } from '../strength/StrengthCard'
 
 const KIND: Record<string, string> = {
   warmup: 'warm-up', run: 'run', walk: 'walk', stride: 'stride', recovery: 'recovery', cooldown: 'cool-down', interval: 'interval',
@@ -87,6 +89,7 @@ export function TodayWorkout({ day, loading }: { day: CalDay | undefined; loadin
 
   const workouts = (day?.items ?? []).flatMap((i) => (i.type === 'workout' ? [i.workout] : []))
   const activities = (day?.items ?? []).flatMap((i) => (i.type === 'activity' ? [i.activity] : []))
+  const strength = (day?.items ?? []).flatMap((i) => (i.type === 'strength' ? [i.strength] : []))
   const linked = new Set(workouts.map((w) => w.completed_activity_id).filter(Boolean))
 
   return (
@@ -109,7 +112,7 @@ export function TodayWorkout({ day, loading }: { day: CalDay | undefined; loadin
             <button type="button" className="hero-top" onClick={() => setOpenWorkout(w)}>
               <span className="hero-eyebrow">
                 Today's run{weekText ? ` · ${weekText}` : w.phase ? ` · ${w.phase.name}` : ''}
-                {(w.adjusted_by === 'checkin') && w.status === 'planned' && <span className="hero-tag">Adjusted</span>}
+                {(w.adjusted_by === 'checkin' || w.adjusted_by === 'auto') && w.status === 'planned' && <span className="hero-tag">Adjusted</span>}
               </span>
               <span className="hero-title">{w.title} · {dur(w.duration_s)}</span>
               <span className="hero-stats">
@@ -120,6 +123,7 @@ export function TodayWorkout({ day, loading }: { day: CalDay | undefined; loadin
               </span>
             </button>
             <div className="hero-body">
+              {w.auto_adjustment && w.status === 'planned' && <AdjustedChip adjustment={w.auto_adjustment} />}
               <StepStrip steps={w.steps} />
               <div className="hero-actions">
                 {done ? (
@@ -139,7 +143,9 @@ export function TodayWorkout({ day, loading }: { day: CalDay | undefined; loadin
         )
       })}
 
-      {day && !workouts.length && !activities.length && plan.data && (
+      {strength.map((s) => <StrengthCard key={s.id} session={s} />)}
+
+      {day && !workouts.length && !activities.length && !strength.length && plan.data && (
         <section className="card rest-card">
           <span className="lbl">Today</span>
           <p className="rest-title">{day.rest ?? 'Rest'}</p>

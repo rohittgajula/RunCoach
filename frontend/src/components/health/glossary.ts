@@ -200,6 +200,73 @@ export const GLOSSARY = {
     why: 'Load that rises slowly builds fitness. Big jumps raise the risk of injury.',
     better: 'Steady, gradual rises are best.',
   },
+  // --- R13 ---------------------------------------------------------------------------
+  injury_risk: {
+    title: 'Injury watch',
+    what: 'A daily check of the patterns that often come before running injuries: mileage jumping too fast, one very long run, your step rate dropping, uneven ground contact, worn-out shoes and pain you report.',
+    why: 'Most running injuries come from doing too much too soon. Spotting it early means a few easier days instead of weeks off.',
+    better: 'Low is what you want. Moderate means ease off a little; high means keep it very easy or rest. It is not a diagnosis — see a physio if pain persists.',
+  },
+  ramp: {
+    title: 'Weekly ramp',
+    what: 'How much more you ran this week than the weeks before. The acute:chronic ratio (ACWR) compares the last 7 days with the last 4 weeks.',
+    why: 'Tissues adapt slower than fitness. Jumps of more than about 10 % a week, or an ACWR above 1.3, raise injury risk.',
+    better: 'Small, steady rises. An ACWR between 0.8 and 1.3 is the sweet spot.',
+  },
+  long_run_share: {
+    title: 'Long-run share',
+    what: 'The share of your week’s distance that came from your single longest run.',
+    why: 'When one run is a big chunk of the week, that run carries most of the strain.',
+    better: 'Under about 40 % of the week.',
+  },
+  gct_balance: {
+    title: 'Ground-contact balance',
+    what: 'How evenly your left and right feet share time on the ground, from a Garmin chest strap or running pod. 50/50 is perfectly even.',
+    why: 'A lopsided stride can be an early sign you’re protecting a sore spot.',
+    better: 'Close to 50/50. More than 2 % off for several runs is worth noticing.',
+  },
+  pain_severity: {
+    title: 'Pain level',
+    what: '1 = a niggle you notice but that doesn’t change how you move. 2 = sore, it changes how you move a little. 3 = it hurts — you’d stop or limp.',
+    why: 'Sore on the same spot two days running is the signal to ease off before it becomes an injury.',
+    better: 'None, of course. If something stays at 2 or more, or gets worse, see a physio.',
+  },
+  mood: {
+    title: 'Mood',
+    what: 'How you feel today, from 1 (low) to 5 (great). One tap a day.',
+    why: 'Mood follows sleep, stress and training. Over weeks it shows what lifts you — and when to keep runs gentle.',
+    better: 'Higher is better. One low day means nothing; a low run of days is worth an easier week.',
+  },
+  energy: {
+    title: 'Energy',
+    what: 'How much energy you have today, from 1 (drained) to 5 (full of energy).',
+    why: 'Low energy for several days, especially with poor sleep, is a sign to recover rather than push.',
+    better: 'Higher is better. It doesn’t mean “train harder” on a high day.',
+  },
+  caffeine_late: {
+    title: 'Late caffeine',
+    what: 'Coffee, tea or energy drinks after 14:00. Caffeine stays in your body for 5–6 hours or more.',
+    why: 'It can make it harder to fall asleep and cut deep sleep, which is when your body repairs from training.',
+    better: 'Fewer late cups. Morning coffee is fine and can even help a run.',
+  },
+  cravings_resisted: {
+    title: 'Cravings resisted',
+    what: 'Of the cravings you logged, the share where you didn’t smoke.',
+    why: 'Every craving you ride out makes the next one weaker. Most pass within 3–5 minutes.',
+    better: 'Higher is better. A slip isn’t failure — log it and keep going.',
+  },
+  hr_at_pace: {
+    title: 'HR at pace',
+    what: 'Your heart rate at a given running pace.',
+    why: 'As your aerobic fitness grows, the same pace costs fewer beats. Heat, poor sleep and illness push it up.',
+    better: 'Lower than usual at the same pace is better.',
+  },
+  hr_drift: {
+    title: 'HR drift',
+    what: 'How much your heart rate creeps up from the first half to the second half of a steady run.',
+    why: 'A big drift means the run got harder than planned — heat, dehydration or starting too fast.',
+    better: 'Lower is better. Under 5 % is a well-paced easy run.',
+  },
 } satisfies Record<string, GlossaryEntry>
 
 export type GlossaryKey = keyof typeof GLOSSARY

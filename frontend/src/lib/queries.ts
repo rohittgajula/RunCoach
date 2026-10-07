@@ -416,6 +416,7 @@ export function useSaveRace() {
     },
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ['races'] })
+      client.invalidateQueries({ queryKey: ['race-plan'] })
       invalidatePlanData(client)
     },
   })
@@ -610,8 +611,12 @@ function invalidateHabits(client: QueryClient) {
 
 /** Bump today's count straight away so a tap feels instant; the server confirms. */
 function bumpToday(client: QueryClient, kind: HabitKind, by: number) {
-  client.setQueryData<HabitToday>(['habits-today'], (old) =>
-    old ? { ...old, counts: { ...old.counts, [kind]: Math.max(0, (old.counts[kind] ?? 0) + by) } } : old)
+  client.setQueryData<HabitToday>(['habits-today'], (old) => {
+    if (!old) return old
+    // R13 §9: caffeine lives in its own block, not in `counts`.
+    if (kind === 'caffeine' && old.caffeine) return { ...old, caffeine: { ...old.caffeine, count: Math.max(0, old.caffeine.count + by) } }
+    return { ...old, counts: { ...old.counts, [kind]: Math.max(0, (old.counts[kind] ?? 0) + by) } }
+  })
 }
 
 export function useLogHabit() {

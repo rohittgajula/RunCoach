@@ -4,7 +4,7 @@ type Pt = [number, number]
 /** A stick-figure pose; limbs are polylines, `focus` marks the working muscle. */
 type Pose = { head: Pt; limbs: Pt[][]; back?: Pt[][]; focus: Pt; prop?: 'mat' }
 
-function Figure({ pose, label }: { pose: Pose; label: string }) {
+export function Figure({ pose, label }: { pose: Pose; label: string }) {
   const path = (pts: Pt[]) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' ')
   return (
     <svg viewBox="0 0 120 90" className="ex-figure guide-anim" role="img" aria-label={label}>

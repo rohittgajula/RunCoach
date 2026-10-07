@@ -13,6 +13,7 @@ import { GarminConnect } from './GarminConnect'
 import { HabitSettings } from './settings/HabitSettings'
 import { LocationSettings } from './settings/LocationSettings'
 import { RunsPerWeek } from './settings/RunsPerWeek'
+import { TrainingExtras } from './settings/TrainingExtras'
 import { reflowText, toDraft, toPatch, type Draft } from './settings/settingsDraft'
 
 function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
@@ -164,14 +165,18 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
       if (!athlete) return
       const updated = await updateAthlete(toPatch(draft, athlete))
       setSaved(true)
-      setReflowNote(reflowText(updated.plan_reflow))
+      const strength = updated.strength_reflow
+      const strengthNote = strength && (strength.created || strength.removed)
+        ? ` Strength: ${[strength.created ? `${strength.created} added` : '', strength.removed ? `${strength.removed} removed` : ''].filter(Boolean).join(', ')}.`
+        : ''
+      setReflowNote((reflowText(updated.plan_reflow) + strengthNote).trim())
       setReflowNotes(updated.plan_reflow?.notes ?? [])
       if (updated.plan_reflow) {
         invalidatePlanData(client)
         client.invalidateQueries({ queryKey: ['today'] })
       }
       // Targets, plan and profile all read these fields.
-      for (const key of ['diet-day', 'profile-summary', 'calendar', 'weather-today', 'habits-summary', 'today']) client.invalidateQueries({ queryKey: [key] })
+      for (const key of ['diet-day', 'profile-summary', 'calendar', 'weather-today', 'habits-summary', 'today', 'habits-today', 'strength', 'adjustments', 'briefing', 'caffeine']) client.invalidateQueries({ queryKey: [key] })
     } catch (caught) {
       setErrors(caught instanceof ApiError ? caught.fieldErrors() : { detail: 'Could not save.' })
     } finally {
@@ -265,6 +270,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           {errors.available_days && <p className="field-error">{errors.available_days}</p>}
           {errors.long_run_day && <p className="field-error">{errors.long_run_day}</p>}
           {athlete && <RunsPerWeek draft={draft} set={set} athlete={athlete} error={errors.runs_per_week} />}
+          <TrainingExtras draft={draft} set={set} suggested={athlete?.strength_per_week_suggested ?? 2} errors={errors} />
         </Section>
 
         <Section title="Diet goal">

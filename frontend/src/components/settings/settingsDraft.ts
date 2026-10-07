@@ -27,6 +27,11 @@ export type Draft = {
   private_goal: 'reduce' | 'none'
   location_source: 'runs' | 'city'
   location_city: string
+  // R13
+  auto_adjust_plan: boolean
+  strength_per_week: number
+  caffeine_on_today: boolean
+  pain_daily_check: boolean
 }
 
 export type SetDraft = <K extends keyof Draft>(key: K, value: Draft[K]) => void
@@ -57,6 +62,10 @@ export const toDraft = (a: Athlete): Draft => ({
   private_goal: a.private_goal ?? 'none',
   location_source: a.location_source === 'city' || a.location_city ? 'city' : 'runs',
   location_city: a.location_city || (a.location_source === 'city' ? a.location_name ?? '' : ''),
+  auto_adjust_plan: a.auto_adjust_plan ?? true,
+  strength_per_week: a.strength_per_week ?? 0,
+  caffeine_on_today: !!a.caffeine_on_today,
+  pain_daily_check: !!a.pain_daily_check,
 })
 
 const num = (text: string) => (text.trim() === '' ? null : Number(text))
@@ -88,6 +97,11 @@ export function toPatch(draft: Draft, athlete: Athlete): Partial<Athlete> & { lo
   if (draft.private_habit_enabled !== before.private_habit_enabled) patch.private_habit_enabled = draft.private_habit_enabled
   if (draft.private_on_today !== before.private_on_today) patch.private_on_today = draft.private_on_today
   if (draft.private_goal !== before.private_goal) patch.private_goal = draft.private_goal
+  // R13 — only once touched (an older server never sees them).
+  if (draft.auto_adjust_plan !== before.auto_adjust_plan) patch.auto_adjust_plan = draft.auto_adjust_plan
+  if (draft.strength_per_week !== before.strength_per_week) patch.strength_per_week = draft.strength_per_week
+  if (draft.caffeine_on_today !== before.caffeine_on_today) patch.caffeine_on_today = draft.caffeine_on_today
+  if (draft.pain_daily_check !== before.pain_daily_check) patch.pain_daily_check = draft.pain_daily_check
   if (draft.location_source !== before.location_source || draft.location_city.trim() !== before.location_city.trim()) {
     patch.location_source = draft.location_source
     // An empty city hands the location back to your runs.

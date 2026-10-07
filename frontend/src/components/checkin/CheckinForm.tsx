@@ -3,7 +3,13 @@ import { errorText, useSkipCheckin, useSubmitCheckin } from '../../lib/queries'
 import type { Breathing, CheckinEntry, Legs } from '../../lib/types'
 import { BREATHING, LEGS, rpeLabel } from './checkinUtil'
 import { ChipChoice } from './ChipChoice'
-import { PainPicker, type PainState } from './PainPicker'
+import { useReportPains } from '../../lib/r13'
+import { BodyMap, type PainSpot } from '../injury/BodyMap'
+import { toPainBody } from '../injury/PainSheet'
+
+/** Old check-in `pain` field (R7): area chips + 1–10. Kept so older reads still work. */
+const LEGACY_AREA: Record<string, string> = { lower_back: 'back', hamstring: 'other', quad: 'other' }
+const LEGACY_LEVEL = { 1: 3, 2: 5, 3: 8 } as const
 
 /**
  * "How did it feel?" — sensible defaults so a normal run is one slide and Done (~10 s).
@@ -22,21 +28,35 @@ export function CheckinForm({
   const [rpe, setRpe] = useState(4)
   const [legs, setLegs] = useState<Legs>('ok')
   const [breathing, setBreathing] = useState<Breathing>('ok')
-  const [pain, setPain] = useState<PainState>({ on: false, where: '', level: 3 })
+  const [painOn, setPainOn] = useState(false)
+  const [spots, setSpots] = useState<PainSpot[]>([])
   const [note, setNote] = useState('')
-  const busy = submit.isPending || skip.isPending
-  const painIncomplete = pain.on && !pain.where
+  const pains = useReportPains()
+  const busy = submit.isPending || skip.isPending || pains.isPending
+  const painIncomplete = painOn && !spots.length
 
-  const done = () =>
+  const done = () => {
+    const worst = painOn ? [...spots].sort((a, b) => b.severity - a.severity)[0] : undefined
     submit.mutate(
       {
         activityId,
-        body: { rpe, legs, breathing, pain: pain.on ? { where: pain.where, level: pain.level } : null, note: note.trim() },
+        body: {
+          rpe, legs, breathing, note: note.trim(),
+          pain: worst ? { where: LEGACY_AREA[worst.area] ?? worst.area, level: LEGACY_LEVEL[worst.severity] } : null,
+        },
       },
-      { onSuccess: onDone },
+      {
+        onSuccess: (entry) => {
+          // R13 §3: each spot becomes a PainReport linked to this run (feeds injury watch).
+          if (painOn && spots.length) {
+            pains.mutate(spots.map((p) => toPainBody(p, { activity_id: activityId })), { onSettled: () => onDone(entry) })
+          } else onDone(entry)
+        },
+      },
     )
+  }
 
-  const error = submit.error ?? skip.error
+  const error = submit.error ?? skip.error ?? pains.error
   return (
     <div className="checkin">
       <label className="ci-range ci-rpe">
@@ -55,7 +75,17 @@ export function CheckinForm({
       </label>
       <ChipChoice label="Legs" options={LEGS} value={legs} onChange={setLegs} />
       <ChipChoice label="Breathing" options={BREATHING} value={breathing} onChange={setBreathing} />
-      <PainPicker value={pain} onChange={setPain} />
+      <div className="ci-block">
+        <div className="switch-row">
+          <span className="ci-label">Anything hurting?</span>
+          <button
+            type="button" role="switch" aria-checked={painOn} aria-label="Anything hurting?"
+            className={`switch ${painOn ? 'is-on is-bad' : ''}`}
+            onClick={() => setPainOn(!painOn)}
+          />
+        </div>
+        {painOn && <BodyMap value={spots} onChange={setSpots} />}
+      </div>
       <textarea
         className="ci-note" rows={2} placeholder="Anything else? (optional)"
         value={note} onChange={(e) => setNote(e.target.value)}

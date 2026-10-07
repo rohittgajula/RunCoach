@@ -17,7 +17,7 @@ export function ThisWeek({ week }: { week: CalendarResponse | undefined }) {
       if (item.type === 'workout') {
         planned += 1
         if (item.workout.status === 'completed') done += 1
-      } else if (isRun(item.activity.sport)) {
+      } else if (item.type === 'activity' && isRun(item.activity.sport)) {
         metres += item.activity.distance_m || 0
         if (item.activity.unplanned) done += 1
       }

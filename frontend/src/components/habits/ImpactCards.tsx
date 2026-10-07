@@ -15,7 +15,7 @@ const METRICS: Record<string, { name: string; unit: string }> = {
 const unitOf = (i: HabitImpact) => i.unit ?? METRICS[i.metric]?.unit ?? ''
 const nameOf = (i: HabitImpact) => METRICS[i.metric]?.name ?? i.metric.replace(/_/g, ' ')
 
-const AFTER: Record<HabitKind, string> = { smoke: 'smoking', alcohol: 'drinking', sugar: 'sugary food', private: 'it' }
+const AFTER: Record<HabitKind, string> = { smoke: 'smoking', alcohol: 'drinking', sugar: 'sugary food', private: 'it', caffeine: 'late caffeine' }
 
 const num = (v: number | null, unit: string) => {
   if (v == null) return '--'

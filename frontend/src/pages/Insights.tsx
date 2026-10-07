@@ -14,6 +14,7 @@ const HabitsPage = lazy(() => import('../components/habits/HabitsSection').then(
 const CompareSection = lazy(() => import('../components/health/CompareSection').then((m) => ({ default: m.CompareSection })))
 const FitnessSection = lazy(() => import('../components/health/FitnessSection').then((m) => ({ default: m.FitnessSection })))
 const ReportsSection = lazy(() => import('../components/health/ReportsSection').then((m) => ({ default: m.ReportsSection })))
+const MonthlyReportsPage = lazy(() => import('../components/health/ReportsSection').then((m) => ({ default: m.MonthlyReportsPage })))
 const SleepSection = lazy(() => import('../components/health/SleepSection').then((m) => ({ default: m.SleepSection })))
 const ProgressSection = lazy(() => import('../components/progress/ProgressSection').then((m) => ({ default: m.ProgressSection })))
 
@@ -88,6 +89,8 @@ export default function Health() {
           <Route path="guides" element={<GuidesSection />} />
           <Route path="compare" element={<CompareSection />} />
           <Route path="reports" element={<ReportsSection />} />
+          <Route path="reports/monthly" element={<MonthlyReportsPage />} />
+          <Route path="reports/monthly/:month" element={<MonthlyReportsPage />} />
           <Route path="reports/:week" element={<ReportsSection />} />
           <Route path="*" element={<Navigate to="/health" replace />} />
         </Routes>

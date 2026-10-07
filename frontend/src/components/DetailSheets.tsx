@@ -17,6 +17,9 @@ import { StepsList } from './StepsList'
 import { WeatherBlock } from './weather/WeatherBlock'
 import { WorkoutBar } from './WorkoutBar'
 import { RunMapSection } from './map/RunMapSection'
+import { RunShareButton } from './share/RunShareButton'
+import { AdjustedChip } from './adjust/AdjustedChip'
+import { RunReviewSection } from './review/RunReview'
 import { useCoachLaunch } from './useCoachLaunch'
 
 export { StepsList }
@@ -75,6 +78,7 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
             {w.status !== 'planned' && <span className={`tag ${w.status === 'completed' ? 'tag-ok' : ''}`}>{w.status}</span>}
             {w.adjusted_by === 'checkin' && <span className="tag tag-adjusted">Adjusted by check-in</span>}
           </div>
+          {w.auto_adjustment && w.status === 'planned' && <AdjustedChip adjustment={w.auto_adjustment} />}
 
           {done ? (
             <>
@@ -209,7 +213,12 @@ export function ActivitySheet({ activity, onClose }: { activity: ActivityCard | 
   const segments = detail.data?.segments?.filter((s) => s.kind !== 'stop') ?? []
 
   return (
-    <BottomSheet open={!!a} onClose={onClose} label="Activity">
+    <BottomSheet
+      open={!!a}
+      onClose={onClose}
+      label="Activity"
+      actions={a && /run|walk|hik/i.test(a.sport) ? <RunShareButton activity={a} avgHr={detail.data?.avg_hr} /> : undefined}
+    >
       {a && (
         <div className="detail">
           <p className="muted">
@@ -256,6 +265,8 @@ export function ActivitySheet({ activity, onClose }: { activity: ActivityCard | 
               error={aiReview.isError ? errorText(aiReview.error, 'Could not get a review. Try again.') : undefined}
             />
           )}
+
+          {/run/i.test(a.sport) && <RunReviewSection activityId={a.id} />}
 
           {!/strength|yoga|swim|indoor|treadmill/i.test(a.sport) && <RunMapSection activityId={a.id} />}
 

@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import { EveningWakeCard } from '../components/alarm/AlarmCards'
+import { UpcomingAdjustments } from '../components/adjust/UpcomingAdjustments'
+import { BriefingCard } from '../components/briefing/BriefingCard'
+import { TodayInjury } from '../components/injury/DailyPainCheck'
+import { RecentReviewCard } from '../components/review/RunReview'
 import { PendingCheckins } from '../components/checkin/PendingCheckins'
 import { TodayCard } from '../components/checkin/TodayCard'
 import { QuickLogRow } from '../components/habits/QuickLogRow'
@@ -74,13 +78,17 @@ export default function Today() {
       </header>
       {toast && <div className="toast" role="status">{toast}</div>}
 
+      <BriefingCard />
       <PendingCheckins />
+      <RecentReviewCard />
       <WeeklyReportCard />
       <TodayCard />
+      <TodayInjury />
       {week.isError && !week.data && (
         <ErrorState message={errorText(week.error, 'Today’s plan did not load.')} onRetry={() => week.refetch()} />
       )}
       <TodayWorkout day={day} loading={week.isPending} />
+      <UpcomingAdjustments />
       <EveningWakeCard />
       <TodaySoFar />
       <WeatherCard />

@@ -18,6 +18,7 @@ import './styles/insights.css'
 import './styles/r10.css'
 import './styles/r11.css'
 import './styles/r12.css'
+import './styles/r13.css'
 
 // Before the first paint, so a dark-theme device never flashes white.
 applyTheme()

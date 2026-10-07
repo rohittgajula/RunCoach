@@ -348,3 +348,64 @@ export const InfoIcon = (p: IconProps) => (
     <path d="M12 11v5.5M12 7.6v.01" strokeWidth={2.4} />
   </Svg>
 )
+
+// --- R13 ---------------------------------------------------------------------------
+
+export const ShareIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" />
+    <path d="M5 12v6.5A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V12" />
+  </Svg>
+)
+
+export const FlagIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 21V4M5 4h11l-2 4 2 4H5" />
+  </Svg>
+)
+
+export const UndoIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M9 14 4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+  </Svg>
+)
+
+export const DumbbellIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11" />
+  </Svg>
+)
+
+export const CoffeeIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9Z" />
+    <path d="M16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5c0 1 1 1.5 1 2.5M12 3.5c0 1 1 1.5 1 2.5" />
+  </Svg>
+)
+
+export const BandageIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="2.5" y="8" width="19" height="8" rx="4" transform="rotate(-45 12 12)" />
+    <path d="M10.5 10.5h.01M13.5 13.5h.01M13.5 10.5h.01M10.5 13.5h.01" strokeWidth={2.4} />
+  </Svg>
+)
+
+export const DownloadIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4.5 20h15" />
+  </Svg>
+)
+
+export const WindIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 8h10a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7" />
+  </Svg>
+)
+
+export const PiggyIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 11a7 6 0 0 1 12.5-2.5L20 8v4l-1.5.8A7 6 0 0 1 15 17v2.5h-2.5V18h-3v1.5H7V17a6 6 0 0 1-2-6Z" />
+    <path d="M15 10.5h.01" strokeWidth={2.6} />
+  </Svg>
+)

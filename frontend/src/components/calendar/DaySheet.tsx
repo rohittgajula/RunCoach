@@ -1,3 +1,4 @@
+import { StrengthCard } from '../strength/StrengthCard'
 import { parseDate } from '../../lib/format'
 import type { ActivityCard, CalDay, Workout } from '../../lib/types'
 import { BottomSheet } from '../BottomSheet'
@@ -29,6 +30,8 @@ export function DaySheet({
                 onOpen={() => { onClose(); onWorkout(item.workout) }}
                 onGuide={() => { onClose(); onGuide(item.workout) }}
               />
+            ) : item.type === 'strength' ? (
+              <StrengthCard key={`s${item.strength.id}`} session={item.strength} />
             ) : (
               <ActivityCardView
                 key={`a${item.activity.id}`}

@@ -3,6 +3,7 @@ import type { ActivityCard, Workout } from '../lib/types'
 import { ActivityIcon, CheckIcon, ReviewIcon, RunIcon, WalkIcon } from './Icons'
 import { PhasePill } from './PhasePill'
 import { WorkoutBar } from './WorkoutBar'
+import { AdjustedChip } from './adjust/AdjustedChip'
 
 export function SportIcon({ sport, size = 20 }: { sport: string; size?: number }) {
   const s = sport.toLowerCase()
@@ -41,10 +42,11 @@ export function WorkoutCard({
           </span>
         )}
         {workout.status === 'skipped' && <span className="tag">Skipped</span>}
-        {(adjusted || workout.adjusted_by === 'checkin') && workout.status === 'planned' && <span className="tag tag-adjusted">Adjusted</span>}
+        {(adjusted || workout.adjusted_by === 'checkin' || workout.adjusted_by === 'auto') && workout.status === 'planned' && <span className="tag tag-adjusted">Adjusted</span>}
       </header>
       <WorkoutBar steps={workout.steps} />
       <p className="cal-card-title">{workout.title}</p>
+      {workout.auto_adjustment && workout.status === 'planned' && <AdjustedChip adjustment={workout.auto_adjustment} compact />}
       <footer className="cal-card-foot">
         {workout.phase && <PhasePill kind={workout.phase.kind} />}
         <Stat label="Duration" value={dur(workout.duration_s)} />

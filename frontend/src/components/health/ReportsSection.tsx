@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, NavLink, useLocation, useParams } from 'react-router-dom'
 import { dateTime, dayMonth, dur } from '../../lib/format'
 import { errorText, useWeeklyReport, useWeeklyReportAi, useWeeklyReports } from '../../lib/queries'
 import type { WeeklyReport } from '../../lib/types'
@@ -7,6 +7,9 @@ import { ChevronRight, SparkIcon } from '../Icons'
 import { CardHead, ThenNow, type ThenNowRow } from '../Kit'
 import { Markdown } from '../Markdown'
 import { Empty, ErrorState, Skeleton } from '../States'
+import { ShareButton } from '../share/ShareButton'
+import { InfoButton } from './InfoButton'
+import { MonthlyReportsSection } from './MonthlyReport'
 
 const ZONE_COLOR: Record<string, string> = {
   below: 'var(--walk)', Z1: 'var(--run-soft)', Z2: 'var(--easy-2)', Z3: 'var(--run)', Z4: 'var(--fuel)', Z5: 'var(--bad)',
@@ -18,6 +21,27 @@ const fmtNum = (v: number | null | undefined, unit: string) => {
   return Number.isInteger(v) ? String(v) : v.toFixed(1)
 }
 
+/** R13 §11: Weekly | Monthly tabs above the reports. */
+export function ReportTabs() {
+  const { pathname } = useLocation()
+  const weekly = !pathname.includes('/reports/monthly')
+  return (
+    <nav className="segmented segmented-full report-tabs" aria-label="Report period">
+      <NavLink to="/health/reports" end className={`segmented-option ${weekly ? 'is-active' : ''}`} aria-current={weekly ? 'page' : undefined}>Weekly</NavLink>
+      <NavLink to="/health/reports/monthly" className={`segmented-option ${!weekly ? 'is-active' : ''}`} aria-current={!weekly ? 'page' : undefined}>Monthly</NavLink>
+    </nav>
+  )
+}
+
+export function MonthlyReportsPage() {
+  return (
+    <div className="stack">
+      <ReportTabs />
+      <MonthlyReportsSection />
+    </div>
+  )
+}
+
 /** Health → Weekly reports: the chosen week (default: last complete one) and past weeks. */
 export function ReportsSection() {
   const { week } = useParams()
@@ -27,6 +51,7 @@ export function ReportsSection() {
 
   return (
     <div className="stack">
+      <ReportTabs />
       {report.isPending && <section className="card"><Skeleton lines={6} /></section>}
       {report.isError && <ErrorState message={errorText(report.error)} onRetry={() => report.refetch()} />}
       {!report.isPending && !report.isError && !r && (
@@ -88,6 +113,10 @@ export function WeeklyReportView({ report: r }: { report: WeeklyReport }) {
             <span className="lbl">Week of {dayMonth(r.week_start)} – {dayMonth(r.week_end)}</span>
             <p className="kit-title">Weekly report</p>
           </div>
+          <ShareButton
+            label="Share this week"
+            card={() => ({ kind: 'week', label: `${dayMonth(r.week_start)} – ${dayMonth(r.week_end)}`, runs: r.runs.done, km: r.runs.km, duration_s: r.runs.time_s })}
+          />
         </div>
         <div className="report-grid">
           <div className="report-cell"><b>{r.runs.done}{r.runs.planned ? `/${r.runs.planned}` : ''}</b><span>runs{r.runs.planned ? ' done' : ''}</span></div>
@@ -134,6 +163,16 @@ export function WeeklyReportView({ report: r }: { report: WeeklyReport }) {
         <section className="card">
           <CardHead title="Habits vs the week before" />
           <ThenNow rows={habits} />
+        </section>
+      )}
+
+      {r.mood && r.mood.days > 0 && (
+        <section className="card">
+          <CardHead title="Mood & energy" sub={`Average of ${r.mood.days} ${r.mood.days === 1 ? 'day' : 'days'}.`} aside={<InfoButton k="mood" />} />
+          <ThenNow rows={[
+            ...(r.mood.mood_avg != null ? [{ label: 'Mood', then: r.mood.previous_mood_avg != null ? r.mood.previous_mood_avg.toFixed(1) : '—', now: r.mood.mood_avg.toFixed(1), unit: '/5', delta: r.mood.previous_mood_avg != null ? r.mood.mood_avg - r.mood.previous_mood_avg : undefined, better: 'higher' as const }] : []),
+            ...(r.mood.energy_avg != null ? [{ label: 'Energy', then: r.mood.previous_energy_avg != null ? r.mood.previous_energy_avg.toFixed(1) : '—', now: r.mood.energy_avg.toFixed(1), unit: '/5', delta: r.mood.previous_energy_avg != null ? r.mood.energy_avg - r.mood.previous_energy_avg : undefined, better: 'higher' as const }] : []),
+          ]} />
         </section>
       )}
 

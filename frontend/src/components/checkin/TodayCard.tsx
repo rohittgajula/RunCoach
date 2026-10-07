@@ -11,6 +11,7 @@ import { WorkoutBar } from '../WorkoutBar'
 import { keptPlan, markKept, missingLine, unmarkKept } from './checkinUtil'
 import { SignalChips, VerdictPill } from './SignalChips'
 import { TodayExplanation } from './TodayExplanation'
+import { MoodCard } from '../mood/MoodCard'
 
 /** Readiness 0–100: Garmin's / the computed one from Insights, else the check-in's signal. */
 function useReadinessScore(data: TodayCheckin | undefined): number | null {
@@ -89,6 +90,7 @@ function FullToday({ data }: { data: TodayCheckin }) {
         </div>
       )}
       {apply.isError && <p className="bad small">{errorText(apply.error, 'Could not adjust today’s workout.')}</p>}
+      <MoodCard embedded />
     </section>
   )
 }
