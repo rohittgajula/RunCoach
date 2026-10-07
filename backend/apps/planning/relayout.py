@@ -63,17 +63,31 @@ def _longest_run(workout) -> float | None:
 
 
 def _pair(sessions, rows):
-    """Match new sessions to old rows: same kind first, then whatever is left."""
+    """Match new sessions to old rows so a row keeps its identity where it can.
+
+    Kind is matched across the WHOLE week before any row is reused for a different
+    kind: a greedy single pass let an earlier easy session take the long run's row,
+    so the (unchanged) long run lost its watch copy and a different session was sent
+    under its id. Passes: same kind and date, then same kind (nearest date), then any
+    leftover row (nearest date). Returns ([(session, row | None)], spare rows).
+    """
     free = list(rows)
-    pairs = []
-    for session in sessions:
-        row = next((r for r in free if r.kind == session.kind), None)
-        if row is None and free:
-            row = free[0]
-        if row is not None:
-            free.remove(row)
-        pairs.append((session, row))
-    return pairs, free
+    matched: dict[int, PlannedWorkout] = {}
+
+    def assign(fits):
+        for i, session in enumerate(sessions):
+            if i in matched:
+                continue
+            candidates = [r for r in free if fits(r, session)]
+            if candidates:
+                row = min(candidates, key=lambda r: (abs((r.date - session.date).days), r.pk))
+                free.remove(row)
+                matched[i] = row
+
+    assign(lambda r, s: r.kind == s.kind and r.date == s.date)
+    assign(lambda r, s: r.kind == s.kind)
+    assign(lambda r, s: True)
+    return [(s, matched.get(i)) for i, s in enumerate(sessions)], free
 
 
 def _write(athlete, plan, row, session, gphase, phase, bands):

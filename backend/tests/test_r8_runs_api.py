@@ -165,3 +165,97 @@ def test_new_plan_uses_the_choice(api, athlete):
     for w in p.workouts.filter(kind__in=RUNS):
         counts[(w.date - start).days // 7] += 1
     assert max(counts.values()) > 4
+
+
+# --- Regression: re-layout must keep each row's identity (and its watch copy) --------
+#
+# A greedy single-pass pairing let an earlier run/walk session take the long run's row
+# when the week had more run/walks than run/walk rows. The long run (unchanged) then got
+# a NEW row without a Garmin id, and the old long run's watch copy was replaced by a
+# 17 min run/walk on a different day. Whether it happened depended on the weekday the
+# plan started on (it starts "tomorrow"), so the clock is pinned explicitly here.
+
+def _pin_clock(monkeypatch, instant):
+    from django.utils import timezone as dj_tz
+
+    monkeypatch.setattr(dj_tz, "now", lambda: instant)
+
+
+def _watch_from(calls):
+    """What the watch holds after the fake client's calls: {garmin id: date}."""
+    watch = {}
+    for call in calls:
+        if call[0] == "schedule":
+            watch[call[1]] = call[2]
+        elif call[0] == "delete":
+            watch.pop(call[1], None)
+        elif call[0] == "unschedule":
+            watch.pop(call[1] - 50000, None)
+    return watch
+
+
+# Sunday 23:50 UTC is Monday 05:20 in Kolkata (the reported failure), plus one instant
+# per weekday so the plan starts on every day of the week.
+PINNED = [dt.datetime(2026, 10, 11, 23, 50, tzinfo=dt.timezone.utc)] + [
+    dt.datetime(2026, 10, 5 + d, 6, 0, tzinfo=dt.timezone.utc) for d in range(7)]
+
+
+@pytest.mark.parametrize("instant", PINNED, ids=lambda t: t.strftime("%a-%H%M"))
+def test_relayout_keeps_long_run_row_and_watch_in_step(api, athlete, fake, monkeypatch,
+                                                       django_capture_on_commit_callbacks,
+                                                       instant):
+    _pin_clock(monkeypatch, instant)
+    athlete.timezone = "Asia/Kolkata"
+    athlete.available_days = ALL_DAYS
+    athlete.save()
+    today = athlete.local_today
+    plan = accept_plan(propose_plan(athlete, race_name="Test 10K", distance_km=10,
+                                    race_date=today + dt.timedelta(weeks=10)))
+    start = start_of(plan)
+    i = future_weeks(plan, athlete)[0]
+    week = plan.workouts.filter(kind__in=RUNS, date__gte=start + dt.timedelta(days=7 * i),
+                                date__lt=start + dt.timedelta(days=7 * i + 7))
+    long_run = week.get(kind="LONG")
+    for w in week:                                           # the whole week on the watch
+        assert api.post(f"/api/workouts/{w.pk}/garmin/").status_code == 200
+    long_run.refresh_from_db()
+    fixed = {w.pk: (w.date, w.title, w.steps) for w in plan.workouts.filter(date__lte=today)}
+    calls_before = list(fake.calls)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        assert patch(api, runs_per_week=6).status_code == 200
+
+    after = PlannedWorkout.objects.get(pk=long_run.pk)
+    assert after.kind == "LONG"                              # the row stays the long run
+    if (after.date, after.steps) == (long_run.date, long_run.steps):
+        assert after.garmin_workout_id == long_run.garmin_workout_id   # not re-sent
+    # Every workout on the watch matches exactly one current row, on its date.
+    watch = _watch_from(calls_before + fake.calls)
+    rows = {w.garmin_workout_id: w.date.isoformat()
+            for w in plan.workouts.filter(garmin_workout_id__isnull=False)}
+    assert watch == rows
+    for pk, (date, title, steps) in fixed.items():           # today and past untouched
+        w = PlannedWorkout.objects.get(pk=pk)
+        assert (w.date, w.title, w.steps) == (date, title, steps)
+
+
+def test_pair_matches_kind_across_the_week_first():
+    from types import SimpleNamespace as NS
+
+    from apps.planning.relayout import _pair
+
+    d = dt.date(2026, 10, 13)                                # a Tuesday plan week
+    rows = [NS(pk=1, kind="RUN_WALK", date=d + dt.timedelta(days=1)),
+            NS(pk=2, kind="RUN_WALK", date=d + dt.timedelta(days=3)),
+            NS(pk=3, kind="LONG", date=d + dt.timedelta(days=5)),
+            NS(pk=4, kind="RUN_WALK", date=d + dt.timedelta(days=6))]
+    sessions = [NS(kind="RUN_WALK", date=d + dt.timedelta(days=k)) for k in (0, 1, 2, 3)] + [
+        NS(kind="LONG", date=d + dt.timedelta(days=5)),
+        NS(kind="RUN_WALK", date=d + dt.timedelta(days=6))]
+    pairs, spare = _pair(sessions, rows)
+    got = {(s.kind, s.date): (r.pk if r else None) for s, r in pairs}
+    assert got[("LONG", d + dt.timedelta(days=5))] == 3
+    assert got[("RUN_WALK", d + dt.timedelta(days=1))] == 1      # same day kept
+    assert got[("RUN_WALK", d + dt.timedelta(days=3))] == 2
+    assert got[("RUN_WALK", d + dt.timedelta(days=6))] == 4
+    assert sorted(r.pk for _, r in pairs if r) == [1, 2, 3, 4] and spare == []
