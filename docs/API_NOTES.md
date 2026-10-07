@@ -619,3 +619,279 @@ report: {
   broken entry → `weather_available: false`, `feels_like_max` / `hydration` null.
   `hydration` has the `/weather/today/` shape `{before_ml, during_ml_per_h, after_note,
   electrolytes}`. Diet targets for the fueling guide come from the existing diet endpoint.
+
+## R10 (SPEC_R10.md) — contract for §B (Garmin data) and §C (features)
+
+All paths are under `/api/`, need a signed-in athlete (401 otherwise) and only ever read
+or write the requester's own rows. Dates are ISO `YYYY-MM-DD`; datetimes ISO 8601 with
+offset; local clock times are `"HH:MM"` (24 h) in the athlete's timezone. Any field
+marked `|null` is `null` when Garmin / the data does not provide it — the UI hides it.
+Errors are `400 {detail: str}` unless noted.
+
+**Ranges.** Every `?range=` below accepts `7d | 4w | 3m | 6m | 1y` (7, 28, 91, 182, 365
+days ending today, inclusive). Anything else → 400 `{detail}`. Defaults: fitness 6m,
+sleep 4w, form 3m, body 6m, compare 3m. Every ranged body carries
+`range: str, start: date, end: date`.
+
+### B1/B3 `GET /health/fitness/?range=`
+```
+{ range, start, end,
+  vo2max:          {current: float|null, change: float|null, series: [{date, value: float}]},
+  fitness_age:     {current: float|null, chronological_age: int|null,
+                    achievable: float|null, change: float|null,
+                    series: [{date, value: float}]},
+  endurance_score: {current: int|null, level: str|null, change: int|null,
+                    series: [{date, value: int}]},
+  race_predictions: {current: Pred|null, previous: Pred|null,
+                     as_of: date|null, previous_as_of: date|null,
+                     series: [{date, "5k_s", "10k_s", "half_s", "marathon_s"}]},
+  lactate_threshold: null | {hr: int|null, pace_s_per_km: int|null, date: date,
+                     source: "garmin", zones_updated: bool, zones_updated_at: datetime|null,
+                     series: [{date, hr: int|null, pace_s_per_km: int|null}]},
+  zones: Zones|null }
+Pred = {"5k_s": int|null, "10k_s": int|null, "half_s": int|null, "marathon_s": int|null}
+```
+- `change` = latest value in the range minus the first value in the range (null with
+  fewer than 2 values). Race predictions: `previous` = the first prediction in the range;
+  lower seconds = faster.
+- `endurance_score.level`: Garmin classification as words (Recreational, Intermediate,
+  Trained, Well-trained, Expert, Superior, Elite) or null.
+- `zones_updated` is true for 14 days after the LT changed the zones.
+- `Zones` = the athlete's `zones` object (below).
+
+**Athlete `zones` gains keys** (existing keys unchanged): `source: "heart_rate_reserve" |
+"lactate_threshold"`, `lt_hr: int|null`, `lt_date: date|null`, `updated_at: datetime|null`,
+`capped: bool` (true when the safety rule below lowered an LT-derived easy bound).
+`resting_hr` may be null when the zones come from the LT alone.
+
+**LT → zones safety rule.** Zones switch to the lactate threshold only when Garmin has
+an LT heart rate (120–210 bpm, below max HR when known). LT zones (fractions of LTHR,
+Friel running): Z1 0.65–0.85, Z2 0.85–0.89, Z3 0.89–0.94, Z4 0.94–1.00, Z5 1.00–max HR
+(max = known max HR, else LTHR × 1.06). **Easy zones can never get harder:** Z1 and Z2
+bounds are each `min(LT value, heart-rate-reserve value, hr_ceiling)` (HRR zones when they
+can be computed), so an easy run never targets a higher HR than before; Z3 then starts at
+Z2's top. The LT, its date and source are stored on the athlete (`lt_hr`, `lt_pace_s`,
+`lt_date`, `zones_source`, `zones_updated_at`); a newer LT only rewrites them when the HR
+or pace changed. Without LT data nothing changes.
+
+### B2 `GET /health/training-status/`
+```
+{ date: date|null, status: str|null, status_key: str|null,
+  acute_load: float|null, chronic_load: float|null, acwr: float|null,
+  load_focus: null | {date: date, feedback: str|null, period_days: 28,
+     items: [{key: "low_aerobic"|"high_aerobic"|"anaerobic", label: str, value: float,
+              target_min: float|null, target_max: float|null,
+              state: "below"|"in_range"|"above"|null}]},
+  history: [{date, status_key: str|null, acute_load: float|null, chronic_load: float|null}] }
+```
+- `status` e.g. "Productive"; `status_key` one of productive, maintaining, recovery,
+  unproductive, detraining, peaking, overreaching, strained, no_status (null if unknown).
+- `feedback` e.g. "Below targets" (Garmin's phrase in words). `history` = last 28 days,
+  oldest first. Everything comes from the latest day that has it.
+
+### B4 `GET /health/sleep/?range=` (default 4w)
+```
+{ range, start, end,
+  nights: [{date, sleep_s: int|null, need_s: int|null, score: int|null,
+            deep_s, light_s, rem_s, awake_s: int|null,
+            bedtime: "YYYY-MM-DDTHH:MM"|null, wake_time: "YYYY-MM-DDTHH:MM"|null,
+            restless_moments: int|null, spo2_avg: float|null, spo2_low: float|null,
+            breathing_rate: float|null}],
+  averages: Avg, previous: Avg,
+  regularity: {bedtime_sd_min: int|null, previous_bedtime_sd_min: int|null, n: int,
+               better: bool|null},
+  debt: {need_s: int|null, debt_s: int|null, short_nights: int, nights: int,
+         short_by_s: int|null},
+  sleep_vs_runs: {short_h: 6, long_h: 7, short: {easy_hr: float|null, n: int},
+                  long: {easy_hr: float|null, n: int}, diff_bpm: float|null,
+                  enough_data: bool, sentence: str|null},
+  tonight: {need_s: int|null, wake_time: "HH:MM"|null, bedtime: "HH:MM"|null} }
+Avg = {sleep_s: int|null, need_s: int|null, score: int|null, deep_s: int|null,
+       rem_s: int|null, spo2_avg: float|null, breathing_rate: float|null,
+       restless_moments: int|null, bedtime: "HH:MM"|null, wake_time: "HH:MM"|null}
+```
+- A night is dated by the morning it ends (Garmin's convention). `nights` oldest first,
+  only nights with any sleep data. `previous` = the same-length range just before.
+- Regularity = standard deviation of bedtime (minutes; bedtimes after midnight count as
+  24:xx), needs ≥ 3 nights (else null); `better` = SD at least 5 min lower than previous.
+- Debt = the last 7 nights with both values: Σ(need − actual), never below 0 (`debt_s`);
+  `need_s` = median need; `short_nights` = nights under need; `short_by_s` = mean shortfall
+  on those nights.
+- Sleep vs runs: HR on easy-pace runs the day after a night < 6 h vs ≥ 7 h, within the
+  range; `enough_data` needs ≥ 3 runs on each side.
+- Tonight: median wake time of the last 7 nights; bedtime = wake − need − 15 min.
+
+### B5 `GET /health/form/?range=` (default 3m)
+```
+{ range, start, end, has_dynamics: bool,
+  runs: [{activity_id, date, cadence_spm: float|null, ground_contact_ms: float|null,
+          vertical_oscillation_cm: float|null, stride_length_m: float|null,
+          run_km: float, run_pace_s_per_km: float|null}],
+  metrics: [{key: "cadence"|"ground_contact"|"vertical_oscillation"|"stride_length",
+             label, unit, current: float|null, previous: float|null, change: float|null,
+             better: bool|null, trend_per_week: float|null, n: int}] }
+```
+- `current` = mean of the last 5 runs in range with the value, `previous` = the 5 before.
+  `better`: cadence closer to 168; ground contact / vertical oscillation lower; stride
+  length null (not good/bad by itself). Null below 1 % change.
+
+### B6 `GET /health/records/`
+```
+{ records: [{key, label, source: "garmin"|"computed", unit: "s"|"m", value: float,
+             display: str, date: date|null, activity_id: int|null,
+             garmin_activity_id: int|null, is_new: bool}],
+  new_count: int, synced_on: date|null }
+```
+- Garmin keys (in this order, only the ones Garmin has): `1k`, `mile`, `5k`, `10k`, `half`,
+  `marathon` (unit s), `longest_run` (unit m). Computed keys (from our own runs):
+  `fastest_1k` (s), `longest_distance` (m), `longest_continuous` (s, longest unbroken run
+  block). `display` "27:15", "1:02:15", "10.2 km".
+- `is_new` = set within the last 14 days. `activity_id` = our Activity when matched.
+
+### B7 `GET /health/body/?range=` (default 6m)
+```
+{ range, start, end, profile_weight_kg: float|null,
+  latest: null | {date, weight_kg: float|null, body_fat_pct: float|null, bmi: float|null,
+                  muscle_mass_kg: float|null, source: "garmin"|"manual"},
+  change: {weight_kg: float|null, body_fat_pct: float|null},
+  trend_kg_per_week: float|null,
+  series: [{date, weight_kg: float|null, body_fat_pct: float|null,
+            source: "garmin"|"manual"}] }
+```
+- Garmin weigh-ins merged with manual weight entries (one point per day; Garmin wins).
+  A Garmin weigh-in newer than every weight entry also becomes a `MetricEntry` (source
+  garmin), so the profile weight — and so Diet — uses it.
+
+### B8 Gear — `GET/POST /gear/`, `PATCH/DELETE /gear/{id}/`
+```
+GET  -> {shoes: [Shoe], default_retire_km: 700}
+Shoe = {id, name, brand: str, source: "garmin"|"local", is_default: bool, retired: bool,
+        retire_km: float, start_km: float, distance_km: float, activities: int,
+        in_use_since: date|null, last_used: date|null, remaining_km: float,
+        replace_soon: bool, replace_due: bool, garmin_uuid: str|null, created_at}
+```
+- Order: active first, default first, then newest. Garmin shoes: distance/activity count
+  from Garmin's gear stats; `retire_km` from Garmin's max distance (else 700).
+  Local shoes: `start_km` + runs assigned to the shoe. Running activities with no shoe
+  dated on/after a local default shoe's `in_use_since` (else its creation date) are
+  auto-assigned to it.
+- `replace_soon` ≥ 90 % of `retire_km`, `replace_due` ≥ 100 %.
+- POST `{name (1–80, required), brand?, retire_km? (100–2000), start_km? (0–5000),
+  is_default?, in_use_since?}` → 201 Shoe (local). Making one default clears the others.
+- PATCH local: any of those + `retired`. PATCH a Garmin shoe: only `retire_km`,
+  `is_default`, `retired` (other keys → 400). DELETE local → 204; Garmin → 400.
+  Another athlete's id → 404.
+
+### C9 Lung recovery `GET /habits/lung-recovery/`
+```
+{ available: bool, reason: null|"no_quit_date"|"quit_date_in_future",
+  quit_date: date|null, days_since_quit: int|null,
+  metrics: [{key: "sleep_breathing_rate"|"spo2"|"resting_hr"|"easy_hr", label, unit,
+             before: float|null, before_n: int, now: float|null, now_n: int,
+             change: float|null, better: bool|null, enough_data: bool,
+             series: [{date, value: float}], sentence: str}],
+  milestones: [{label, reached: bool, at: datetime}],
+  note: str }
+```
+- before = the 14 days before the quit date; now = the last 14 days (since the quit date
+  when that is shorter). `enough_data` needs ≥ 5 values each side. Thresholds for
+  `better` as R8 impact (breathing ±0.5, SpO2 ±1 point, RHR ±2, easy HR ±2). Series from
+  quit − 14 days to today. Sentences describe association only ("…since you quit — this
+  can't show the cause"). `available: false` → `metrics: []`, `milestones: []`.
+
+### C10 Weekly report
+`GET /reports/weekly/?week=YYYY-MM-DD` (any date in the wanted Monday–Sunday week;
+default = last complete week). The current or a future week → 400. Built and stored on
+first read if the Monday 06:00 job has not run yet.
+```
+{ id, week_start, week_end, generated_at,
+  runs: {done: int, planned: int, planned_done: int, km: float, run_km: float,
+         time_s: int, previous_done: int, previous_km: float},
+  zones: {Z1, Z2, Z3, Z4, Z5, below: int (seconds)} | {}, zones_total_s: int,
+  prs: [{key, label, display, date}],
+  wellness: [{metric: "hrv"|"rhr"|"sleep"|"sleep_score", label, unit,
+              this_week: float|null, previous_week: float|null, delta: float|null,
+              better: bool|null}],
+  habits: [{habit: "smoke"|"alcohol"|"sugar"|"private", label, this_week: float,
+            previous_week: float, delta: float, better: bool|null}],
+  went_well: [str], to_improve: [str], goal: str,
+  ai: {status: "none"|"ready", markdown: str, generated_at: datetime|null} }
+```
+- `GET /reports/weekly/list/` → `[{id, week_start, week_end, runs_done, km, generated_at}]`
+  newest first, max 52.
+- `POST /reports/weekly/ai/?week=` → `{status, markdown, generated_at}` (coach tier,
+  cached per report; `?refresh=1` regenerates). 503 `{detail}` when AI is unavailable or
+  the budget is used; 429 throttle scope `chat`. The model gets the report minus the
+  private habit (and nothing per-day).
+- `habits` lists only tracked habits (logged in either week or with a goal); `private`
+  only when enabled. Fewer than 2 runs/night values → wellness side null.
+- Beat: hourly; an athlete is built when it is Monday 06:xx in their timezone (idempotent).
+
+### C11 Compare any two
+`GET /health/compare/metrics/` →
+`{metrics: [{key, label, unit, group: "wellness"|"habits"|"runs", noun: str}]}`.
+Keys — wellness: `sleep_h, sleep_score, hrv, rhr, stress, body_battery, breathing_rate,
+spo2, steps, bedtime_h, training_load`; habits: `smoke, alcohol, sugar` (+ `private` only
+when enabled); runs (by run date, mean of the day's runs): `run_km, run_pace, easy_hr,
+avg_hr, efficiency, cadence, hr_drift, run_fraction`. `bedtime_h`: 22.5 = 22:30, 25.0 = 01:00.
+
+`GET /health/compare/?x=&y=&range=&lag=0|1` (lag default 0; 1 = y the day after x)
+```
+{ x: {key, label, unit}, y: {key, label, unit}, range, start, end, lag: int,
+  points: [{date, x: float, y: float}], n: int, rho: float|null,
+  strength: "none"|"weak"|"moderate"|"strong"|null,
+  direction: "positive"|"negative"|null, enough_data: bool,
+  trend: {slope: float, intercept: float}|null, sentence: str, caveat: str }
+```
+- Unknown key, x == y, `private` while disabled, lag not 0/1 → 400 `{detail}`.
+- Habit days count from the first log (0 on days without one). `enough_data` n ≥ 8;
+  strength by |ρ|: < 0.2 none, < 0.4 weak, < 0.6 moderate, else strong. ρ to 2 dp.
+- Sentence e.g. "Days with more sleep tended to be followed by lower HR at easy pace
+  (ρ = −0.48, n = 22)." Compare is never sent to the AI.
+
+### C12 Reminders (web push)
+- `GET /reminders/` →
+  `{available: bool, public_key: str|null, subscriptions: int, ios_note: str,
+    reminders: [{key, label, description, enabled: bool, time: "HH:MM"}]}`.
+  Keys: `morning_checkin` (07:00), `habit_log` (21:00), `best_run_time` (06:00),
+  `weekly_report` (Mondays, 07:00). All off by default.
+- `PATCH /reminders/` `{<key>: {enabled?: bool, time?: "HH:MM"}, …}` → same as GET.
+  Bad key / time → 400.
+- `POST /reminders/subscribe/` `{endpoint: https URL, keys: {p256dh, auth}}` → 201
+  `{id, created: bool}` (200 with `created: false` when already stored).
+- `POST /reminders/unsubscribe/` `{endpoint}` → `{deleted: int}` (own rows only).
+- `POST /reminders/test/` → `{sent: int, failed: int}`.
+- `available` is false unless `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`
+  are all set; then subscribe/test → 503 `{detail}` and nothing is sent (GET/PATCH still
+  work). Push payload `{title, body, url, tag}`; no habit counts or health numbers in it.
+- Beat every 5 min: a reminder is sent once per local day, from its time up to 2 h after.
+  `best_run_time` needs a weather best window; `weekly_report` only on Mondays with a
+  report. Expired subscriptions (404/410) are deleted.
+
+### C13 Achievements
+- `GET /achievements/` →
+```
+{ badges: [{key, group, label, description, target: int, unit: str, earned: bool,
+            earned_on: date|null, progress: {current: int, target: int}, new: bool}],
+  recent: [{key, kind: "badge"|"pr", label, earned_on: date}], unseen: int }
+```
+  Groups/keys: smoke_free (`smoke_free_1|3|7|14|30|90`, days; only when smoking is
+  tracked), consistency (`consistent_weeks_2|4|8|12`: consecutive Mon–Sun weeks with ≥ 2
+  runs), distance (`first_5k`: a run ≥ 5 km), records (`prs_1|5|10`: personal-record
+  events), run_streak (`run_streak_3|5|7`: consecutive days with a run), sleep
+  (`sleep_7h_3|7|14|30`: consecutive nights ≥ 7 h). `earned_on` = the day it was reached,
+  stored once (idempotent). `recent` = last 10 earned (badges and PR events).
+- `POST /achievements/seen/` → `{updated: int}` (clears `new`).
+
+### C14 `GET /health/readiness-forecast/`
+```
+{ date: date (tomorrow), estimate: int|null, low: int|null, high: int|null,
+  label: str, is_estimate: true,
+  today: {score: int|null, source: "garmin"|"computed"|null},
+  factors: [{key: "load"|"hrv_trend"|"sleep_debt"|"alcohol"|"smoke", label, effect: int,
+             detail: str}],
+  levers: [{key: "bedtime"|"no_alcohol", label: str, gain: int}],
+  best_case: int|null, sentence: str, note: str }
+```
+- Deterministic; `estimate` null (with a sentence saying why) when there is no readiness
+  data in the last 3 days. Private habit is never an input.
