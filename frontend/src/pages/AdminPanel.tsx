@@ -6,12 +6,13 @@ import { Disclosure, Row, RowGroup } from '../components/Disclose'
 import { Field } from '../components/Field'
 import { CardHead, Meter, Pill } from '../components/Kit'
 import { PageHeader } from '../components/PageHeader'
+import { Compare, Glossary, ModelsSection, ProviderSwitch, TiersR15 } from '../components/admin/AiR15'
 import { ErrorState, Skeleton } from '../components/States'
 import { ApiError, api, json } from '../lib/auth'
 import { errorText } from '../lib/queries'
 import {
-  useAdminInvites, useAdminSystem, useAdminUsers, useAdminWrite, useAiConfig, useAiPrices, useAiProviders, useAiStats,
-  type AdminUser, type AiPrice, type AiStats, type AiTier, type Invite,
+  useAdminInvites, useAdminSystem, useAdminUsers, useAdminWrite, useAiPrices, useAiProviders, useAiStats,
+  type AdminUser, type AiPrice, type AiStats, type Invite,
 } from '../lib/r14admin'
 
 type Tab = 'users' | 'ai' | 'system'
@@ -199,22 +200,53 @@ function Invites() {
 
 // --- AI ---------------------------------------------------------------------------------
 
+type AiSub = 'usage' | 'setup' | 'models' | 'compare'
+const AI_SUBS: Array<{ key: AiSub; label: string }> = [
+  { key: 'usage', label: 'Usage' }, { key: 'setup', label: 'Setup' }, { key: 'models', label: 'Models' }, { key: 'compare', label: 'Compare' },
+]
+
 function AiTab() {
+  const [sub, setSub] = useState<AiSub>(() => {
+    try { return (sessionStorage.getItem('rc.admin.ai') as AiSub) || 'usage' } catch { return 'usage' }
+  })
+  useEffect(() => {
+    try { sessionStorage.setItem('rc.admin.ai', sub) } catch { /* ignore */ }
+  }, [sub])
   return (
     <div className="stack">
-      <Usage />
-      <Disclosure id="admin-tiers" title="Models per tier" sub="Provider + model for lite · fast · coach · deep">
-        <Tiers />
-      </Disclosure>
-      <Disclosure id="admin-test" title="Test a prompt" sub="Send one prompt to any configured model">
-        <TestPrompt />
-      </Disclosure>
-      <Disclosure id="admin-prices" title="Price table" sub="USD per 1M tokens, per model">
-        <Prices />
-      </Disclosure>
-      <Disclosure id="admin-providers" title="Providers" sub="OpenAI · Google AI Studio (Gemini)">
-        <Providers />
-      </Disclosure>
+      <div className="segmented segmented-full" role="tablist" aria-label="AI sections">
+        {AI_SUBS.map((t) => (
+          <button key={t.key} type="button" role="tab" aria-selected={sub === t.key} className={`segmented-option ${sub === t.key ? 'is-active' : ''}`} onClick={() => setSub(t.key)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {sub === 'usage' && <Usage />}
+      {sub === 'setup' && (
+        <>
+          <ProviderSwitch />
+          <Disclosure id="admin-tiers" title="Models per tier" sub="Provider + model and a fallback for lite · fast · coach · deep">
+            <TiersR15 />
+          </Disclosure>
+          <Disclosure id="admin-test" title="Test a prompt" sub="Send one prompt to any configured model">
+            <TestPrompt />
+          </Disclosure>
+          <Disclosure id="admin-prices" title="Price table" sub="USD per 1M tokens, per model">
+            <Prices />
+          </Disclosure>
+          <Disclosure id="admin-providers" title="Providers" sub="OpenAI · Google AI Studio (Gemini)">
+            <Providers />
+          </Disclosure>
+          <Glossary />
+        </>
+      )}
+      {sub === 'models' && (
+        <>
+          <ModelsSection />
+          <Glossary />
+        </>
+      )}
+      {sub === 'compare' && <Compare />}
     </div>
   )
 }
@@ -234,66 +266,10 @@ function Providers() {
           <p className="muted small">
             {Object.entries(x.features).filter(([, v]) => v).map(([k]) => k.replace('_', ' ')).join(' · ') || 'No features reported'}
           </p>
-          <p className="small">{x.models.length ? x.models.join(', ') : 'No models in the price table yet.'}</p>
+          <p className="small">{x.models.length ? `${x.models.length} models${(x as { models_source?: string }).models_source === 'live' ? ' (live list)' : ' (from the price table)'} — see AI → Models` : 'No models in the price table yet.'}</p>
         </section>
       ))}
     </>
-  )
-}
-
-function Tiers() {
-  const cfg = useAiConfig()
-  const providers = useAiProviders()
-  const write = useAdminWrite()
-  const [draft, setDraft] = useState<Record<string, { provider: string; model: string }>>({})
-  if (cfg.isPending || providers.isPending) return <Skeleton lines={4} />
-  if (cfg.isError) return <Forbidden error={cfg.error} what="AI config" />
-  const configured = (providers.data ?? []).filter((p) => p.configured)
-  const modelsOf = (key: string) => (providers.data ?? []).find((p) => p.key === key)?.models ?? []
-  const value = (t: AiTier) => draft[t.tier] ?? { provider: t.provider, model: t.model }
-  const changed = Object.entries(draft).filter(([tier, v]) => {
-    const t = cfg.data.tiers.find((x) => x.tier === tier)
-    return t && (t.provider !== v.provider || t.model !== v.model)
-  })
-  const save = () =>
-    write.mutate(
-      { path: '/admin/ai/config/', method: 'PUT', body: { tiers: changed.map(([tier, v]) => ({ tier, ...v })) } },
-      { onSuccess: () => setDraft({}) },
-    )
-  return (
-    <section className="card stack">
-      {cfg.data.tiers.map((t) => {
-        const v = value(t)
-        return (
-          <div key={t.tier} className="stack-sm admin-tier">
-            <div className="kit-head">
-              <span className="grow"><b>{t.tier}</b> <span className="muted small">{t.source === 'db' ? `set here${t.updated_at ? ` · ${when(t.updated_at)}` : ''}` : 'from env'}</span></span>
-              {!t.available && <Pill topic="bad">Unavailable</Pill>}
-            </div>
-            <div className="grid-2 grid-2-even">
-              <select aria-label={`${t.tier} provider`} value={v.provider} onChange={(e) => setDraft({ ...draft, [t.tier]: { provider: e.target.value, model: modelsOf(e.target.value)[0] ?? '' } })}>
-                {configured.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-                {!configured.some((p) => p.key === v.provider) && <option value={v.provider}>{v.provider} (no key)</option>}
-              </select>
-              <select aria-label={`${t.tier} model`} value={v.model} onChange={(e) => setDraft({ ...draft, [t.tier]: { provider: v.provider, model: e.target.value } })}>
-                {modelsOf(v.provider).map((m) => <option key={m} value={m}>{m}</option>)}
-                {!modelsOf(v.provider).includes(v.model) && <option value={v.model}>{v.model}</option>}
-              </select>
-            </div>
-            {t.source === 'db' && (
-              <button type="button" className="link-btn small" disabled={write.isPending} onClick={() => write.mutate({ path: '/admin/ai/config/', method: 'PUT', body: { tiers: [{ tier: t.tier, reset: true }] } })}>
-                Reset to env ({t.env_provider} · {t.env_model})
-              </button>
-            )}
-          </div>
-        )
-      })}
-      <p className="muted small">Uses: {Object.entries(cfg.data.operations).map(([op, tier]) => `${op} → ${tier}`).join(' · ')}</p>
-      {write.isError && <p className="bad small">{errorText(write.error, 'Could not save.')}</p>}
-      <button type="button" className="btn btn-primary btn-sm" disabled={!changed.length || write.isPending} onClick={save}>
-        {write.isPending ? 'Saving…' : changed.length ? `Save ${changed.length} change${changed.length === 1 ? '' : 's'}` : 'No changes'}
-      </button>
-    </section>
   )
 }
 

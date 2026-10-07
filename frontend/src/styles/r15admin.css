@@ -1,0 +1,83 @@
+/* R15 admin → AI: provider switch, model cards, pickers, compare. Admin chunk only. */
+
+.ai-glossary { line-height: 1.5; }
+.ai-h { font-size: 15px; font-weight: 800; margin: 0; }
+.ai-clip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ai-model-grid, .ai-compare-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) {
+  .ai-model-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ai-compare-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+}
+.ai-model .kit-head { margin-bottom: 0; align-items: flex-start; }
+.ai-model-name { font-size: 16px; }
+.ai-model code { font-size: 12px; overflow-wrap: anywhere; }
+.ai-chips { gap: 6px; align-items: center; }
+
+.ai-meters { display: grid; gap: 6px; }
+.ai-meter { display: grid; grid-template-columns: 64px auto 1fr; align-items: center; gap: 10px; font-size: 13px; }
+.ai-meter-label { color: var(--muted); font-weight: 600; }
+.ai-meter-word { font-weight: 700; }
+.ai-dots { display: inline-flex; gap: 4px; }
+.ai-dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.ai-dots.is-good i.on { background: var(--run); }
+.ai-dots.is-cost i.on { background: var(--fuel); }
+
+.ai-facts { display: grid; gap: 4px; margin: 0; font-size: 13px; }
+.ai-facts > div { display: grid; grid-template-columns: 96px 1fr; gap: 8px; }
+.ai-facts dt { color: var(--muted); font-weight: 600; }
+.ai-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ai-facts-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ai-facts-row > div { display: block; }
+.ai-facts-row .is-best dd { color: var(--good-fg); font-weight: 700; }
+
+.ai-route { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px; align-items: center; }
+.ai-fallback-label { margin-top: 2px; }
+.ai-route select { min-height: 48px; }
+.ai-fallback-note { padding: 0 4px; }
+
+.ai-picker {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 6px 12px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.ai-picker b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-picker:disabled { opacity: 0.5; }
+.ai-pick-row {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 56px; padding: 12px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.ai-pick-row.is-active { border-color: var(--run); box-shadow: 0 0 0 1px var(--run); }
+.ai-pick-row .kit-head { margin-bottom: 2px; }
+.ai-pick-meta { margin-top: 4px; font-weight: 600; }
+
+.ai-target { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.ai-target + .ai-target { border-top: 1px solid var(--line-soft); padding-top: 10px; }
+.ai-target select { min-height: 48px; }
+.ai-target-pick { grid-column: 2 / -1; min-width: 0; }
+.ai-target > .chip { grid-row: 1; grid-column: 3; }
+.ai-picker-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ai-picker-wrap > .warn-text { margin: 0; }
+.ai-target-n {
+  flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--run-tint); color: var(--run-ink); font-weight: 800; font-size: 13px;
+}
+
+.ai-result .kit-head { margin-bottom: 0; align-items: flex-start; }
+.ai-output { max-height: 320px; overflow: auto; font-size: 14px; }
+.ai-sent summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--run-ink); font-weight: 700; }
+.ai-pre { white-space: pre-wrap; font-size: 12px; max-height: 240px; overflow: auto; background: var(--card-2); padding: 10px; border-radius: 10px; margin: 0; }
+.ai-stars { display: flex; gap: 2px; }
+.ai-star {
+  width: 44px; height: 44px; border: 0; background: none; font-size: 24px; line-height: 1; cursor: pointer;
+  color: var(--line); padding: 0;
+}
+.ai-star.on { color: var(--habits); }
+
+.ai-history { display: flex; flex-direction: column; }
+.ai-history-row {
+  display: flex; align-items: center; width: 100%; min-height: 56px; padding: 8px 4px; gap: 8px;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; min-width: 0;
+}
+.ai-history-row .grow { min-width: 0; }
+.ai-history-row + .ai-history-row { border-top: 1px solid var(--line-soft); }
+.ai-history-row.is-active b { color: var(--run-ink); }
