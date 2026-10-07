@@ -121,3 +121,18 @@ class CheckinExplanation(BaseModel):
     """R7 §1: the one-line "why" under the morning check-in verdict."""
 
     text: str = Field(description="One sentence, at most 30 words.")
+
+
+class HabitsSummary(BaseModel):
+    """R8 §B: the habits explanation, from aggregates only."""
+
+    markdown: str = Field(description="A short markdown summary, 80-160 words.")
+
+
+class ProgressReview(BaseModel):
+    """R8 §C: the progress review of the last N runs against the N before."""
+
+    went_well: list[str] = Field(description="1-3 short points that improved.")
+    improve: list[str] = Field(description="1-3 short points to work on.")
+    check: list[str] = Field(description="0-2 things worth checking (heat, sleep, kit).")
+    markdown: str = Field(description="A short markdown review, 60-140 words.")

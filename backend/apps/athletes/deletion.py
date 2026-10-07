@@ -3,6 +3,11 @@
 The database cascade from User removes every row. Files on disk do not cascade, so
 they are collected first and removed after the rows are gone: FIT files, meal photos,
 and the athlete's Garmin token directory (a live credential for their Garmin account).
+
+R8: habit logs (HabitLog) cascade with the athlete, and so do the stored location
+fields (they live on the Athlete row). Per-activity cache entries (progress' fastest
+1 km) are dropped explicitly. The weather cache is keyed by a rounded place, not a
+person, and expires within the hour.
 """
 
 import logging
@@ -72,11 +77,28 @@ def revoke_refresh_tokens(user: User) -> int:
     return count
 
 
+def _cache_keys(user: User) -> list[str]:
+    from apps.activities.models import Activity
+
+    athlete = getattr(user, "athlete", None)
+    if athlete is None:
+        return []
+    return [f"progress:fastest1k:{pk}:{version}" for pk, version in
+            Activity.objects.filter(athlete=athlete).values_list("pk", "segmentation_version")]
+
+
 def delete_account(user: User) -> None:
+    from django.core.cache import cache
+
     paths = _athlete_paths(user)
+    keys = _cache_keys(user)
     with transaction.atomic():
         revoke_refresh_tokens(user)
         # OutstandingToken.user is SET_NULL, so the blacklist rows outlive the user.
         user.delete()
     for path in paths:
         _remove(path)
+    try:
+        cache.delete_many(keys)
+    except Exception:  # noqa: BLE001 — a cache outage must not fail a finished deletion
+        logger.exception("account deletion: could not clear cache keys")

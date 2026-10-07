@@ -54,6 +54,12 @@ class WellnessSnapshot:
     body_battery_high: int | None = None
     acwr: float | None = None                # acute:chronic custom load, 7 / 28 days
     last_rpe: int | None = None              # yesterday's post-run RPE (highest)
+    # R8: habits and weather. Each can only add watch/bad reasons (easier, never harder).
+    drinks_yesterday: float | None = None    # standard drinks logged yesterday
+    heat_feels_like: float | None = None     # at the best run window today
+    heat_dew_point: float | None = None
+    heat_hot: bool = False
+    aqi: float | None = None                 # US AQI now
 
 
 @dataclass

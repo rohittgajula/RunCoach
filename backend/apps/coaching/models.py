@@ -63,6 +63,8 @@ class AIAnalysis(OwnedByAthlete):
         REVIEW = "review", "Workout review"
         INSIGHTS = "insights", "Insights overview"
         CHECKIN = "checkin", "Morning check-in explanation"
+        HABITS = "habits", "Habits summary"
+        PROGRESS = "progress", "Progress review"
 
     kind = models.CharField(max_length=12, choices=Kind.choices, db_index=True)
     activity = models.ForeignKey(

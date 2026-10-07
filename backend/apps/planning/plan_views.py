@@ -230,7 +230,11 @@ def workout_view(request, pk: int):
     if workout is None:
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
     if request.method == "GET":
-        return Response(workout_json(workout))
+        from apps.ingest.weather_services import workout_weather
+
+        body = workout_json(workout)
+        body["weather"] = workout_weather(request.user.athlete, workout)
+        return Response(body)
 
     fields = []
     if "date" in request.data:

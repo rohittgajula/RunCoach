@@ -34,6 +34,9 @@ READINESS_WATCH = 50
 ACWR_WATCH = 1.5
 RPE_WATCH = 8
 EASY_HR_DROP = 5
+# R8: drinks yesterday (standard drinks) and air quality (US AQI).
+ALCOHOL_WATCH, ALCOHOL_BAD = 3, 5
+AQI_WATCH, AQI_BAD = 100, 200
 MIN_BASELINE_DAYS = 7
 # Only when Garmin has no HRV baseline band yet: a drop this far under the athlete's
 # own recent average is a "watch" (never "bad" — the spec's bad rule needs Garmin's band).
@@ -160,8 +163,29 @@ def signals(s: WellnessSnapshot) -> tuple[list[dict], list[str]]:
         reasons.append(_reason("rpe", status, f"Yesterday's run felt {s.last_rpe}/10",
                                s.last_rpe))
 
+    reasons += _r8_signals(s)
     reasons.sort(key=lambda r: STATUS_ORDER[r["status"]])
     return reasons, missing
+
+
+def _r8_signals(s: WellnessSnapshot) -> list[dict]:
+    """Alcohol, heat, air (R8). Only ever watch/bad — none is reported as "good" and none
+    counts as missing, so they can only make the verdict easier."""
+    out = []
+    drinks = s.drinks_yesterday
+    if drinks is not None and drinks >= ALCOHOL_WATCH:
+        status = "bad" if drinks >= ALCOHOL_BAD else "watch"
+        out.append(_reason("alcohol", status, f"{drinks:g} drinks last night", drinks))
+    if s.heat_hot:
+        bits = [f"feels like {s.heat_feels_like:.0f}°C" if s.heat_feels_like is not None
+                else None,
+                f"dew point {s.heat_dew_point:.0f}°C" if s.heat_dew_point is not None else None]
+        label = "Hot today" + (": " + " · ".join(b for b in bits if b) if any(bits) else "")
+        out.append(_reason("heat", "watch", label, s.heat_feels_like))
+    if s.aqi is not None and s.aqi > AQI_WATCH:
+        status = "bad" if s.aqi > AQI_BAD else "watch"
+        out.append(_reason("air", status, f"Air quality AQI {s.aqi:.0f}", s.aqi))
+    return out
 
 
 def verdict_for(reasons: list[dict], has_workout: bool) -> str:

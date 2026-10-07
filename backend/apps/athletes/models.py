@@ -89,6 +89,45 @@ class Athlete(models.Model):
         default=6, help_text="0 = Monday. The one day with time for a long session."
     )
 
+    # R8 §A: how many days a week to run (2-6). None = the coach default
+    # (planning.generator.run_day_limit). Same weekly volume, split differently.
+    runs_per_week = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    # R8 §B: habits. Logged in apps.habits; these are the goals and the quit maths.
+    class SmokeGoal(models.TextChoices):
+        QUIT = "quit", "Quit"
+        REDUCE = "reduce", "Reduce"
+        NONE = "none", "None"
+
+    class ReduceGoal(models.TextChoices):
+        REDUCE = "reduce", "Reduce"
+        NONE = "none", "None"
+
+    smoke_goal = models.CharField(max_length=6, choices=SmokeGoal.choices,
+                                  default=SmokeGoal.NONE)
+    smoke_quit_date = models.DateField(null=True, blank=True)
+    smoke_baseline_per_day = models.FloatField(null=True, blank=True)
+    cigarette_price = models.FloatField(null=True, blank=True, help_text="Rupees per cigarette.")
+    alcohol_goal = models.CharField(max_length=6, choices=ReduceGoal.choices,
+                                    default=ReduceGoal.NONE)
+    sugar_goal = models.CharField(max_length=6, choices=ReduceGoal.choices,
+                                  default=ReduceGoal.NONE)
+    daily_limits = models.JSONField(default=dict, blank=True)
+
+    # R8 §D: where the athlete runs, rounded to 2 decimals (~1 km) — never finer.
+    class LocationSource(models.TextChoices):
+        RUNS = "runs", "From runs"
+        CITY = "city", "City"
+        NONE = "none", "None"
+
+    location_lat = models.FloatField(null=True, blank=True)
+    location_lon = models.FloatField(null=True, blank=True)
+    location_name = models.CharField(max_length=120, blank=True, default="")
+    location_city = models.CharField(max_length=120, blank=True, default="",
+                                     help_text="What the athlete typed; overrides runs.")
+    location_source = models.CharField(max_length=4, choices=LocationSource.choices,
+                                       default=LocationSource.NONE)
+
     # Whether the athlete has been through onboarding. Needed as an explicit flag
     # rather than inferred: the router has to decide where a freshly-registered
     # athlete lands, and racing a redirect against a state update silently skipped

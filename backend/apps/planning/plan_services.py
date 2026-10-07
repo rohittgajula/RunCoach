@@ -166,7 +166,28 @@ def _checkin_extras(athlete: Athlete, day: dt.date) -> dict:
     return {
         "acwr": round(acute / chronic, 2) if chronic > 0 and enough else None,
         "last_rpe": max(rpes) if rpes else None,
+        **_r8_extras(athlete, day),
     }
+
+
+def _r8_extras(athlete: Athlete, day: dt.date) -> dict:
+    """R8: drinks logged yesterday, and today's heat / air (today only; no weather = no
+    signal)."""
+    from django.db.models import Sum
+
+    from apps.habits.models import HabitLog
+
+    drinks = HabitLog.objects.filter(
+        athlete=athlete, kind="alcohol", local_date=day - dt.timedelta(days=1),
+    ).aggregate(total=Sum("quantity"))["total"]
+    extras = {"drinks_yesterday": drinks}
+    if day == athlete.local_today:
+        from apps.ingest.weather_services import checkin_weather
+
+        wx = checkin_weather(athlete)
+        extras.update(heat_feels_like=wx.get("feels_like"), heat_dew_point=wx.get("dew_point"),
+                      heat_hot=bool(wx.get("hot")), aqi=wx.get("aqi"))
+    return extras
 
 
 def session_on(athlete: Athlete, day: dt.date) -> Session | None:

@@ -65,3 +65,26 @@ def isolated_throttle_cache(monkeypatch):
     cache = LocMemCache("throttle-tests", {})
     cache.clear()
     monkeypatch.setattr(SimpleRateThrottle, "cache", cache)
+
+
+@pytest.fixture(autouse=True)
+def no_real_weather(monkeypatch):
+    """R8 §D: Open-Meteo is never called from tests. Every weather fetch fails (an
+    outage) unless a test patches `apps.ingest.weather._get_json` itself, and the
+    weather / progress caches are a fresh in-memory cache per test (never the shared
+    Redis the dev server uses)."""
+    from django.core.cache.backends.locmem import LocMemCache
+
+    from apps.ingest import weather
+
+    def offline(url, params):
+        raise weather.WeatherUnavailable("network disabled in tests")
+
+    cache = LocMemCache("weather-tests", {})
+    cache.clear()
+    monkeypatch.setattr(weather, "_get_json", offline)
+    monkeypatch.setattr(weather, "cache", cache)
+    from apps.activities import progress
+
+    monkeypatch.setattr(progress, "cache", cache)
+    return cache

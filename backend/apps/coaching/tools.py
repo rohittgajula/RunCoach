@@ -85,6 +85,15 @@ TOOLS = [
          "meal_type": {"type": "string", "enum": ["breakfast", "lunch", "dinner", "snack"]},
          "eaten_at": {"type": "string", "description": "ISO datetime, athlete local time"}},
         ["description", "meal_type"]),
+    _fn("log_habit",
+        "Log cigarettes (smoke), standard drinks (alcohol) or sugar servings (sugar) the "
+        "athlete says they had, e.g. 'had 2 beers at 9' -> alcohol 2 at 21:00 today. "
+        "Only log what they actually said; never guess a quantity.",
+        {"kind": {"type": "string", "enum": ["smoke", "alcohol", "sugar"]},
+         "quantity": {"type": "number", "minimum": 0.1, "maximum": 100},
+         "at": {"type": "string", "description": "ISO datetime, athlete local time; "
+                "omit for now"}},
+        ["kind", "quantity"]),
     _fn("add_memory", "Remember a durable fact about the athlete.",
         {"text": {"type": "string"}}, ["text"]),
 ]
@@ -283,6 +292,33 @@ class ToolRunner:
         )
         self._attach("meal", meal.pk)
         return meal_json(meal)
+
+    def t_log_habit(self, kind, quantity=1, at=None):
+        from django.utils import timezone
+        from django.utils.dateparse import parse_datetime
+
+        from apps.habits.models import HabitLog
+        from apps.habits.services import counts_on, log_json
+
+        if kind not in HabitLog.Kind.values:
+            return {"error": "kind must be smoke, alcohol or sugar."}
+        try:
+            quantity = float(quantity)
+        except (TypeError, ValueError):
+            return {"error": "quantity must be a number."}
+        if not 0 < quantity <= 100:
+            return {"error": "quantity must be between 0.1 and 100."}
+        when = parse_datetime(str(at)) if at else None
+        if when is not None and timezone.is_naive(when):
+            from zoneinfo import ZoneInfo
+
+            when = when.replace(tzinfo=ZoneInfo(self.athlete.timezone or "UTC"))
+        now = timezone.now()
+        if when is None or when > now:
+            when = now                     # never in the future
+        log = HabitLog.objects.create(athlete=self.athlete, kind=kind, quantity=quantity,
+                                      at=when, note="via chat")
+        return {"logged": log_json(log), "today": counts_on(self.athlete, log.local_date)}
 
     def t_add_memory(self, text):
         fact = add_fact(self.athlete, text, MemoryFact.Source.CHAT, self.chat_message)

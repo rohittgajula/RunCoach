@@ -2,7 +2,7 @@
 
 > Claude keeps this current. If it contradicts the code, the code wins and this is stale.
 
-Last updated: **2026-10-07** · Status: **R0–R4 built; R6 backend built (history baseline, adaptation, month calendar, Insights, more Garmin); R7 backend built (morning check-in, post-run check-in, easy-day guard, send to Garmin — no live upload yet) — R5 polish next** (see [docs/SPEC.md](docs/SPEC.md) § 6). Deviations from the API contract: [docs/API_NOTES.md](docs/API_NOTES.md).
+Last updated: **2026-10-07** · Status: **R0–R4 built; R6 backend built (history baseline, adaptation, month calendar, Insights, more Garmin); R7 backend built (morning check-in, post-run check-in, easy-day guard, send to Garmin — no live upload yet); R8 backend built (runs per week, habits, progress comparison, weather — docs/SPEC_R8.md) — R5 polish next** (see [docs/SPEC.md](docs/SPEC.md) § 6). Deviations from the API contract: [docs/API_NOTES.md](docs/API_NOTES.md).
 
 ## Origin
 
@@ -46,7 +46,7 @@ read it before touching Garmin, dates, or the AI client.
 Login → onboarding → chat "build a plan for 10k" → proposal card → accept → calendar
 fills with workouts → Guide opens a chat with the workout attached and a step-by-step
 answer incl. fueling. Weight entry + history sheet. Diet targets for a rest day.
-Backend suite: 661 passing (R6 + R7 backend + deploy hardening + plan re-flow).
+Backend suite: 772 passing (R6 + R7 + R8 backend + deploy hardening + plan re-flow).
 
 ## Deploy hardening (2026-10-04, docs/DEPLOY.md §1–2)
 
@@ -82,3 +82,18 @@ anything — fixed with `FixedScopeThrottle`.
   plan** offer is gone from the UI; `POST /api/plans/active/rebuild/` remains.
 - Rohit's 7-day selection on 2026-10-04 was never saved (no PATCH reached the server);
   his profile was still Mon/Wed/Fri/Sat.
+
+## R8 backend (2026-10-07)
+
+- **Runs per week** (`Athlete.runs_per_week`, 2–6 or Auto): same weekly volume, split
+  differently; no session under 15 min (fewer runs that week, with a note); always a rest
+  day. Changing it re-lays fully-future plan weeks (`planning/relayout.py`).
+- **Habits** (`apps/habits`, `analysis/habits.py`): cigarette / drink / sugar logs, quit
+  streak and savings, next-morning impact (n ≥ 5 each side, thresholds), AI summary from
+  aggregates only, chat `log_habit`, check-in `alcohol` signal.
+- **Progress** (`analysis/progress.py`, `GET /progress/`): last N runs vs the N before,
+  direction-aware, by distance bucket, bests, focus, AI review.
+- **Weather** (`analysis/weather_advice.py`, `apps/ingest/weather*.py`): Open-Meteo
+  forecast + air quality + geocoding, keyless, 5 s timeout, cached hourly per rounded
+  place; location rounded to 2 dp from run GPS or a typed city. Hydration, best run
+  window, AQI advice, diet water bonus, check-in `heat`/`air` signals (easier only).

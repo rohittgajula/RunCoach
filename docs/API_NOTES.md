@@ -376,3 +376,115 @@ and never fails the save.
   (db + Redis) is readiness. Both answer regardless of the Host header.
 - `InviteCode` lives in admin: "Generate code" on the list page, or the action
   "Generate a new code like each selected one".
+
+## R8 (SPEC_R8.md) — additions and choices
+
+**§A runs per week**
+- Athlete JSON: `runs_per_week` (null | 2–6, writable; 1/7/non-int → 400),
+  `runs_per_week_recommended` (= `run_day_limit` on the active plan's
+  `summary.baseline.run_km_per_week`, else the history baseline, else the 5 km/week
+  beginner default → 4), `runs_per_week_effective` = min(choice or recommended,
+  available days, 6).
+- Generator: same weekly volume split over the effective count. **15-min rule applies to
+  every plan, not only explicit choices**: a week whose non-long sessions would be under
+  15 min total gets fewer runs (never fewer than 2). Plan `summary.notes` lists those
+  weeks ("Week of 19 Oct: 5 runs instead of 6 — …"); `summary.runs_per_week` stores the choice.
+- Re-layout (`planning/relayout.py`, `apps/planning/relayout.py`): only **plan weeks**
+  (7-day blocks from the first phase start, the generator's own weeks) that start after
+  today, contain no RACE and only `planned` workouts. The current partial week is never
+  re-laid. A week is regenerated only when its run count differs from the target. Week
+  volume = the stored prescribed run seconds (adaptation already applied to those rows,
+  so it is kept — not re-applied twice); walking seconds kept too; phase from the rows.
+  Rows are rewritten in place (same kind first) so watch copies are re-sent (`watch_updated`);
+  surplus rows and WALKs on a new run date are deleted (`dropped`, `watch_removed`).
+  The long run keeps its share of the week, so it usually does not change.
+- Triggers on PATCH /api/athlete/: `runs_per_week` changed, or days/long-run day changed
+  **while an explicit `runs_per_week` is set** (re-flow first, then re-layout). With
+  "Auto" (null) a days change keeps the earlier re-flow behaviour (drops). The re-flow's
+  limit is the explicit choice when set.
+- `plan_reflow` (when not null) is now always `{moved, dropped, watch_updated,
+  watch_removed, regenerated, notes}` (re-flow and re-layout summed). `notes` can be
+  non-empty with `regenerated: 0`. Record appended to `summary.reflows` with reason
+  "runs per week changed".
+
+**§B habits** (`apps/habits`, `analysis/habits.py`)
+- Log JSON: `{id, kind, quantity, at, local_date, note, created_at}`. quantity 0.1–100
+  (default 1); `at` > 5 min in the future → 400; note ≤ 200. GET list: newest first, max
+  1000, default last 90 days when neither `start` nor `end` given; bad date → 400.
+- `GET /habits/today/` `last_at` values are the last log time ever (null if none).
+- Summary extra keys: `today`, `goals` {smoke, alcohol, sugar}. Impact rows have extra
+  `dose` (null, or "1-2"/"3+" for alcohol HRV rows, shown only when both dose groups have
+  ≥ 3 nights). All impact rows are returned (UI filters on `enough_data`). Impact metric
+  keys: hrv, rhr, sleep_score, body_battery, stress, sleep_respiration (±0.5 brpm), easy_hr,
+  efficiency (±3 %), hr_drift (±1 pt). Days considered: from the first log of that habit
+  (or quit date for smoke) to yesterday; metrics are the DailyMetrics dated the next day.
+- **Averages** divide by the range window, or by the days since the first-ever log of
+  that habit when shorter (minimum 7 days) — never by days with data. `per_day_avg` /
+  `per_week_avg` are null when the habit was never logged.
+- Streak: zero-cigarette days counted from the quit date or first log (whichever is
+  earlier); today counts while clean. `since_quit` null without a quit date;
+  `cigarettes_avoided` = max(baseline × days − smoked since quit, 0) (null without
+  baseline); `money_saved` a number in ₹ (null without price). Milestones count from the
+  later of the quit date (local midnight) and the last cigarette logged after it.
+- `POST /habits/summary/?range=&refresh=1` → `{status, markdown, generated_at}` (like
+  insights), not the full payload. Cached per day; `refresh=1` deletes today's row and
+  regenerates. 503 `{detail}` on AIUnavailable/budget; 429 throttle scope `chat`. The
+  model gets aggregates only (no series, rows, times or notes); money as "₹2,448".
+- Morning check-in: signal `alcohol` only when yesterday's drinks ≥ 3 (watch) / ≥ 5 (bad),
+  label "3 drinks last night", value = drinks. Never "good", never in `signals_missing`.
+- Chat tool `log_habit(kind, quantity, at?)` (future `at` → now; note "via chat");
+  system prompt `habits: {today, yesterday, goals, smoke_free_streak_days,
+  days_since_quit}` when the athlete tracks anything.
+- Insights focus: `smoke_free` (smoke days in last 14 > the 14 before) and `alcohol`
+  (12-week alcohol→HRV row with enough_data and direction worse).
+- Athlete fields: `smoke_goal` (quit|reduce|none, default none), `smoke_quit_date`,
+  `smoke_baseline_per_day` (0–100), `cigarette_price` (0–10000), `alcohol_goal`,
+  `sugar_goal` (reduce|none), `daily_limits` ({smoke?, alcohol?, sugar?: number 0–100 | null}).
+
+**§C progress** (`analysis/progress.py`, `apps/activities/progress*.py`)
+- `GET /progress/?window=1|5|10|20&sport=running|walking` (else 400). Extra keys:
+  `window, runs, current_n, previous_n, sport, today, review`. Runs: last 365 days, max
+  300, with segmented running. window=1 compares the last run with the 5 before.
+- `metrics`: 12 rows, keys `run_km, total_km, run_pace, avg_hr, max_hr, easy_hr,
+  efficiency, hr_drift, cadence, run_fraction, longest_run_s, z2_pct` (units km, km, s/km,
+  bpm, bpm, bpm, m/min/bpm, %, spm, %, s, %). Values are per-run means. `run_fraction`
+  in percent. `better` null when |delta_pct| < 1 %, either side missing, or for avg/max
+  HR; cadence better = closer to 168 spm. easy_hr = duration-weighted HR of run blocks
+  whose pace is within easy_pace_min−15 … easy_pace_max+30 s/km.
+- `distance_buckets`: `[{bucket: lt2|2to5|5to8|8plus, label, runs, current_n,
+  previous_n, metrics}]` by total distance. `bests`: `{fastest_1k_s, longest_run_km,
+  longest_continuous_s, lowest_easy_hr}` each `{value, date, activity_id, new}` or null
+  (fastest 1 km from the distance stream, cached per activity). `series`: last
+  max(2×window, 40) runs `{date, activity_id, run_km, total_km, pace, avg_hr, efficiency,
+  cadence, bucket}`. `focus`: `[{key, kind: improve|check, title, why, how}]`, ≤ 4.
+- `POST /progress/review/?window=&refresh=1` → `{status, went_well, improve, check,
+  markdown, generated_at}`; 409 with no runs; 503 AIUnavailable; cached per window per day.
+  `GET /progress/` carries the same object as `review` (status none until generated).
+
+**§D weather** (`analysis/weather_advice.py`, `apps/ingest/weather*.py`)
+- `GET /weather/today/` always 200. Extra keys: `available`, `reason` (null |
+  "no_location" | "unavailable"), `daily {temp_max, temp_min, feels_like_max}`, `heat`
+  (cool|warm|hot|very_hot), `pace_slowdown_pct` (0/3/8/12). When unavailable: `now`,
+  `hydration`, `best_window`, `heat` null, lists empty, bonus 0.
+- `hourly[]`: next 24 h from the current hour `{time ("YYYY-MM-DDTHH:MM" local), temp,
+  feels_like, humidity, dew_point, precip_prob, wind (km/h), uv, weather_code,
+  condition, aqi, pm25}`. `best_window {start, end, reason}` local ISO minutes, 1 h, may
+  be tomorrow morning. Advisory `level`: info | caution | warning.
+- Hydration uses the best-window conditions and today's planned workout duration:
+  `during_ml_per_h` 0 when the run is < 45 min (band value when nothing is planned).
+  Water bonus / food tips use today's max feels-like.
+- Location: `location_city` (writable; geocoded on save; not found or outage → 400
+  `{location_city: [...]}`; "" clears → back to runs). Read-only `location_lat/lon`
+  (2 dp), `location_name` ("Near your recent runs" for source runs), `location_source`.
+  Runs location = first GPS record of the latest run, re-derived on read.
+- Cache: Django cache (Redis) per rounded lat/lon + timezone + UTC hour, 1 h; 5 s timeout.
+- Check-in: `heat` (watch) when even the best window is hot (feels ≥ 32 °C or dew ≥ 24 °C);
+  `air` watch AQI > 100, bad > 200. Neither ever "good" nor in `signals_missing`.
+- Diet day: `targets.water_ml` includes the bonus, new `targets.water_bonus_ml`, top-level
+  `weather_tips: [str]`, `fueling[].weather_note` (str | null) — today only.
+- `GET /workouts/{id}/` gains `weather`: null unless the workout is today; else
+  `{available:false, reason}` or `{available, location_name, now, best_window, advisories,
+  hydration, heat, pace_slowdown_pct, fueling_note}`.
+
+**§E** Account deletion removes HabitLog (cascade) and location (Athlete row); per-activity
+progress cache keys are deleted too.

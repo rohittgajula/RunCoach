@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     "apps.coaching",
     "apps.journal",
     "apps.diet",
+    "apps.habits",
 ]
 
 MIDDLEWARE = [
@@ -340,6 +341,9 @@ AI_MODEL_TIERS = {
     "insights_summary": "coach",
     # R7: the one-line morning check-in "why".
     "checkin_explain": "lite",
+    # R8: habits explanation and the progress review are the coach's voice.
+    "habits_summary": "coach",
+    "progress_review": "coach",
 }
 
 # Per athlete per month, every model call counted. Read by coaching/services.py.

@@ -131,6 +131,11 @@ class FocusInputs:
     gap_days: int | None = None
     respiration_recent: list[float | None] = field(default_factory=list)  # newest first
     respiration_baseline: float | None = None
+    # R8 §B: smoking days in the last 14 vs the 14 before; the alcohol -> HRV impact row.
+    smoke_days_recent: int | None = None
+    smoke_days_before: int | None = None
+    smoke_streak_days: int | None = None
+    alcohol_hrv: dict | None = None
 
 
 def _item(key, title, why, how) -> dict:
@@ -178,6 +183,8 @@ def focus(inputs: FocusInputs) -> list[dict]:
             f"{round(inputs.easy_above_z2_share * 100)} % of your easy running was above Z2.",
             "Run slower, walk sooner — if you can't talk in full sentences, it's too fast."))
 
+    items += habit_focus(inputs)
+
     if inputs.avg_cadence is not None and inputs.avg_cadence < CADENCE_FOCUS_BELOW:
         items.append(_item(
             "cadence", "Shorter, quicker steps",
@@ -194,3 +201,25 @@ def focus(inputs: FocusInputs) -> list[dict]:
             "Add 30–60 s to each run block next week, keeping the walks the same."))
 
     return items[:MAX_FOCUS]
+
+
+def habit_focus(inputs: FocusInputs) -> list[dict]:
+    """R8 §B: smoking days rising -> smoke-free streak; alcohol nights with lower HRV
+    (enough data only) -> an alcohol item. Association wording, never causation."""
+    items = []
+    recent, before = inputs.smoke_days_recent, inputs.smoke_days_before
+    if recent is not None and before is not None and recent > before:
+        streak = inputs.smoke_streak_days or 0
+        items.append(_item(
+            "smoke_free", "Smoke-free streak",
+            f"You smoked on {recent} of the last 14 days, up from {before} the 14 before.",
+            f"Your current smoke-free streak is {streak} day{'s' if streak != 1 else ''} — "
+            "aim to add one more today; your lungs and easy runs both benefit."))
+    row = inputs.alcohol_hrv
+    if row and row.get("enough_data") and row.get("direction") == "worse":
+        items.append(_item(
+            "alcohol", "Alcohol and recovery",
+            f"On nights after drinking your HRV was {abs(row['diff']):g} ms lower on "
+            f"average (n={row['n_with']} vs {row['n_without']}).",
+            "Keep drinks to the nights before rest days, and not the night before a key run."))
+    return items

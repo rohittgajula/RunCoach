@@ -127,13 +127,16 @@ def test_diet_day_shape(api, athlete, active):
     assert r.status_code == 201, r.content
     assert set(r.json()) == MEAL_KEYS and r.json()["kcal"] == 180
     body = api.get("/api/diet/day/", {"date": str(day)}).json()
-    assert set(body) == {"date", "targets", "eaten", "burn", "meals", "fueling", "missing_profile"}
-    assert set(body["targets"]) == {"kcal", "carbs_g", "protein_g", "fat_g", "water_ml", "rationale"}
+    # R8 §D added weather_tips and targets.water_bonus_ml (0 without weather).
+    assert set(body) == {"date", "targets", "eaten", "burn", "meals", "fueling",
+                         "missing_profile", "weather_tips"}
+    assert set(body["targets"]) == {"kcal", "carbs_g", "protein_g", "fat_g", "water_ml",
+                                    "water_bonus_ml", "rationale"}
     assert set(body["eaten"]) == {"kcal", "carbs_g", "protein_g", "fat_g"}
     assert set(body["burn"]) == {"bmr", "non_exercise", "exercise", "exercise_source"}
     assert body["eaten"]["kcal"] == 180
     assert body["burn"]["exercise_source"] == "planned"
-    assert set(body["fueling"][0]) == {"workout_id", "title"} | FUEL_KEYS
+    assert set(body["fueling"][0]) == {"workout_id", "title", "weather_note"} | FUEL_KEYS
     assert set(body["missing_profile"]) == {"height_cm", "sex", "date_of_birth"}
 
     meal_id = body["meals"][0]["id"]

@@ -259,9 +259,33 @@ def insights_payload(athlete: Athlete, range_key: str) -> dict:
         gap_days=(today - last_run).days if last_run else None,
         respiration_recent=resp[:3],
         respiration_baseline=baseline_resp,
+        **_habit_inputs(athlete, today),
     ))
     payload["summary"] = _summary(athlete, today)
     return payload
+
+
+def _habit_inputs(athlete: Athlete, today: dt.date) -> dict:
+    """R8 §B focus inputs: smoking days (last 14 vs the 14 before), the smoke-free
+    streak and the alcohol -> HRV impact row over 12 weeks."""
+    from apps.habits.models import HabitLog
+
+    if not HabitLog.objects.filter(athlete=athlete).exists():
+        return {}
+    from apps.habits.services import smoke_streak, summary_payload
+
+    days = set(HabitLog.objects.filter(
+        athlete=athlete, kind="smoke", local_date__gte=today - dt.timedelta(days=27),
+        quantity__gt=0).values_list("local_date", flat=True))
+    cut = today - dt.timedelta(days=13)
+    impact = summary_payload(athlete, "12w")["impact"]
+    return {
+        "smoke_days_recent": sum(1 for d in days if d >= cut),
+        "smoke_days_before": sum(1 for d in days if d < cut),
+        "smoke_streak_days": smoke_streak(athlete)["current_days"],
+        "alcohol_hrv": next((r for r in impact if r["habit"] == "alcohol"
+                             and r["metric"] == "hrv" and not r["dose"]), None),
+    }
 
 
 def _range(request) -> str | None:

@@ -217,22 +217,45 @@ class AthleteDetailView(generics.RetrieveUpdateAPIView):
 
     def update(self, request, *args, **kwargs):
         """Save the profile; when the training days change, move the active plan's
-        future workouts onto them (apps.planning.reflow) in the same transaction.
+        future workouts onto them (apps.planning.reflow), and when the number of runs a
+        week must change, re-lay the future weeks (apps.planning.relayout, R8 §A) — in
+        the same transaction.
 
         The response carries `plan_reflow`: {moved, dropped, watch_updated,
-        watch_removed}, or null when nothing in the plan had to change.
+        watch_removed, regenerated, notes}, or null when nothing in the plan changed.
         """
         from django.db import transaction
 
+        from apps.ingest.weather_services import refresh_location
         from apps.planning.reflow import reflow_active_plan
+        from apps.planning.relayout import relayout_active_plan
 
         athlete = self.get_object()
-        before = (athlete.available_days, athlete.long_run_day)
+        days_before = (athlete.available_days, athlete.long_run_day)
+        runs_before = athlete.runs_per_week
         with transaction.atomic():
             response = super().update(request, *args, **kwargs)
             athlete.refresh_from_db()
-            reflowed = None
-            if (athlete.available_days, athlete.long_run_day) != before:
-                reflowed = reflow_active_plan(athlete)
-        response.data["plan_reflow"] = reflowed
+            days_changed = (athlete.available_days, athlete.long_run_day) != days_before
+            runs_changed = athlete.runs_per_week != runs_before
+            reflowed = reflow_active_plan(athlete) if days_changed else None
+            relaid = None
+            if runs_changed or (days_changed and athlete.runs_per_week):
+                relaid = relayout_active_plan(athlete)
+        if athlete.location_source != "city":
+            refresh_location(athlete)
+            response.data.update({k: getattr(athlete, k) for k in (
+                "location_lat", "location_lon", "location_name", "location_source")})
+        response.data["plan_reflow"] = _merge_reflow(reflowed, relaid)
         return response
+
+
+def _merge_reflow(reflowed: dict | None, relaid: dict | None) -> dict | None:
+    if reflowed is None and relaid is None:
+        return None
+    merged = {"moved": 0, "dropped": 0, "watch_updated": 0, "watch_removed": 0,
+              "regenerated": 0, "notes": []}
+    for part in (reflowed, relaid):
+        for key, value in (part or {}).items():
+            merged[key] = merged[key] + value
+    return merged

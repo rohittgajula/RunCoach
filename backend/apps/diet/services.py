@@ -112,6 +112,14 @@ def meal_json(meal: Meal) -> dict:
     }
 
 
+def _weather_note(athlete: Athlete, workout: PlannedWorkout) -> str | None:
+    """R8 §D: forecast-aware drinking line for today's workouts (None otherwise)."""
+    from apps.ingest.weather_services import fueling_note, workout_weather
+
+    block = workout_weather(athlete, workout)
+    return block.get("fueling_note") if block and block.get("available") else None
+
+
 def diet_day(athlete: Athlete, day: dt.date) -> dict:
     data = _DayData(athlete, day, day)
     targets = data.targets(day, profile_for(athlete))
@@ -121,15 +129,23 @@ def diet_day(athlete: Athlete, day: dt.date) -> dict:
     fueling = []
     for workout in data.workouts.get(day, []):
         fuel = workout.fueling or fueling_for(workout.kind, workout.duration_s, weight).as_dict()
-        fueling.append({"workout_id": workout.pk, "title": workout.title, **fuel})
+        fueling.append({"workout_id": workout.pk, "title": workout.title, **fuel,
+                        "weather_note": _weather_note(athlete, workout)})
 
+    from apps.ingest.weather_services import water_bonus_ml
+
+    bonus, food_tips = water_bonus_ml(athlete, day)
+    rationale = targets.rationale
+    if bonus:
+        rationale = f"{rationale} +{bonus} ml water for the heat today.".strip()
     return {
         "date": day,
         "targets": {
             "kcal": targets.kcal, "carbs_g": targets.carbs_g, "protein_g": targets.protein_g,
-            "fat_g": targets.fat_g, "water_ml": targets.water_ml,
-            "rationale": targets.rationale,
+            "fat_g": targets.fat_g, "water_ml": targets.water_ml + bonus,
+            "water_bonus_ml": bonus, "rationale": rationale,
         },
+        "weather_tips": food_tips,
         "eaten": {
             "kcal": round(sum(m.kcal for m in meals)),
             "carbs_g": round(sum(m.carbs_g for m in meals)),

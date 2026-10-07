@@ -104,6 +104,11 @@ def system_prompt(athlete: Athlete) -> str:
         ],
         "diet_today": {"targets": diet["targets"], "eaten": diet["eaten"]},
     }
+    from apps.habits.services import chat_context
+
+    habits = chat_context(athlete)
+    if habits:
+        context["habits"] = habits
     return f"{PERSONA}\n\nContext (already calculated):\n{json.dumps(context, default=str)}"
 
 

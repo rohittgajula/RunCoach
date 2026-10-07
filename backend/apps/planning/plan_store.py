@@ -201,6 +201,8 @@ def propose_plan(
         available = [d for d in range(7) if baseline.available_days.get(str(d))]
         baseline = dataclasses.replace(baseline, long_run_day=available[-1] if available else 6)
 
+    if athlete.runs_per_week:
+        baseline = dataclasses.replace(baseline, runs_per_week=int(athlete.runs_per_week))
     generated = generate_plan(
         plan_start=start, race_date=race_date, race_km=float(distance_km),
         baseline=baseline, config=config_from_settings(),
@@ -254,6 +256,8 @@ def propose_plan(
             "race_created": race_created,
             "available_days": baseline.available_days,
             "long_run_day": baseline.long_run_day,
+            "runs_per_week": athlete.runs_per_week,
+            "notes": generated.notes,
             "baseline": {
                 "run_km_per_week": round(baseline.run_km_per_week, 1),
                 "longest_run_s": round(baseline.longest_run_s),

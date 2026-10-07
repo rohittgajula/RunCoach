@@ -13,6 +13,53 @@ WEEKDAYS = {"0", "1", "2", "3", "4", "5", "6"}
 class AthleteSerializer(serializers.ModelSerializer):
     training_days_per_week = serializers.IntegerField(read_only=True)
     zones = serializers.SerializerMethodField()
+    runs_per_week = serializers.IntegerField(min_value=2, max_value=6, allow_null=True,
+                                             required=False)
+    runs_per_week_recommended = serializers.SerializerMethodField()
+    runs_per_week_effective = serializers.SerializerMethodField()
+    smoke_baseline_per_day = serializers.FloatField(min_value=0, max_value=100,
+                                                    allow_null=True, required=False)
+    cigarette_price = serializers.FloatField(min_value=0, max_value=10000, allow_null=True,
+                                             required=False)
+    location_city = serializers.CharField(max_length=120, allow_blank=True, required=False)
+
+    def get_runs_per_week_recommended(self, athlete):
+        from apps.planning.relayout import recommended_runs
+
+        return recommended_runs(athlete)
+
+    def get_runs_per_week_effective(self, athlete):
+        from apps.planning.relayout import effective_runs
+
+        return effective_runs(athlete)
+
+    def validate_daily_limits(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict) or not set(value) <= {"smoke", "alcohol", "sugar"}:
+            raise serializers.ValidationError(
+                "Must be an object with optional keys smoke, alcohol, sugar.")
+        for key, limit in value.items():
+            if limit is not None and (not isinstance(limit, (int, float)) or
+                                      isinstance(limit, bool) or not 0 <= limit <= 100):
+                raise serializers.ValidationError(f"{key} must be a number 0-100 or null.")
+        return value
+
+    def validate_location_city(self, value):
+        """Geocode on save (Open-Meteo). Blank clears it: back to the runs' location."""
+        value = (value or "").strip()
+        if not value:
+            return {"city": ""}
+        from apps.ingest.weather import WeatherUnavailable, geocode
+
+        try:
+            found = geocode(value)
+        except WeatherUnavailable as exc:
+            raise serializers.ValidationError(
+                "Couldn't look that city up right now — try again in a minute.") from exc
+        if found is None:
+            raise serializers.ValidationError("Couldn't find that city.")
+        return {"city": value, **found}
 
     def get_zones(self, athlete):
         """None when the data cannot support zones — the client shows nothing
@@ -42,12 +89,18 @@ class AthleteSerializer(serializers.ModelSerializer):
             "run_cadence_threshold", "available_days", "long_run_day",
             "training_days_per_week", "onboarding_complete", "zones",
             "garmin_connected", "garmin_last_sync", "created_at", "updated_at",
+            # R8
+            "runs_per_week", "runs_per_week_recommended", "runs_per_week_effective",
+            "smoke_goal", "smoke_quit_date", "smoke_baseline_per_day", "cigarette_price",
+            "alcohol_goal", "sugar_goal", "daily_limits",
+            "location_lat", "location_lon", "location_name", "location_source",
+            "location_city",
         ]
         # System-managed. A client that could PATCH garmin_connected=True could make
         # the UI claim sync works when it does not.
         read_only_fields = [
             "id", "garmin_connected", "garmin_last_sync", "created_at", "updated_at",
-            "zones",
+            "zones", "location_lat", "location_lon", "location_name", "location_source",
         ]
 
     def validate_timezone(self, value):
@@ -84,6 +137,9 @@ class AthleteSerializer(serializers.ModelSerializer):
             if field in validated and validated[field] is not None
             and validated[field] != getattr(instance, field)
         }
+        city = validated.pop("location_city", None)
+        if city is not None:
+            _apply_city(instance, city)
         instance = super().update(instance, validated)
         for kind, value in changed.items():
             MetricEntry.objects.create(
@@ -125,6 +181,17 @@ class AthleteSerializer(serializers.ModelSerializer):
                 {"long_run_day": "Your long-run day must be a day you are available to train."}
             )
         return attrs
+
+
+def _apply_city(athlete, city: dict) -> None:
+    """A typed city overrides the runs' location; clearing it re-derives from runs."""
+    athlete.location_city = city["city"]
+    if city["city"]:
+        athlete.location_lat, athlete.location_lon = city["lat"], city["lon"]
+        athlete.location_name, athlete.location_source = city["name"], "city"
+    else:
+        athlete.location_lat = athlete.location_lon = None
+        athlete.location_name, athlete.location_source = "", "none"
 
 
 class RegisterSerializer(serializers.Serializer):

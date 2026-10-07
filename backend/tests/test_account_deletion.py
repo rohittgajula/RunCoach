@@ -92,3 +92,18 @@ def test_refresh_token_is_dead_after_deletion(client):
 @pytest.mark.django_db
 def test_deletion_requires_authentication(client):
     assert client.delete(ME, {"password": "x"}, content_type="application/json").status_code == 401
+
+
+def test_deletion_removes_habit_logs_and_location(api, athlete, other_athlete):
+    """R8: HabitLog rows and the stored location go with the account."""
+    from apps.habits.models import HabitLog
+
+    Athlete.objects.filter(pk=athlete.pk).update(location_lat=17.39, location_lon=78.49,
+                                                  location_name="Hyderabad",
+                                                  location_source="city")
+    for who in (athlete, other_athlete):
+        HabitLog.objects.create(athlete=who, kind="smoke", at=timezone.now(), quantity=2)
+    assert api.delete(ME, {"password": PASSWORD}, format="json").status_code == 204
+    assert not HabitLog.objects.filter(athlete_id=athlete.pk).exists()
+    assert not Athlete.objects.filter(location_lat=17.39, location_lon=78.49).exists()
+    assert HabitLog.objects.filter(athlete=other_athlete).count() == 1

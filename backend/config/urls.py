@@ -16,6 +16,7 @@ urlpatterns = [
     path("api/", include("apps.coaching.urls")),
     path("api/", include("apps.journal.urls")),
     path("api/", include("apps.diet.urls")),
+    path("api/", include("apps.habits.urls")),
 ]
 
 # Raw MEDIA_URL in development only. `static()` is a no-op when DEBUG is off; meal

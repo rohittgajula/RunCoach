@@ -21,7 +21,7 @@ import datetime as dt
 from django.db import transaction
 from django.utils import timezone
 
-from planning.generator import run_day_limit
+from planning.generator import MAX_RUN_DAYS, run_day_limit
 from planning.reflow import Item, reflow
 
 from .garmin_sync import forget_on_garmin, resync_on_garmin
@@ -32,10 +32,13 @@ REASON = "training days changed"
 KEEP_RECORDS = 20
 
 
-def _limit(plan: TrainingPlan) -> int:
+def _limit(plan: TrainingPlan, athlete=None) -> int:
     """Run days per week, the generator's rule on the baseline the plan was built on.
-    A plan without a stored baseline gets the regular cap (never more drops)."""
+    A plan without a stored baseline gets the regular cap (never more drops). The
+    athlete's own `runs_per_week` (R8 §A) wins when set."""
     config = config_from_settings()
+    if athlete is not None and athlete.runs_per_week:
+        return min(int(athlete.runs_per_week), MAX_RUN_DAYS)
     km = ((plan.summary or {}).get("baseline") or {}).get("run_km_per_week")
     if km is None:
         return config.max_run_days
@@ -66,7 +69,7 @@ def reflow_active_plan(athlete) -> dict | None:
     items = [Item(id=w.pk, date=w.date, kind=w.kind, duration_s=w.duration_s, status=w.status)
              for w in workouts.values()]
     result = reflow(items, available=available, long_day=athlete.long_run_day,
-                    limit=_limit(plan), today=today, last_date=last_date)
+                    limit=_limit(plan, athlete), today=today, last_date=last_date)
 
     summary = dict(plan.summary or {})
     summary["available_days"] = athlete.available_days

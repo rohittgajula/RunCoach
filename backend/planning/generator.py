@@ -82,6 +82,9 @@ class Baseline:
     walk_pace_s_per_km: float
     available_days: dict          # {"0".."6": bool}
     long_run_day: int
+    # The athlete's own choice of run days a week (R8 §A); None = the coach default
+    # (`run_day_limit`). The weekly volume never changes with it — only how it is split.
+    runs_per_week: int | None = None
 
 
 @dataclass
@@ -133,6 +136,9 @@ class Plan:
     race_needs_continuous_s: float
     warnings: list[str]
     weeks: list[Week]
+    # Weeks that got fewer runs than chosen because splitting the volume further would
+    # have made a session shorter than MIN_SESSION_MINUTES (R8 §A).
+    notes: list[str] = field(default_factory=list)
 
     @property
     def will_run_continuously(self) -> bool:
@@ -372,6 +378,33 @@ def run_day_limit(run_km_per_week: float, config: PlanConfig) -> int:
     )
 
 
+# R8 §A: never more than six run days (always one rest day), and no run session shorter
+# than this. When splitting a week's volume would go below it, the week gets fewer runs.
+MAX_RUN_DAYS = 6
+MIN_SESSION_MINUTES = 15.0
+
+
+def effective_run_days(choice: int | None, recommended: int, available_count: int) -> int:
+    """min(choice or recommended, available days, 6) — the run days a week will get."""
+    return max(min(choice or recommended, available_count, MAX_RUN_DAYS), 0)
+
+
+def fit_run_count(week_run_minutes: float, long_share: float, run_walk_ratio: float,
+                  wanted: int, long_cap_share: float = 1.0) -> int:
+    """Largest count <= wanted whose non-long sessions are all >= MIN_SESSION_MINUTES of
+    total time. Never below 2 (one long run + one other) when 2 were wanted, so the
+    week's volume always has somewhere to go; fewer runs only ever means longer ones."""
+    if wanted <= 2:
+        return wanted
+    long_minutes = week_run_minutes * min(long_share, long_cap_share)
+    rest_minutes = max(week_run_minutes - long_minutes, 0.0)
+    total_factor = 1 / run_walk_ratio if run_walk_ratio > 0 else 1.0
+    for n in range(wanted, 2, -1):
+        if rest_minutes / (n - 1) * total_factor >= MIN_SESSION_MINUTES:
+            return n
+    return 2
+
+
 def run_days(available: list[int], long_day: int, limit: int) -> list[int]:
     """Pick at most `limit` days from `available`, always including `long_day`,
     spread as evenly as possible around the week (largest smallest gap wins, then
@@ -397,7 +430,7 @@ def run_days(available: list[int], long_day: int, limit: int) -> list[int]:
 
 
 def _lay_out_week(
-    week: Week, baseline: Baseline, config: PlanConfig
+    week: Week, baseline: Baseline, config: PlanConfig, notes: list[str] | None = None,
 ) -> list[Session]:
     """Place the week's volume on the athlete's own available days.
 
@@ -421,7 +454,17 @@ def _lay_out_week(
         ]
 
     long_day = baseline.long_run_day if baseline.long_run_day in available else available[-1]
-    limit = run_day_limit(baseline.run_km_per_week, config)
+    wanted = effective_run_days(baseline.runs_per_week,
+                                run_day_limit(baseline.run_km_per_week, config), len(available))
+    limit = fit_run_count(week.planned_run_km * baseline.run_pace_s_per_km / 60,
+                          shape["long_share"], shape["run_walk_ratio"], wanted,
+                          config.max_long_run_pct_of_week / 100)
+    if limit < wanted and notes is not None:
+        notes.append(
+            f"Week of {week.start_date:%-d %b}: {limit} runs instead of {wanted} — splitting "
+            f"{week.planned_run_km:g} km further would make sessions shorter than "
+            f"{MIN_SESSION_MINUTES:g} min."
+        )
     chosen = run_days(available, long_day, limit)
     others = [d for d in chosen if d != long_day]
 
@@ -562,6 +605,7 @@ def generate_plan(
         )
 
     weeks: list[Week] = []
+    notes: list[str] = []
     for index, (phase, volume) in enumerate(zip(phases, volumes)):
         start = plan_start + dt.timedelta(days=index * 7)
         week = Week(
@@ -573,7 +617,7 @@ def generate_plan(
             continuous_target_s=continuous[index],
             is_cutback=index > 0 and volume < volumes[index - 1],
         )
-        week.sessions = _lay_out_week(week, baseline, config)
+        week.sessions = _lay_out_week(week, baseline, config, notes)
         weeks.append(week)
 
     return Plan(
@@ -586,4 +630,5 @@ def generate_plan(
         race_needs_continuous_s=round(race_needs_s),
         warnings=warnings,
         weeks=weeks,
+        notes=notes,
     )
