@@ -1629,3 +1629,86 @@ planner's wake time for today when it is between 04:00 and 11:00, else at this t
 PATCH with `time` for it → 400). Both off by default. Payloads: `{title: "Good morning",
 url: "/", tag: "briefing"}`, `{title: "Run reviewed", url: "/activities/{id}", tag:
 "run_review"}` — no numbers.
+
+### R13 backend choices (and where the spec was silent)
+- **Auto-adjust storage**: a new `WorkoutAdjustment` model (one row per changed workout,
+  with `before`/`after` for Undo), not `PlanAdjustment` — that table's (plan, week_start)
+  row is the weekly adaptation's idempotency key. The R6 weekly adaptation is unchanged.
+- **Auto-adjust rules** (`planning/adapt.py`, pure). Signal weights: RPE ≥ 9 → 2, RPE 8 on
+  an easy session → 1; run HR ≥ 5 bpm over the session's zone top → 1 (≥ 10 → 2); drift
+  > 8 % → 1; < 70 % of planned run time → 1 (< 50 % → 2); readiness < 25, sleep debt
+  ≥ 5 h / 7 nights, ≥ 3 drinks last night → 1 each; pain watch → 2, pain bad → 4; injury
+  risk high → 2. Score 1 = mild: the next session −10 % (a hard one is swapped with a
+  later easy day that does not put it the day before a long/hard day, else made easy);
+  2–3 = moderate: next −20 % (hard → easy −20 %), the one after −10 %; ≥ 4 = strong: next
+  becomes a run/walk at −25 % of total time, the one after −15 %; pain bad → next = rest.
+  Window: sessions today … today+4. Never: completed/skipped/past, RACE, WALK/REST,
+  moved (`moved_from`), check-in applied, `adjusted_by="kept"` (an undo) or already auto
+  (except an auto *extension*, which is reverted before easing). The same run / pain is
+  acted on once: re-evaluating it changes more sessions only when a new signal key appears.
+- **+5 % rule**: only with no strain signal, readiness ≥ 50 (or unknown), no pain, injury
+  risk low, and the last 3 runs all planned EASY/RUN_WALK/LONG sessions with ≥ 90 % of the
+  planned run time, RPE ≤ 6 (or none), HR not over the zone top, drift ≤ 5 %. Target: the
+  next EASY/RUN_WALK session; extra = min(5 % of its running, the room left in its plan
+  week) in whole minutes, ≥ 1 min. "Room" = the week's run seconds as the plan prescribed
+  them before any auto change (skipped and RACE excluded) minus what is prescribed now —
+  so the week can never exceed the plan's own volume (in practice the rule only gives back
+  time an earlier auto change took). Plan week = 7-day blocks from the first phase start.
+- **When it runs**: `planning.after_run` (queued after `activities.derive_one` for an
+  activity dated today or the 2 days before — history re-derivations never trigger it),
+  `planning.after_checkin` (post-run check-in saved; RPE), `planning.after_pain` (pain
+  report). Changed workouts on the watch are re-sent via `garmin_sync.resync_on_garmin`.
+- **Pain** in the morning check-in: a sore spot (≥ 2) on two of the last 3 days adds
+  reason `pain` (`watch`, or `bad` with a 3). A pain `watch` alone now makes the verdict at
+  least `easy`; `bad` → `rest` (existing rule). The check-in AI explanation gets the label
+  "Pain reported" — body locations never go to a model.
+- **GCT balance**: read from the FIT session message `avg_stance_time_balance` into
+  `ActivityMetrics.gct_balance_left_pct` (30–70 % only). Existing activities get it only
+  after re-derivation (`python manage.py derive` / an algorithm bump).
+- **Injury flags in the monthly report**: `flags` = spots with ≥ 2/3 on two or more days
+  that month; `pain_days` = days with any report (flags are not replayed day by day).
+- **Strength → watch**: supported. garminconnect 0.3.10 has
+  `Garmin.upload_strength_workout(StrengthWorkout)` (→ `upload_workout`, POST
+  /workout-service/workout) and the exercise catalogue `garminconnect.exercises`; the
+  session is uploaded with `StrengthWorkout.model_validate(payload)` then
+  `schedule_workout`, on the garmin queue with the shared breaker and the existing client
+  (`apps/planning/garmin_strength_push.py`). The 8 Guides exercises map to catalogue pairs
+  (calf → CALF_RAISE/STANDING_CALF_RAISE, bridge → HIP_RAISE/HIP_RAISE, split squat →
+  LUNGE/LUNGE, plank → PLANK/PLANK, side plank → PLANK/SIDE_PLANK, clamshell →
+  HIP_STABILITY/HIP_STABILITY, A-skip → WARM_UP/WALKING_HIGH_KNEES, hip-flexor →
+  WARM_UP/STRETCH_LUNGING_HIP_FLEXOR), verified against the installed catalogue in tests.
+  Holds end on time, the rest on reps (per-side doses doubled). Not probed on a live
+  account. `can_send_to_watch` = Garmin connected.
+- **Strength placement** needs an active plan; sessions are placed up to 8 weeks ahead
+  (nightly top-up `planning.strength_topup`), never in the 5 days before the race, and
+  re-placed when `strength_per_week`, the training days or runs per week change, or a plan
+  is accepted. A day in the past or a completed/skipped session is never moved.
+- **Run review URL**: `GET /activities/{id}/review/` shares its path with the R6 `POST`
+  (open a chat thread) — the POST still works and is the only one throttled.
+- **Caffeine** is a `HabitLog` kind with its own report (`/habits/caffeine/`, late-vs-not
+  rows in the R9 row shape) rather than a fourth habit inside `/habits/summary/` — adding
+  it there would have changed the smoke/alcohol/sugar summary, its AI input and the chat
+  tool. Garmin has no sleep-latency figure; "awake time in the night" stands in (said in
+  `caveat`). The monthly report lists caffeine with the other habits.
+- **Mood**: the weekly report gains a `mood` averages block (computed on read); mood notes
+  never leave the database (export aside).
+- **Briefing** is recomputed on each read after 04:00 and stored once a day (dismissal, AI
+  text). The 15-minute beat builds it at the wake planner's wake time (04:00–11:00, else
+  06:30); the `morning_briefing` push is sent at that time too.
+- **Export token** = HMAC-SHA256 (SECRET_KEY) of the export id and creation time —
+  re-derivable, never stored. The download needs the owner's auth and the token; the ZIP is
+  unlinked as soon as it is opened for the download. One export per hour per athlete
+  (any status). Includes everything the athlete owns, the private habit too; excludes FIT
+  files, meal photos and Garmin tokens. The DEBUG media route now refuses `exports/` (also
+  after `..` normalisation).
+- **Account deletion**: all R13 tables cascade from the Athlete; `media/exports/athlete_<id>/`
+  is removed with the other files.
+- **Deploy**: migrations `athletes.0010_r13`, `activities.0006_r13_gct_review`,
+  `coaching.0008_r13_ai_kinds`, `habits.0003_r13_caffeine_cravings`, `health.0002_r13`,
+  `planning.0005_r13`, `reminders.0004_r13_briefing_review`. Restart worker, garmin
+  worker and beat (new tasks: planning.after_run / after_checkin / after_pain /
+  garmin_strength_push (garmin queue) / strength_topup, health.monthly_reports /
+  build_monthly_report / morning_briefings, athletes.build_export / export_cleanup; new
+  beat entries monthly-reports, morning-briefings, strength-topup, export-cleanup). New
+  AI tier names `morning_briefing` (lite), `run_review`, `monthly_report` (coach) — no new
+  env vars, no new dependencies. Off-site backups: deploy/RESTORE.md.
