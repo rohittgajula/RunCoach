@@ -13,7 +13,7 @@ import { RacesCard } from '../components/profile/RacesCard'
 import { dur, pace } from '../lib/format'
 import { errorText, useProfileSummary } from '../lib/queries'
 import type { MetricKind } from '../lib/types'
-import { BUILD_PLAN_PROMPT } from './Calendar'
+import { BUILD_PLAN_PROMPT } from '../lib/prompts'
 
 function Metric({
   label, value, unit, onClick,

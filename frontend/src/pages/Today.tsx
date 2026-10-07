@@ -16,6 +16,7 @@ import { WeatherCard } from '../components/today/WeatherCard'
 import { WeeklyReportCard } from '../components/today/WeeklyReportCard'
 import { useAuth } from '../lib/AuthContext'
 import { parseDate, todayISO } from '../lib/format'
+import { preloadTabs } from '../lib/preload'
 import { errorText, useHabitSummary, useSync, useWeek } from '../lib/queries'
 
 function greeting(): string {
@@ -44,6 +45,8 @@ export default function Today() {
   const day = week.data?.days.find((d) => d.date === today)
   const name = (athlete?.display_name || '').split(' ')[0]
   const dateLabel = parseDate(today).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
+
+  useEffect(() => { preloadTabs() }, [])
 
   useEffect(() => {
     if (!toast) return

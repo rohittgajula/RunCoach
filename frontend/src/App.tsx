@@ -1,16 +1,24 @@
-import type { ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { Shell } from './components/Shell'
 import { Loading } from './components/States'
 import { useAuth } from './lib/AuthContext'
-import Plan from './pages/Calendar'
-import Chat, { ChatIndex } from './pages/Chat'
-import Diet from './pages/Diet'
-import Health from './pages/Insights'
-import { Login, Register } from './pages/Auth'
-import Me from './pages/Me'
-import Onboarding from './pages/Onboarding'
 import Today from './pages/Today'
+
+// R13 §16: Today is the first screen, so it stays in the main chunk; every other tab
+// (and the auth/onboarding screens a signed-in user never sees) loads on demand.
+const Plan = lazy(() => import('./pages/Calendar'))
+const Chat = lazy(() => import('./pages/Chat'))
+const ChatIndex = lazy(() => import('./pages/Chat').then((m) => ({ default: m.ChatIndex })))
+const Diet = lazy(() => import('./pages/Diet'))
+const Health = lazy(() => import('./pages/Insights'))
+const Me = lazy(() => import('./pages/Me'))
+const Onboarding = lazy(() => import('./pages/Onboarding'))
+const Login = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Login })))
+const Register = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Register })))
+
+const pageFallback = <div className="page centered"><Loading block /></div>
+
 
 /**
  * Three gates, in order: signed in, onboarded, then the five tabs. Onboarding is an
@@ -37,6 +45,7 @@ function GuestOnly({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
+    <Suspense fallback={pageFallback}>
     <Routes>
       <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
       <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
@@ -46,6 +55,7 @@ export default function App() {
         element={
           <RequireAuth>
             <Shell>
+              <Suspense fallback={pageFallback}>
               <Routes>
                 <Route path="/today" element={<Today />} />
                 <Route path="/plan" element={<Plan />} />
@@ -61,11 +71,13 @@ export default function App() {
                 <Route path="/profile" element={<Navigate to="/me" replace />} />
                 <Route path="*" element={<Navigate to="/today" replace />} />
               </Routes>
+              </Suspense>
             </Shell>
           </RequireAuth>
         }
       />
     </Routes>
+    </Suspense>
   )
 }
 

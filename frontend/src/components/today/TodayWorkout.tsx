@@ -10,7 +10,7 @@ import { Skeleton } from '../States'
 import { clock, groupSteps } from '../StepsList'
 import { useCoachLaunch } from '../useCoachLaunch'
 import { GarminSendButton } from '../workout/GarminSendButton'
-import { BUILD_PLAN_PROMPT } from '../../pages/Calendar'
+import { BUILD_PLAN_PROMPT } from '../../lib/prompts'
 
 const KIND: Record<string, string> = {
   warmup: 'warm-up', run: 'run', walk: 'walk', stride: 'stride', recovery: 'recovery', cooldown: 'cool-down', interval: 'interval',

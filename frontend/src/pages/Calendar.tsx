@@ -15,7 +15,8 @@ import { addDays, dur, monthDay, parseDate, todayISO, weekday } from '../lib/for
 import { errorText, useActivePlan, useCalendar, useSync, useToday } from '../lib/queries'
 import type { ActivityCard, CalDay, CalWeek, Workout } from '../lib/types'
 
-export const BUILD_PLAN_PROMPT = 'Build a plan for me to run 10k.'
+import { BUILD_PLAN_PROMPT } from '../lib/prompts'
+export { BUILD_PLAN_PROMPT }
 
 /** Plan tab: the month/week calendar and the plan (the pre-R10 Calendar minus today). */
 export default function Calendar() {

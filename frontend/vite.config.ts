@@ -41,6 +41,22 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
+  build: {
+    // R13 §16: stable vendor chunks cache across deploys; app code changes don't
+    // invalidate React. Charts and maps stay out of the first load entirely.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (/[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/.test(id)) return 'vendor-react'
+          if (id.includes('@tanstack')) return 'vendor-query'
+          if (/[\\/](recharts|d3-[^\\/]+|victory-vendor|decimal\.js-light|es-toolkit|redux|@reduxjs|reselect|immer|react-redux|use-sync-external-store|eventemitter3|clsx|tiny-invariant)[\\/]/.test(id)) return 'vendor-charts'
+          if (id.includes('leaflet')) return 'vendor-map'
+          return undefined
+        },
+      },
+    },
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

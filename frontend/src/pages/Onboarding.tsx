@@ -4,7 +4,7 @@ import { Field } from '../components/Field'
 import { GarminConnect } from '../components/GarminConnect'
 import { useAuth } from '../lib/AuthContext'
 import { errorText } from '../lib/queries'
-import { BUILD_PLAN_PROMPT } from './Calendar'
+import { BUILD_PLAN_PROMPT } from '../lib/prompts'
 
 /**
  * Two steps, then straight into a conversation. The coach asks for everything else
