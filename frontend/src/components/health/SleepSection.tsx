@@ -6,6 +6,7 @@ import { ChartFrame } from '../ChartFrame'
 import { guideHref } from '../guides/guideData'
 import { WakePlannerCard, WatchAlarmsCard } from '../alarm/AlarmCards'
 import { CardHead, Delta, MetricTile, ToneChip } from '../Kit'
+import { InfoButton } from './InfoButton'
 import { MetricChart } from '../MetricChart'
 import { Empty, ErrorState, Skeleton } from '../States'
 import { clock } from '../weather/weatherUtil'
@@ -78,7 +79,7 @@ function SleepHero({ s }: { s: HealthSleep }) {
     <section className="card">
       <div className="kit-head" style={{ alignItems: 'flex-start', marginBottom: 4 }}>
         <div className="grow">
-          <span className="lbl">Average sleep</span>
+          <span className="title-info"><span className="lbl">Average sleep</span><InfoButton k="sleep" /></span>
           <div className="big-num" style={{ fontSize: 36 }}>{hm(avg?.sleep_s)}</div>
         </div>
         {debt?.debt_s != null && (
@@ -137,24 +138,24 @@ function SleepTiles({ s }: { s: HealthSleep }) {
   if (r?.bedtime_sd_min != null) {
     const d = r.previous_bedtime_sd_min != null ? r.bedtime_sd_min - r.previous_bedtime_sd_min : null
     tiles.push(
-      <MetricTile key="reg" label="Bedtime regularity" value={`±${Math.round(r.bedtime_sd_min)}`} unit="min"
+      <MetricTile key="reg" label="Bedtime regularity" info={<InfoButton k="regularity" normal={r.previous_bedtime_sd_min != null ? `±${Math.round(r.previous_bedtime_sd_min)} min in the period before` : undefined} />} value={`±${Math.round(r.bedtime_sd_min)}`} unit="min"
         sub={d != null && Math.abs(d) >= 5 ? <span className={d < 0 ? 'good-text' : 'bad'}>{d < 0 ? '▼ more regular' : '▲ less regular'}</span> : a?.bedtime ? `usually ${clock(a.bedtime)}` : undefined} />,
     )
   }
   if (a?.deep_s != null) {
-    tiles.push(<MetricTile key="deep" label="Deep sleep" value={hm(a.deep_s)} chip={<Delta value={p?.deep_s != null ? (a.deep_s - p.deep_s) / 60 : null} better="higher" unit="min" flatWithin={2} />} />)
+    tiles.push(<MetricTile key="deep" label="Deep sleep" info={<InfoButton k="deep_sleep" normal={p?.deep_s != null ? `${hm(p.deep_s)} a night in the period before` : undefined} />} value={hm(a.deep_s)} chip={<Delta value={p?.deep_s != null ? (a.deep_s - p.deep_s) / 60 : null} better="higher" unit="min" flatWithin={2} />} />)
   }
   if (a?.score != null) {
-    tiles.push(<MetricTile key="score" label="Sleep score" value={Math.round(a.score)} chip={<Delta value={p?.score != null ? a.score - p.score : null} better="higher" flatWithin={1} />} />)
+    tiles.push(<MetricTile key="score" label="Sleep score" info={<InfoButton k="sleep_score" normal={p?.score != null ? `${Math.round(p.score)} in the period before` : undefined} />} value={Math.round(a.score)} chip={<Delta value={p?.score != null ? a.score - p.score : null} better="higher" flatWithin={1} />} />)
   }
   if (a?.spo2_avg != null) {
-    tiles.push(<MetricTile key="spo2" label="SpO2" value={`${Math.round(a.spo2_avg)}%`} chip={<Delta value={p?.spo2_avg != null ? a.spo2_avg - p.spo2_avg : null} better="higher" format={(v) => v.toFixed(1)} flatWithin={0.5} />} />)
+    tiles.push(<MetricTile key="spo2" label="SpO2" info={<InfoButton k="spo2" normal={p?.spo2_avg != null ? `${Math.round(p.spo2_avg)}% in the period before` : undefined} />} value={`${Math.round(a.spo2_avg)}%`} chip={<Delta value={p?.spo2_avg != null ? a.spo2_avg - p.spo2_avg : null} better="higher" format={(v) => v.toFixed(1)} flatWithin={0.5} />} />)
   }
   if (a?.breathing_rate != null) {
-    tiles.push(<MetricTile key="br" label="Breathing rate" value={a.breathing_rate.toFixed(1)} unit="/min" chip={<Delta value={p?.breathing_rate != null ? a.breathing_rate - p.breathing_rate : null} better="lower" format={(v) => v.toFixed(1)} flatWithin={0.2} />} />)
+    tiles.push(<MetricTile key="br" label="Breathing rate" info={<InfoButton k="breathing_rate" normal={p?.breathing_rate != null ? `${p.breathing_rate.toFixed(1)} breaths/min in the period before` : undefined} />} value={a.breathing_rate.toFixed(1)} unit="/min" chip={<Delta value={p?.breathing_rate != null ? a.breathing_rate - p.breathing_rate : null} better="lower" format={(v) => v.toFixed(1)} flatWithin={0.2} />} />)
   }
   if (a?.restless_moments != null) {
-    tiles.push(<MetricTile key="rest" label="Restless" value={Math.round(a.restless_moments)} chip={<Delta value={p?.restless_moments != null ? a.restless_moments - p.restless_moments : null} better="lower" flatWithin={1} />} />)
+    tiles.push(<MetricTile key="rest" label="Restless" info={<InfoButton k="restless" normal={p?.restless_moments != null ? `${Math.round(p.restless_moments)} a night in the period before` : undefined} />} value={Math.round(a.restless_moments)} chip={<Delta value={p?.restless_moments != null ? a.restless_moments - p.restless_moments : null} better="lower" flatWithin={1} />} />)
   }
   if (!tiles.length) return null
   return <div className="mt-grid">{tiles}</div>
@@ -168,6 +169,7 @@ function SleepTrend({ nights, need, period }: { nights: Array<Pick<SleepNight, '
   return (
     <section className="card">
       <ChartFrame
+        info={<InfoButton k="sleep" normal={need ? `You need about ${h(need / 3600)} h (Garmin’s estimate)` : undefined} />}
         title={period.freq === 'day' ? 'Sleep per night' : `Sleep per night · ${FREQ_WORD[period.freq]} average`}
         caption={<>{need ? `Shaded band = within 30 min of the ${h(need / 3600)} h you need.` : 'Dashed line = your average.'}<span className="block">{periodCaption(period)}</span></>}
       >

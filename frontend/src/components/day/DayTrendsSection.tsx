@@ -5,20 +5,22 @@ import { ChartFrame } from '../ChartFrame'
 import { ChevronLeft } from '../Icons'
 import { CardHead, Delta, MetricTile, Pill } from '../Kit'
 import { MetricChart } from '../MetricChart'
+import { InfoButton } from '../health/InfoButton'
+import type { GlossaryKey } from '../health/glossary'
 import { FREQ_NOUN, FREQ_WORD, bucket, periodCaption, rangeText, useHealthPeriod, withApiPeriod, type Agg } from '../health/healthRange'
 import { Empty, ErrorState, Skeleton } from '../States'
 import { clock } from '../weather/weatherUtil'
 import { n0 } from './dayUtil'
 
-type Tile = { key: keyof DayTrendAvg; label: string; unit?: string; better: 'higher' | 'lower'; flat: number }
+type Tile = { key: keyof DayTrendAvg; g: GlossaryKey; label: string; unit?: string; better: 'higher' | 'lower'; flat: number }
 const TILES: Tile[] = [
-  { key: 'steps', label: 'Steps / day', better: 'higher', flat: 150 },
-  { key: 'active_min', label: 'Active', unit: 'min', better: 'higher', flat: 2 },
-  { key: 'sedentary_min', label: 'Sitting', unit: 'min', better: 'lower', flat: 5 },
-  { key: 'stress_avg', label: 'Stress avg', better: 'lower', flat: 1 },
-  { key: 'stress_high_min', label: 'High stress', unit: 'min', better: 'lower', flat: 2 },
-  { key: 'awake_hr_avg', label: 'Awake HR', unit: 'bpm', better: 'lower', flat: 0.5 },
-  { key: 'bb_at_bedtime', label: 'Battery at bedtime', better: 'higher', flat: 1 },
+  { key: 'steps', g: 'steps', label: 'Steps / day', better: 'higher', flat: 150 },
+  { key: 'active_min', g: 'active_min', label: 'Active', unit: 'min', better: 'higher', flat: 2 },
+  { key: 'sedentary_min', g: 'sedentary_min', label: 'Sitting', unit: 'min', better: 'lower', flat: 5 },
+  { key: 'stress_avg', g: 'stress', label: 'Stress avg', better: 'lower', flat: 1 },
+  { key: 'stress_high_min', g: 'stress_high_min', label: 'High stress', unit: 'min', better: 'lower', flat: 2 },
+  { key: 'awake_hr_avg', g: 'awake_hr', label: 'Awake HR', unit: 'bpm', better: 'lower', flat: 0.5 },
+  { key: 'bb_at_bedtime', g: 'bb_bedtime', label: 'Battery at bedtime', better: 'higher', flat: 1 },
 ]
 
 /** Health → Day → Trends: the day metrics over weeks, weekday pattern, day → night → run. */
@@ -68,6 +70,7 @@ export function DayTrendsSection() {
               label={tile.label}
               value={n0(now)}
               unit={tile.unit}
+              info={<InfoButton k={tile.g} normal={before != null ? `${n0(before)}${tile.unit ? ` ${tile.unit}` : ''} a day in the period before` : undefined} />}
               chip={<Delta value={before != null ? now - before : null} better={tile.better} flatWithin={tile.flat} format={(v) => n0(v)} />}
               sub={before != null ? `before ${n0(before)}` : undefined}
             />
@@ -77,35 +80,35 @@ export function DayTrendsSection() {
 
       {enough('steps') && (
         <section className="card">
-          <ChartFrame title={`Steps${per}`} chip={t.goal_streak > 1 ? <Pill topic="run">{t.goal_streak}-day streak</Pill> : undefined} caption={<>{goal && freq === 'day' ? `Shaded = within 10% of your ${n0(goal)} goal.` : freq === 'day' ? 'Dashed line = your average.' : `Total steps each ${FREQ_NOUN[freq]}.`}<span className="block">{when}</span></>}>
+          <ChartFrame info={<InfoButton k="steps" />} title={`Steps${per}`} chip={t.goal_streak > 1 ? <Pill topic="run">{t.goal_streak}-day streak</Pill> : undefined} caption={<>{goal && freq === 'day' ? `Shaded = within 10% of your ${n0(goal)} goal.` : freq === 'day' ? 'Dashed line = your average.' : `Total steps each ${FREQ_NOUN[freq]}.`}<span className="block">{when}</span></>}>
             <MetricChart data={series('steps', 'sum')} freq={freq} color="var(--run)" height={180} format={(v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : String(Math.round(v)))} band={goal && freq === 'day' ? { low: goal * 0.9, high: goal * 1.1, label: 'goal' } : null} />
           </ChartFrame>
         </section>
       )}
       {enough('active_min') && (
         <section className="card">
-          <ChartFrame title={freq === 'day' ? 'Active minutes' : `Active minutes per day · ${FREQ_WORD[freq]} average`} caption={<>Walking, runs and anything that gets you moving.<span className="block">{when}</span></>}>
+          <ChartFrame info={<InfoButton k="active_min" />} title={freq === 'day' ? 'Active minutes' : `Active minutes per day · ${FREQ_WORD[freq]} average`} caption={<>Walking, runs and anything that gets you moving.<span className="block">{when}</span></>}>
             <MetricChart data={series('active_min')} freq={freq} color="var(--run)" height={160} />
           </ChartFrame>
         </section>
       )}
       {enough('stress_avg') && (
         <section className="card">
-          <ChartFrame title="Stress average" caption={<>0–25 rest · 26–50 low · 51–75 medium · 76–100 high.<span className="block">{when}</span></>}>
+          <ChartFrame info={<InfoButton k="stress" />} title="Stress average" caption={<>0–25 rest · 26–50 low · 51–75 medium · 76–100 high.<span className="block">{when}</span></>}>
             <MetricChart data={series('stress_avg')} freq={freq} color="var(--recovery)" height={160} />
           </ChartFrame>
         </section>
       )}
       {enough('awake_hr_avg') && (
         <section className="card">
-          <ChartFrame title="Heart rate while awake" caption={<>{t.awake_hr_trend?.sentence || 'Not counting sleep and workouts.'}<span className="block">{when}</span></>}>
+          <ChartFrame info={<InfoButton k="awake_hr" />} title="Heart rate while awake" caption={<>{t.awake_hr_trend?.sentence || 'Not counting sleep and workouts.'}<span className="block">{when}</span></>}>
             <MetricChart data={series('awake_hr_avg')} freq={freq} color="var(--recovery-ink)" height={160} />
           </ChartFrame>
         </section>
       )}
       {enough('bb_at_bedtime') && (
         <section className="card">
-          <ChartFrame title="Body Battery at bedtime" caption={<>Going to bed with more left usually means a calmer day.<span className="block">{when}</span></>}>
+          <ChartFrame info={<InfoButton k="bb_bedtime" />} title="Body Battery at bedtime" caption={<>Going to bed with more left usually means a calmer day.<span className="block">{when}</span></>}>
             <MetricChart data={series('bb_at_bedtime')} freq={freq} color="var(--sleep)" height={160} domain={[0, 100]} />
           </ChartFrame>
         </section>

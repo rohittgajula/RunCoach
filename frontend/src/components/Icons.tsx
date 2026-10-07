@@ -341,3 +341,10 @@ export const WatchIcon = (p: IconProps) => (
     <path d="M9 6.5 9.5 3h5l.5 3.5M9 17.5l.5 3.5h5l.5-3.5M12 9.8V12l1.5 1" />
   </Svg>
 )
+
+export const InfoIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5.5M12 7.6v.01" strokeWidth={2.4} />
+  </Svg>
+)

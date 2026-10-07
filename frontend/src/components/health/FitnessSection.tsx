@@ -6,6 +6,7 @@ import { CardHead, Delta, MetricTile, Pill } from '../Kit'
 import { MetricChart } from '../MetricChart'
 import { Sparkline } from '../Sparkline'
 import { Empty, ErrorState, Skeleton } from '../States'
+import { InfoButton } from './InfoButton'
 import { bucket, periodCaption, useHealthPeriod, withApiPeriod, type Period } from './healthRange'
 import { TrainingStatusCard } from './TrainingStatusCard'
 
@@ -50,7 +51,7 @@ function Vo2Card({ vo2, period }: { vo2: NonNullable<HealthFitness['vo2max']>; p
     <section className="card">
       <div className="kit-head" style={{ alignItems: 'flex-start' }}>
         <div className="grow">
-          <span className="lbl">VO2max</span>
+          <span className="title-info"><span className="lbl">VO2max</span><InfoButton k="vo2max" normal={first ? `${one(first.value)} at the start of this period` : undefined} /></span>
           <div className="big-num">{one(vo2.current!)}</div>
         </div>
         <Delta value={vo2.change} better="higher" format={one} suffix={inWords(period)} />
@@ -76,6 +77,7 @@ function AgeEndurance({ f, period }: { f: HealthFitness | null | undefined; peri
       <MetricTile
         key="age"
         label="Fitness age"
+        info={<InfoButton k="fitness_age" normal={age.chronological_age != null ? `Your real age is ${age.chronological_age}` : undefined} />}
         value={Math.round(age.current)}
         chip={<Delta value={age.change} better="lower" format={(v) => one(v)} unit="yr" />}
         sub={diff != null ? (
@@ -91,6 +93,7 @@ function AgeEndurance({ f, period }: { f: HealthFitness | null | undefined; peri
       <MetricTile
         key="end"
         label="Endurance"
+        info={<InfoButton k="endurance_score" normal={end.level ? `Garmin rates this “${end.level}”` : undefined} />}
         value={end.current.toLocaleString()}
         chip={<Delta value={end.change} better="higher" format={(v) => Math.round(v).toLocaleString()} />}
         sub={end.level ?? inWords(period)}
@@ -111,7 +114,7 @@ function RaceCard({ f }: { f: HealthFitness | null | undefined }) {
   if (!cur || !RACES.some(([k]) => cur[k])) return null
   return (
     <section className="card">
-      <CardHead title="Race predictions" sub={rp?.previous_as_of ? `vs ${dayMonth(rp.previous_as_of)}` : undefined} />
+      <CardHead title={<span className="title-info">Race predictions<InfoButton k="race_predictions" /></span>} sub={rp?.previous_as_of ? `vs ${dayMonth(rp.previous_as_of)}` : undefined} />
       <div className="rp-grid">
         {RACES.filter(([k]) => cur[k]).map(([k, label]) => {
           const now = cur[k] as number
@@ -165,7 +168,7 @@ function ThresholdCard({ f }: { f: HealthFitness | null | undefined }) {
   return (
     <section className="card">
       <CardHead
-        title={lt ? 'Lactate threshold' : 'Heart-rate zones'}
+        title={lt ? <span className="title-info">Lactate threshold<InfoButton k="lactate_threshold" /></span> : 'Heart-rate zones'}
         aside={lt?.zones_updated ? <Pill topic="run">Zones updated</Pill> : undefined}
         sub={lt?.date ? `Garmin, ${dayMonth(lt.date)}` : zones?.source === 'heart_rate_reserve' ? 'From your resting and max HR' : undefined}
       />

@@ -7,6 +7,7 @@ import { ChipButton } from '../ChipButton'
 import { guideHref } from '../guides/guideData'
 import { ChevronLeft, ChevronRight } from '../Icons'
 import { CardHead, Delta, MetricTile, Pill, TopicRing } from '../Kit'
+import { InfoButton } from '../health/InfoButton'
 import { Empty, ErrorState, Skeleton } from '../States'
 import { clock } from '../weather/weatherUtil'
 import { DayTimeline, type Lane, type Marker } from './DayTimeline'
@@ -183,7 +184,7 @@ function StepsCard({ d }: { d: HealthDay }) {
     : s.goal_source === 'garmin' ? `Goal ${n0(goal)} (your Garmin goal)` : `Goal ${n0(goal)} (from your last 4 weeks)`
   return (
     <section className="card">
-      <CardHead title="Steps" aside={s.met ? <Pill topic="ok">Goal hit</Pill> : undefined} />
+      <CardHead title={<span className="title-info">Steps<InfoButton k="steps" /></span>} aside={s.met ? <Pill topic="ok">Goal hit</Pill> : undefined} />
       <div className="steps-hero">
         <TopicRing value={s.total ?? 0} max={goal || Math.max(s.total ?? 1, 1)} topic="run" size={96} label="Steps" display={s.total != null ? compact(s.total) : '--'} sub={goal ? `${pctOf(s.pct)}` : undefined} />
         <div className="grow">
@@ -236,7 +237,7 @@ function SittingCard({ d }: { d: HealthDay }) {
   const ls = a.longest_sedentary
   return (
     <section className="card">
-      <CardHead title="Moving vs sitting" sub={`While awake${a.source === 'steps' ? ' · estimated from your steps' : ''}`} />
+      <CardHead title={<span className="title-info">Moving vs sitting<InfoButton k="sedentary_min" /></span>} sub={`While awake${a.source === 'steps' ? ' · estimated from your steps' : ''}`} />
       <div className="stack-bar" role="img" aria-label={parts.map((p) => `${p.label} ${hm((p.v ?? 0) * 60)}`).join(', ')}>
         {parts.filter((p) => p.v).map((p) => <span key={p.key} className={p.cls} style={{ flexGrow: p.v!, flexBasis: 0 }} />)}
       </div>
@@ -271,7 +272,7 @@ function StressCard({ d, trends }: { d: HealthDay; trends: DayTrends | null }) {
   return (
     <section className="card">
       <CardHead
-        title="Stress"
+        title={<span className="title-info">Stress<InfoButton k="stress" /></span>}
         sub={s.avg != null ? `Average ${s.avg} · ${stressWord(s.avg)}${s.max != null ? ` · peak ${s.max}` : ''}` : undefined}
       />
       {total > 0 && (
@@ -306,7 +307,7 @@ function BodyBatteryCard({ d }: { d: HealthDay }) {
   const events = [...b.events].sort((x, y) => (minutesOf(x.start) ?? 0) - (minutesOf(y.start) ?? 0))
   return (
     <section className="card">
-      <CardHead title="Body Battery" sub={[b.charged != null && `+${b.charged} charged`, b.drained != null && `−${b.drained} drained`].filter(Boolean).join(' · ') || undefined} />
+      <CardHead title={<span className="title-info">Body Battery<InfoButton k="body_battery" /></span>} sub={[b.charged != null && `+${b.charged} charged`, b.drained != null && `−${b.drained} drained`].filter(Boolean).join(' · ') || undefined} />
       <div className="bb-ends">
         <MetricTile className="mt-inset" label="At wake" value={b.at_wake ?? '—'} sub={d.awake ? clock(d.awake.start) : undefined} />
         {d.is_today ? (
@@ -342,7 +343,7 @@ function AwakeHrCard({ d }: { d: HealthDay }) {
   return (
     <section className="card">
       <CardHead
-        title="Heart rate while awake"
+        title={<span className="title-info">Heart rate while awake<InfoButton k="awake_hr" /></span>}
         sub="Not counting sleep and workouts"
         aside={<Delta value={h.trend.change} better="lower" unit="bpm" flatWithin={0.5} suffix="vs last wk" />}
       />

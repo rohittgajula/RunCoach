@@ -16,13 +16,13 @@ export function DeltaChip({ trend, format, unit = '', label = 'vs previous perio
 
 /** A chart with its header (title + delta chip) and a one-line "what this means" caption. */
 export function ChartFrame({
-  title, chip, caption, children, className = '',
-}: { title?: ReactNode; chip?: ReactNode; caption?: ReactNode; children: ReactNode; className?: string }) {
+  title, chip, caption, children, className = '', info,
+}: { title?: ReactNode; chip?: ReactNode; caption?: ReactNode; children: ReactNode; className?: string; info?: ReactNode }) {
   return (
     <div className={`chart-frame ${className}`}>
       {(title || chip) && (
         <div className="chart-frame-head">
-          {title && <span className="chart-frame-title">{title}</span>}
+          {title && <span className="chart-frame-title">{info ? <span className="title-info">{title}{info}</span> : title}</span>}
           {chip}
         </div>
       )}

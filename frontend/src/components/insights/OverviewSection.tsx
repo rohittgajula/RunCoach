@@ -7,6 +7,8 @@ import { Bullets } from '../Bullets'
 import { trendOf, type Trend } from '../chartUtil'
 import { bucket, periodCaption, useHealthPeriod, withApiPeriod, type Freq, type Period } from '../health/healthRange'
 import { TrainingStatusCard } from '../health/TrainingStatusCard'
+import { InfoButton } from '../health/InfoButton'
+import type { GlossaryKey } from '../health/glossary'
 import { ChevronRight, ReportIcon, ScatterIcon } from '../Icons'
 import { Arrow, Delta, MetricTile, TopicRing } from '../Kit'
 import { FitnessSheet } from '../profile/FitnessSheet'
@@ -106,10 +108,10 @@ function SummaryHero({ data, freq }: { data: Insights; freq: Freq }) {
   const sleepScore = trendOf(bucket((data.sleep?.series ?? []).map((p) => ({ date: p.date, value: p.score ?? null })), freq).map((p) => p.value), 'higher')
   const share = values(data, 'run_fraction', freq)
   const shareTrend = trendOf(share, 'higher')
-  const rings: Array<{ key: string; name: string; caption?: string; topic: 'recovery' | 'sleep' | 'run'; value: number | null; trend: Trend | null; better: 'higher' | 'lower' }> = [
-    { key: 'r', name: 'Readiness', topic: 'recovery', value: data.readiness?.score ?? null, trend: null, better: 'higher' },
-    { key: 's', name: 'Sleep score', topic: 'sleep', value: data.sleep?.avg_score ?? null, trend: sleepScore, better: 'higher' },
-    { key: 'f', name: 'Run vs walk', caption: 'share of time running', topic: 'run', value: lastOf(share), trend: shareTrend, better: 'higher' },
+  const rings: Array<{ key: string; g: GlossaryKey; name: string; caption?: string; topic: 'recovery' | 'sleep' | 'run'; value: number | null; trend: Trend | null; better: 'higher' | 'lower' }> = [
+    { key: 'r', g: 'readiness', name: 'Readiness', topic: 'recovery', value: data.readiness?.score ?? null, trend: null, better: 'higher' },
+    { key: 's', g: 'sleep_score', name: 'Sleep score', topic: 'sleep', value: data.sleep?.avg_score ?? null, trend: sleepScore, better: 'higher' },
+    { key: 'f', g: 'run_fraction', name: 'Run vs walk', caption: 'share of time running', topic: 'run', value: lastOf(share), trend: shareTrend, better: 'higher' },
   ]
   const shown = rings.filter((r) => r.value != null)
 
@@ -122,7 +124,7 @@ function SummaryHero({ data, freq }: { data: Insights; freq: Freq }) {
           {shown.map((r) => (
             <div key={r.key}>
               <TopicRing value={r.value} topic={r.topic} size={84} label={r.name} />
-              <span className="ring-name">{r.name}</span>
+              <span className="ring-name title-info">{r.name}<InfoButton k={r.g} /></span>
               {r.caption && <span className="ring-caption">{r.caption}</span>}
               {r.trend && r.trend.tone !== 'flat' ? (
                 <span className="arrow-line">
@@ -163,12 +165,17 @@ function Tiles({ data, freq, onChart }: { data: Insights; freq: Freq; onChart: (
         const vals = values(data, d.key, freq)
         const t = trendOf(vals, cfg.better)
         const color = `var(--${cfg.topic ?? 'run'})`
+        const gk: GlossaryKey = d.key === 'respiration' ? 'breathing_rate' : d.key
+        const band = cfg.band?.(data)
+        const normal = d.key === 'hrv' && band ? `${cfg.format(band.low)}–${cfg.format(band.high)} ms (your baseline)`
+          : t ? `${cfg.format(t.avg)}${d.unit && d.unit !== 'avg' ? ` ${d.unit}` : ''} on average this period` : undefined
         return (
           <MetricTile
             key={d.key}
             label={d.label}
             value={d.value}
             unit={d.unit}
+            info={<InfoButton k={gk} normal={normal} />}
             onClick={() => onChart(d.key)}
             chip={t ? <Delta value={t.tone === 'flat' ? 0 : t.delta} better={cfg.better} format={cfg.delta ?? cfg.format} steadyText="0" /> : undefined}
           >

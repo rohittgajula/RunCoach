@@ -1,9 +1,4 @@
-import { useMemo, useState } from 'react'
-import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { useAuth } from '../lib/AuthContext'
-import { TIP, chartTip, num } from '../components/ChartTip'
-import { monthTicks, tickDate, trendCaption, trendOf } from '../components/chartUtil'
-import { DeltaChip } from '../components/ChartFrame'
+import { useState } from 'react'
 import { FuelRows } from '../components/DetailSheets'
 import { ChevronLeft, ChevronRight, DietIcon, MoreVIcon, PlusIcon, RunIcon } from '../components/Icons'
 import { KcalRing } from '../components/KcalRing'
@@ -11,14 +6,14 @@ import { LogMealSheet, MEAL_TYPES } from '../components/LogMealSheet'
 import { MacroBar } from '../components/MacroBar'
 import { MealSummary } from '../components/MealCard'
 import { BodyCard } from '../components/BodyCard'
+import { BalanceCard } from '../components/diet/BalanceCard'
 import { PageHeader } from '../components/PageHeader'
-import { RangeSwitch } from '../components/RangeSwitch'
 import { useShell } from '../components/Shell'
 import { WaterTarget } from '../components/weather/WaterTarget'
 import { Empty, ErrorState, Skeleton } from '../components/States'
-import { addDays, parseDate, signed, todayISO } from '../lib/format'
-import { errorText, useDeleteMeal, useDietDay, useDietTrend } from '../lib/queries'
-import type { DietDay, Meal, Range } from '../lib/types'
+import { addDays, parseDate, todayISO } from '../lib/format'
+import { errorText, useDeleteMeal, useDietDay } from '../lib/queries'
+import type { DietDay, Meal } from '../lib/types'
 
 const PROFILE_LABEL: Record<string, string> = {
   height_cm: 'height',
@@ -222,116 +217,3 @@ function MealsCard({ meals, onAdd, onEdit }: { meals: Meal[]; onAdd: () => void;
   )
 }
 
-function BalanceCard() {
-  const { athlete } = useAuth()
-  const [range, setRange] = useState<Range>('3m')
-  const trend = useDietTrend(range)
-
-  const series = useMemo(
-    () =>
-      (trend.data?.series ?? []).map((p) => ({
-        date: p.date,
-        balance: p.intake_kcal != null ? Math.round(p.intake_kcal - p.target_kcal) : null,
-        weight: p.weight_kg,
-      })),
-    [trend.data],
-  )
-  const s = trend.data?.summary
-  const hasIntake = series.some((p) => p.balance != null)
-  const hasWeight = series.some((p) => p.weight != null)
-  const goal = athlete?.diet_goal
-  const weightTrend = trendOf(series.map((p) => p.weight), goal === 'lose' ? 'lower' : goal === 'gain' ? 'higher' : null, 0.1)
-  const kg = (v: number) => v.toFixed(1)
-
-  return (
-    <section className="card">
-      <div className="card-head chart-card-head">
-        <h2 className="card-title">Balance vs weight</h2>
-        <DeltaChip trend={weightTrend} format={kg} unit="kg" label="weight vs the earlier half of this range" />
-      </div>
-      <RangeSwitch value={range} onChange={setRange} />
-      {trend.isPending && <Skeleton height={200} />}
-      {trend.isError && !trend.data && <ErrorState message={errorText(trend.error)} onRetry={() => trend.refetch()} />}
-      {trend.data && (
-        <>
-          {s && s.logged_days_last_7 < 5 ? (
-            <p className="muted small">
-              Log at least 5 of the last 7 days to see your balance ({s.logged_days_last_7}/7 so far).
-            </p>
-          ) : s && s.avg_balance_kcal != null ? (
-            <p className="balance-summary">
-              Avg <strong>{signed(s.avg_balance_kcal)} kcal/day</strong>
-              {s.predicted_kg_per_week != null && <> ≈ {signed(s.predicted_kg_per_week, 1)} kg/week predicted</>}
-              {s.actual_kg_per_week != null && <>, {signed(s.actual_kg_per_week, 1)} kg/week actual</>}
-            </p>
-          ) : null}
-          {hasIntake || hasWeight ? (
-            <div className="chart" style={{ height: 220 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={series} margin={{ top: 44, right: 0, left: 0, bottom: 0 }}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    ticks={monthTicks(series.map((p) => p.date))}
-                    tickFormatter={tickDate}
-                    axisLine={false}
-                    tickLine={false}
-                    minTickGap={24}
-                  />
-                  <YAxis yAxisId="kcal" axisLine={false} tickLine={false} width={40} tickCount={4} mirror />
-                  <YAxis
-                    yAxisId="kg"
-                    orientation="right"
-                    axisLine={false}
-                    tickLine={false}
-                    width={36}
-                    domain={['dataMin - 1', 'dataMax + 1']}
-                    tickFormatter={(v: number) => v.toFixed(0)}
-                    hide={!hasWeight}
-                    mirror
-                  />
-                  <Tooltip content={DietTip} cursor={false} {...TIP} />
-                  <ReferenceLine yAxisId="kcal" y={0} stroke="var(--muted)" strokeDasharray="4 4" strokeOpacity={0.7} label={{ value: 'target', position: 'insideTopLeft', fill: 'var(--muted)', fontSize: 11 }} />
-                  <Bar yAxisId="kcal" dataKey="balance" isAnimationActive={false} radius={[4, 4, 4, 4]} activeBar={{ stroke: 'var(--fg)', strokeWidth: 1.5 }}>
-                    {series.map((p) => (
-                      <Cell key={p.date} fill={(p.balance ?? 0) < 0 ? 'var(--faint)' : 'var(--fuel)'} />
-                    ))}
-                  </Bar>
-                  <Line
-                    yAxisId="kg"
-                    dataKey="weight"
-                    stroke="var(--fg)"
-                    strokeWidth={2.5}
-                    dot={false}
-                    connectNulls
-                    isAnimationActive={false}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <Empty title="No data yet">Logged meals and weigh-ins appear here.</Empty>
-          )}
-          <p className="legend">
-            <span className="legend-swatch legend-under" /> under target
-            <span className="legend-swatch legend-over" /> over target
-            <span className="legend-line" /> weight
-          </p>
-          {weightTrend && <p className="chart-caption">{trendCaption(weightTrend, 'Weight', kg, 'kg', 'range')}</p>}
-        </>
-      )}
-    </section>
-  )
-}
-
-/** Balance (bar) and weight (line) for one day, in the app's tooltip card. */
-const DietTip = chartTip((items, label) => ({
-  title: tickDate(label),
-  lines: items.flatMap((i) => {
-    const v = num(i.value)
-    if (!Number.isFinite(v)) return []
-    return i.dataKey === 'weight'
-      ? [{ text: `${v.toFixed(1)} kg`, color: 'var(--fg)' }]
-      : [{ text: `${signed(v)} kcal vs target`, color: v < 0 ? 'var(--faint)' : 'var(--fuel)' }]
-  }),
-}))

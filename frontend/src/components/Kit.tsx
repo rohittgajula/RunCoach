@@ -143,9 +143,13 @@ export function Pill({ topic, solid = false, children }: { topic?: Topic | 'ok' 
   return <span className={`pill ${topic ? `pill-${topic}` : ''} ${solid ? 'is-solid' : ''}`}>{children}</span>
 }
 
-/** Metric tile (2-col grids): label + chip, big number, a small chart/line under it. */
+/**
+ * Metric tile (2-col grids): label + chip, big number, a small chart/line under it.
+ * `info` = an (i) button next to the label; on a tappable tile the tap target is a
+ * full-size button underneath it, so the two buttons are never nested.
+ */
 export function MetricTile({
-  label, value, unit, chip, sub, children, onClick, className = '',
+  label, value, unit, chip, sub, children, onClick, className = '', info,
 }: {
   label: string
   value: ReactNode
@@ -155,11 +159,15 @@ export function MetricTile({
   children?: ReactNode
   onClick?: () => void
   className?: string
+  info?: ReactNode
 }) {
   const body = (
     <>
       <span className="mt-head">
-        <span className="lbl">{label}</span>
+        <span className="mt-label">
+          <span className="lbl">{label}</span>
+          {info}
+        </span>
         {chip}
       </span>
       <span className="mt-value">
@@ -170,6 +178,14 @@ export function MetricTile({
       {children}
     </>
   )
+  if (onClick && info) {
+    return (
+      <div className={`mt is-tappable has-hit ${className}`}>
+        <button type="button" className="mt-hit" aria-label={`${label}: open chart`} onClick={onClick} />
+        {body}
+      </div>
+    )
+  }
   return onClick ? (
     <button type="button" className={`mt is-tappable ${className}`} onClick={onClick}>
       {body}

@@ -2,6 +2,8 @@ import { dayMonth } from '../../lib/format'
 import { useHealthForm, useRecords } from '../../lib/queries'
 import type { FormMetric, HealthForm } from '../../lib/types'
 import { CardHead, MetricTile, Pill, ToneChip } from '../Kit'
+import { InfoButton } from '../health/InfoButton'
+import { GLOSSARY, type GlossaryKey } from '../health/glossary'
 import { Sparkline } from '../Sparkline'
 
 /** Personal records: Garmin's and our own bests, "New" for the last 14 days. */
@@ -63,6 +65,7 @@ export function FormTrendsCard() {
               key={m.key}
               className="mt-inset"
               label={m.label}
+              info={m.key in GLOSSARY ? <InfoButton k={m.key as GlossaryKey} normal={m.previous != null ? `${m.previous.toFixed(d)} ${m.unit} over the 5 runs before` : undefined} /> : undefined}
               value={m.current!.toFixed(d)}
               unit={m.unit}
               chip={m.change != null && Math.abs(m.change) > 0 ? (
