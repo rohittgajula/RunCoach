@@ -72,11 +72,21 @@ def workout_json(workout: PlannedWorkout, guard_inputs: dict | None = None) -> d
         "adjusted_by": workout.adjusted_by or None,
         "original_steps": workout.original_steps,
         "original": workout.original,
+        # R13 §1: the automatic change on this workout, if any.
+        "auto_adjustment": _auto_adjustment(workout),
         # R7 §3: on the watch.
         "garmin_workout_id": workout.garmin_workout_id,
         "garmin_synced_at": workout.garmin_synced_at,
         "garmin_status": garmin_status(workout),
     }
+
+
+def _auto_adjustment(workout: PlannedWorkout) -> dict | None:
+    if workout.adjusted_by != "auto":
+        return None
+    from .auto_adjust import current_for
+
+    return current_for(workout)
 
 
 def _done_blocks(workout: PlannedWorkout) -> dict:

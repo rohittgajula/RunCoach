@@ -40,3 +40,72 @@ class Achievement(OwnedByAthlete):
         ordering = ["-earned_on", "-id"]
         constraints = [models.UniqueConstraint(fields=["athlete", "key"],
                                                name="uniq_athlete_achievement")]
+
+
+class PainReport(OwnedByAthlete):
+    """R13 §3 "Anything hurting?": one spot, one side, one day. Severity 1–3. Never a
+    diagnosis; two days ≥ 2 on the same spot only ever makes the plan easier."""
+
+    date = models.DateField(db_index=True)
+    location = models.CharField(max_length=12)
+    side = models.CharField(max_length=6)
+    severity = models.PositiveSmallIntegerField()
+    activity = models.ForeignKey("activities.Activity", on_delete=models.SET_NULL, null=True,
+                                 blank=True, related_name="pain_reports")
+    note = models.CharField(max_length=200, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+        constraints = [models.UniqueConstraint(fields=["athlete", "date", "location", "side"],
+                                               name="uniq_athlete_pain_spot_day")]
+
+
+class MoodLog(OwnedByAthlete):
+    """R13 §10: mood and energy, 1–5 each, one per local day. Never sent to the AI
+    except as averages."""
+
+    date = models.DateField()
+    mood = models.PositiveSmallIntegerField()
+    energy = models.PositiveSmallIntegerField()
+    note = models.CharField(max_length=200, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["date"]
+        constraints = [models.UniqueConstraint(fields=["athlete", "date"],
+                                               name="uniq_athlete_mood_day")]
+
+
+class MonthlyReport(OwnedByAthlete):
+    """R13 §11: last month's report, built once (1st of the month 06:00 local or on
+    first read). `payload` is deterministic; the AI paragraph is optional."""
+
+    month = models.DateField(help_text="The 1st of the month.")
+    payload = models.JSONField(default=dict)
+    ai_markdown = models.TextField(blank=True, default="")
+    ai_generated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-month"]
+        constraints = [models.UniqueConstraint(fields=["athlete", "month"],
+                                               name="uniq_athlete_report_month")]
+
+
+class MorningBriefing(OwnedByAthlete):
+    """R13 §6: today's "Good morning" card, stored once a day (dismissal, push sent,
+    optional AI phrasing)."""
+
+    date = models.DateField()
+    payload = models.JSONField(default=dict)
+    dismissed = models.BooleanField(default=False)
+    ai_text = models.TextField(blank=True, default="")
+    ai_generated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date"]
+        constraints = [models.UniqueConstraint(fields=["athlete", "date"],
+                                               name="uniq_athlete_briefing_day")]

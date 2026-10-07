@@ -71,7 +71,21 @@ def evaluate(athlete) -> list[dict]:
     smoke = _smoke(athlete)
     if smoke is not None:
         results["smoke_free"] = smoke
+    cravings = _cravings(athlete)
+    if cravings is not None:
+        results["cravings"] = cravings
     return maths.badges(results)
+
+
+def _cravings(athlete):
+    """R13 §8: resisted cravings, only once the athlete logs cravings at all."""
+    from analysis.cravings import resisted_milestones
+    from apps.habits.models import CravingLog
+
+    rows = list(CravingLog.objects.filter(athlete=athlete).values_list("local_date", "smoked"))
+    if not rows:
+        return None
+    return resisted_milestones([day for day, smoked in rows if not smoked])
 
 
 def _store(athlete, key, kind, label, day) -> bool:

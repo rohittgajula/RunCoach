@@ -22,7 +22,8 @@ from analysis.buckets import bucket_map, shift_back
 from .common import BadRequest, metrics_rows
 from .period import parse_period
 
-SUM_KEYS = {"steps", "smoke", "alcohol", "sugar", "private", "run_km", "training_load"}
+SUM_KEYS = {"steps", "smoke", "alcohol", "sugar", "private", "caffeine", "run_km",
+            "training_load"}
 
 # key -> (label, unit, group, noun)
 CATALOGUE: dict[str, tuple[str, str, str, str]] = {
@@ -41,6 +42,10 @@ CATALOGUE: dict[str, tuple[str, str, str, str]] = {
     "alcohol": ("Drinks", "standard drinks", "habits", "drinks"),
     "sugar": ("Sugar servings", "servings", "habits", "sugar"),
     "private": ("Private", "count", "habits", "Private"),
+    # R13 §9 / §10
+    "caffeine": ("Caffeine", "cups", "habits", "caffeine"),
+    "mood": ("Mood", "1–5", "wellness", "mood"),
+    "energy": ("Energy", "1–5", "wellness", "energy"),
     # R11 §B8: the day between runs (IntradayDay aggregates)
     "active_min": ("Active time", "min", "day", "active time"),
     "sedentary_min": ("Sedentary time", "min", "day", "sedentary time"),
@@ -168,7 +173,16 @@ def _runs(athlete, key, start, end) -> dict[dt.date, float]:
     return {day: round(sum(v) / len(v), digits) for day, v in by_day.items()}
 
 
+def _mood(athlete, key, start, end) -> dict[dt.date, float]:
+    from .models import MoodLog
+
+    return {day: float(value) for day, value in MoodLog.objects.filter(
+        athlete=athlete, date__gte=start, date__lte=end).values_list("date", key)}
+
+
 def series_for(athlete, key: str, start: dt.date, end: dt.date) -> dict[dt.date, float]:
+    if key in ("mood", "energy"):
+        return _mood(athlete, key, start, end)
     group = CATALOGUE[key][2]
     if group == "wellness":
         return _wellness(athlete, key, start, end)

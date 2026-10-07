@@ -82,6 +82,12 @@ def calendar_month(request):
         if phases:
             span = (phases[0].start, phases[-1].end)
 
+    from .strength_service import sessions_between
+
+    strength = {}
+    for session in sessions_between(athlete, first, last):
+        strength.setdefault(session.date, {"id": session.pk, "title": session.title,
+                                           "status": session.status})
     by_day_workout: dict[dt.date, PlannedWorkout] = {}
     for workout in workouts:
         by_day_workout.setdefault(workout.date, workout)
@@ -115,6 +121,8 @@ def calendar_month(request):
             "planned": {"kind": workout.kind, "title": workout.title,
                         "duration_s": workout.duration_s} if workout else None,
             "status": status,
+            # R13 §4
+            "strength": strength.get(cursor),
             "activities": [
                 {"id": a.pk, "sport": a.sport,
                  "duration_s": round(a.total_timer_s or a.total_elapsed_s or 0),

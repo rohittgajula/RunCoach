@@ -20,6 +20,9 @@ class Race(OwnedByAthlete):
         default=False, help_text="The A race. At most one should be set."
     )
     notes = models.TextField(blank=True)
+    # R13 §2: the race-day planner's inputs.
+    goal_time_s = models.PositiveIntegerField(null=True, blank=True)
+    start_time = models.TimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -195,3 +198,69 @@ class PlanAdjustment(OwnedByAthlete):
 
     def __str__(self):
         return f"{self.week_start} x{self.factor}"
+
+
+class WorkoutAdjustment(OwnedByAthlete):
+    """R13 §1: one automatic change to one future workout, after a run (or a pain
+    report). Keeps the prescription before and after so the athlete can undo it.
+
+    Separate from PlanAdjustment, whose (plan, week_start) row is the weekly adaptation's
+    idempotency key; these are per workout and there can be several a week.
+    """
+
+    class Status(models.TextChoices):
+        APPLIED = "applied", "Applied"
+        UNDONE = "undone", "Undone"
+
+    plan = models.ForeignKey(TrainingPlan, on_delete=models.CASCADE,
+                             related_name="auto_adjustments")
+    workout = models.ForeignKey(PlannedWorkout, on_delete=models.SET_NULL, null=True,
+                                blank=True, related_name="auto_adjustments")
+    activity = models.ForeignKey("activities.Activity", on_delete=models.SET_NULL,
+                                 null=True, blank=True, related_name="auto_adjustments")
+    trigger = models.CharField(max_length=10)          # run | checkin | pain
+    action = models.CharField(max_length=10)           # shorten | easier | run_walk | rest | swap | extend
+    reason = models.TextField()
+    chip = models.CharField(max_length=200)
+    signals = models.JSONField(default=list)
+    # {title, kind, duration_s, load, steps, target_zone, description, fueling, date}
+    before = models.JSONField()
+    after = models.JSONField()
+    group = models.CharField(max_length=40, blank=True, default="")
+    status = models.CharField(max_length=8, choices=Status.choices, default=Status.APPLIED)
+    created_at = models.DateTimeField(auto_now_add=True)
+    undone_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+
+class StrengthSession(OwnedByAthlete):
+    """R13 §4: a 20-minute strength & drills session on the calendar."""
+
+    class Status(models.TextChoices):
+        PLANNED = "planned", "Planned"
+        COMPLETED = "completed", "Completed"
+        SKIPPED = "skipped", "Skipped"
+
+    plan = models.ForeignKey(TrainingPlan, on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name="strength_sessions")
+    date = models.DateField(db_index=True)
+    title = models.CharField(max_length=80)
+    duration_s = models.PositiveIntegerField(default=1200)
+    level = models.PositiveSmallIntegerField(default=1)
+    exercises = models.JSONField(default=list)
+    after_run = models.BooleanField(default=False)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PLANNED)
+    completed_activity = models.ForeignKey(
+        "activities.Activity", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="strength_sessions")
+    auto_completed = models.BooleanField(default=False)
+    garmin_workout_id = models.BigIntegerField(null=True, blank=True)
+    garmin_schedule_id = models.BigIntegerField(null=True, blank=True)
+    garmin_synced_at = models.DateTimeField(null=True, blank=True)
+    garmin_payload_hash = models.CharField(max_length=64, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["date", "id"]

@@ -122,3 +122,87 @@ def compute_checkin(athlete_id: int) -> dict:
     return {"athlete": athlete_id, "date": str(athlete.local_today),
             "verdict": verdict.verdict, "workout_id": workout.pk if workout else None,
             "signals_missing": verdict.signals_missing}
+
+
+# --- R13 ---------------------------------------------------------------------------------
+
+@shared_task(name="planning.after_run")
+def after_run_task(activity_id: int) -> dict:
+    """After a new activity is segmented: a strength activity completes that day's
+    strength session; a recent run auto-adjusts the next sessions (§1) and gets its
+    coach review (§7)."""
+    from apps.activities.models import Activity
+
+    from .auto_adjust import evaluate
+    from .strength_service import complete_from_activity
+
+    activity = Activity.objects.filter(pk=activity_id).select_related("athlete").first()
+    if activity is None:
+        return {"skipped": "gone"}
+    athlete = activity.athlete
+    out: dict = {"activity": activity_id}
+    session = complete_from_activity(activity)
+    if session is not None:
+        out["strength_completed"] = session.pk
+    if "run" not in (activity.sport or "").lower():
+        return out
+    out["adjusted"] = len(evaluate(athlete, trigger="run", activity=activity))
+    from apps.activities.reviews import build_review
+
+    review = build_review(activity, push=True)
+    out["review"] = review.pk if review else None
+    return out
+
+
+@shared_task(name="planning.after_checkin")
+def after_checkin_task(activity_id: int) -> dict:
+    """The post-run check-in brings the RPE: re-evaluate (easier only) and refresh the
+    review's bullets."""
+    from apps.activities.models import Activity
+
+    from .auto_adjust import evaluate
+
+    activity = Activity.objects.filter(pk=activity_id).select_related("athlete").first()
+    if activity is None or "run" not in (activity.sport or "").lower():
+        return {"skipped": "gone_or_not_a_run"}
+    adjusted = len(evaluate(activity.athlete, trigger="checkin", activity=activity))
+    from apps.activities.reviews import build_review
+
+    build_review(activity, push=False)
+    return {"activity": activity_id, "adjusted": adjusted}
+
+
+@shared_task(name="planning.after_pain")
+def after_pain_task(athlete_id: int) -> dict:
+    from .auto_adjust import evaluate
+
+    athlete = Athlete.objects.filter(pk=athlete_id).first()
+    if athlete is None:
+        return {"skipped": "gone"}
+    return {"athlete": athlete_id, "adjusted": len(evaluate(athlete, trigger="pain"))}
+
+
+@shared_task(name="planning.garmin_strength_push")
+def garmin_strength_push_task(athlete_id: int, session_ids: list[int],
+                              action: str = "send") -> dict:
+    """R13 §4. Routed to the `garmin` queue (see CELERY_TASK_ROUTES)."""
+    from .garmin_strength_push import run_job
+
+    return run_job(athlete_id, session_ids, action)
+
+
+@shared_task(name="planning.strength_topup")
+def strength_topup() -> dict:
+    """Nightly: keep 8 weeks of strength sessions placed for athletes who chose them."""
+    from .strength_service import place_for
+
+    done = 0
+    for athlete in Athlete.objects.filter(strength_per_week__gt=0):
+        try:
+            place_for(athlete)
+            done += 1
+        except Exception:  # noqa: BLE001 — one athlete must not stop the rest
+            import logging
+
+            logging.getLogger(__name__).exception("strength top-up failed for %s", athlete.pk)
+    return {"athletes": done}

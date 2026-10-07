@@ -1,7 +1,8 @@
 from django.urls import path
 
 from . import (
-    achievements, compare_views, day_views, forecast_views, garmin_views, reports, wake_views,
+    achievements, briefing, compare_views, day_views, forecast_views, garmin_views, injury,
+    monthly, mood, reports, wake_views,
 )
 
 urlpatterns = [
@@ -29,4 +30,17 @@ urlpatterns = [
     path("reports/weekly/ai/", reports.weekly_ai, name="weekly-report-ai"),
     path("achievements/", achievements.achievements, name="achievements"),
     path("achievements/seen/", achievements.achievements_seen, name="achievements-seen"),
+    # R13
+    path("health/injury/", injury.injury, name="health-injury"),
+    path("health/pain/", injury.pain, name="health-pain"),
+    path("health/pain/<int:pk>/", injury.pain_detail, name="health-pain-detail"),
+    path("briefing/today/", briefing.today, name="briefing-today"),
+    path("briefing/today/dismiss/", briefing.dismiss, name="briefing-dismiss"),
+    path("briefing/today/ai/", briefing.briefing_ai, name="briefing-ai"),
+    path("mood/", mood.moods, name="mood"),
+    path("mood/today/", mood.mood_today, name="mood-today"),
+    path("mood/<str:day>/", mood.mood_delete, name="mood-day"),
+    path("reports/monthly/", monthly.monthly, name="monthly-report"),
+    path("reports/monthly/list/", monthly.monthly_list, name="monthly-report-list"),
+    path("reports/monthly/ai/", monthly.monthly_ai, name="monthly-report-ai"),
 ]

@@ -258,6 +258,8 @@ CELERY_TASK_ROUTES = {
     # R7: pushing workouts to Garmin shares the serialised garmin queue.
     "planning.garmin_push": {"queue": "garmin"},
     "planning.garmin_forget": {"queue": "garmin"},
+    # R13 §4: strength workouts to the watch, same serialised queue and breaker.
+    "planning.garmin_strength_push": {"queue": "garmin"},
     "ingest.*": {"queue": "garmin"},
     "activities.*": {"queue": "metrics"},
     "coaching.*": {"queue": "ai"},
@@ -265,6 +267,8 @@ CELERY_TASK_ROUTES = {
     # R10: report cards, badges and reminders are light database work (and push sends).
     "health.*": {"queue": "metrics"},
     "reminders.*": {"queue": "metrics"},
+    # R13 §15: data export (database reads + a ZIP on the media volume).
+    "athletes.*": {"queue": "metrics"},
 }
 
 from celery.schedules import crontab  # noqa: E402
@@ -311,6 +315,25 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(minute=40),
     },
     # R10 §C12: every 5 minutes; each reminder goes once per local day at its time.
+    # R13 §11: hourly; builds last month's report on the 1st at 06:xx local.
+    "monthly-reports": {
+        "task": "health.monthly_reports",
+        "schedule": crontab(minute=4),
+    },
+    # R13 §6/§4/§15: hourly — briefings at the wake time, strength placement top-up,
+    # expired export cleanup.
+    "morning-briefings": {
+        "task": "health.morning_briefings",
+        "schedule": crontab(minute="*/15"),
+    },
+    "strength-topup": {
+        "task": "planning.strength_topup",
+        "schedule": crontab(hour=2, minute=20),
+    },
+    "export-cleanup": {
+        "task": "athletes.export_cleanup",
+        "schedule": crontab(minute=50),
+    },
     "send-reminders": {
         "task": "reminders.send_due",
         "schedule": crontab(minute="*/5"),
@@ -393,6 +416,11 @@ AI_MODEL_TIERS = {
     "progress_review": "coach",
     # R10 §C10: the optional paragraph on the weekly report card.
     "weekly_report": "coach",
+    # R13: briefing phrasing is a cheap one-liner; the run review and monthly report
+    # paragraphs are the coach's voice.
+    "morning_briefing": "lite",
+    "run_review": "coach",
+    "monthly_report": "coach",
 }
 
 # Per athlete per month, every model call counted. Read by coaching/services.py.

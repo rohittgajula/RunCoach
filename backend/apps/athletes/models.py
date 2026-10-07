@@ -151,6 +151,15 @@ class Athlete(models.Model):
     # R11 §E: run maps trim the first and last 200 m so home/work never shows.
     map_hide_endpoints = models.BooleanField(default=True)
 
+    # R13: auto-adjust after each run (§1), strength sessions (§4), caffeine tile (§9),
+    # daily "Anything hurting?" (§3) and the quit-smoking savings goal (§8).
+    auto_adjust_plan = models.BooleanField(default=True)
+    strength_per_week = models.PositiveSmallIntegerField(default=0)
+    caffeine_on_today = models.BooleanField(default=False)
+    pain_daily_check = models.BooleanField(default=False)
+    savings_goal_name = models.CharField(max_length=60, blank=True, default="")
+    savings_goal_amount = models.FloatField(null=True, blank=True)
+
     # Whether the athlete has been through onboarding. Needed as an explicit flag
     # rather than inferred: the router has to decide where a freshly-registered
     # athlete lands, and racing a redirect against a state update silently skipped
@@ -386,3 +395,31 @@ class InviteCode(models.Model):
         return self.uses < self.max_uses and (
             self.expires_at is None or self.expires_at > timezone.now()
         )
+
+
+class DataExport(OwnedByAthlete):
+    """R13 §15: one "Export my data" ZIP. Built by a Celery task into the media volume
+    (never under a public URL), downloadable once by its owner with a one-time token,
+    and deleted after the download or 24 h."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RUNNING = "running", "Running"
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+        EXPIRED = "expired", "Expired"
+        DOWNLOADED = "downloaded", "Downloaded"
+
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    file_name = models.CharField(max_length=200, blank=True, default="")
+    size_bytes = models.PositiveBigIntegerField(null=True, blank=True)
+    # The one-time download token is an HMAC of (id, created_at) with SECRET_KEY —
+    # re-derivable, never stored (apps/athletes/export.py).
+    error = models.CharField(max_length=300, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    downloaded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

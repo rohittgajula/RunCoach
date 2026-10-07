@@ -16,7 +16,13 @@ REMINDERS = {
     "habit_log": ("Habit log", "An evening nudge to log today's habits."),
     "best_run_time": ("Best time to run", "Today's best running window from the weather."),
     "weekly_report": ("Weekly report", "Mondays, when last week's report card is ready."),
+    # R13
+    "morning_briefing": ("Good morning", "Your morning briefing, at your wake time (from "
+                         "the wake planner), else at this time."),
+    "run_reviewed": ("Run reviewed", "When the coach review of a run is ready."),
 }
+# Sent when something happens, not at a time of day: `time` is null and not settable.
+EVENT_REMINDERS = {"run_reviewed"}
 
 
 def settings_for(athlete) -> ReminderSettings:
@@ -27,17 +33,27 @@ def settings_for(athlete) -> ReminderSettings:
 def reminders_json(row: ReminderSettings) -> list[dict]:
     return [{"key": key, "label": label, "description": description,
              "enabled": getattr(row, key),
-             "time": getattr(row, f"{key}_time").strftime("%H:%M")}
+             "time": None if key in EVENT_REMINDERS
+             else getattr(row, f"{key}_time").strftime("%H:%M")}
             for key, (label, description) in REMINDERS.items()]
 
 
+def _time_for(row: ReminderSettings, key: str) -> dt.time:
+    if key == "morning_briefing":
+        from apps.health.briefing import wake_minute
+
+        minute = wake_minute(row.athlete)
+        if minute is not None:
+            return dt.time(minute // 60, minute % 60)
+    return getattr(row, f"{key}_time")
+
+
 def due(row: ReminderSettings, key: str, local_now: dt.datetime) -> bool:
-    if not getattr(row, key):
+    if key in EVENT_REMINDERS or not getattr(row, key):
         return False
     if (row.last_sent or {}).get(key) == local_now.date().isoformat():
         return False
-    at = dt.datetime.combine(local_now.date(), getattr(row, f"{key}_time"),
-                             tzinfo=local_now.tzinfo)
+    at = dt.datetime.combine(local_now.date(), _time_for(row, key), tzinfo=local_now.tzinfo)
     return at <= local_now < at + WINDOW
 
 
@@ -63,6 +79,12 @@ def message(athlete, key: str) -> dict | None:
             return None
         return {"title": "Best time to run today", "body": f"Coolest window: {when}.",
                 "url": "/", "tag": "best_run_time"}
+    if key == "morning_briefing":
+        from apps.health.briefing import build
+
+        build(athlete)
+        return {"title": "Good morning", "body": "Your morning briefing is ready.",
+                "url": "/", "tag": "briefing"}
     if key == "weekly_report":
         if athlete.local_now.weekday() != 0:
             return None

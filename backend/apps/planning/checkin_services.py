@@ -84,11 +84,29 @@ def today_payload(athlete: Athlete) -> dict:
         "adjusted": verdict.adjusted,
         "applied": bool(workout and workout.adjusted_by == CHECKIN),
         "explanation": {"status": "none", "text": ""},
+        # R13 §3 / §10
+        "injury": _injury_brief(athlete),
+        "mood": _mood_today(athlete),
     }
     text = cached_checkin_explanation(athlete, checkin_explain_payload(payload))
     if text:
         payload["explanation"] = {"status": "ready", "text": text}
     return payload
+
+
+def _injury_brief(athlete) -> dict:
+    from apps.health.injury import injury_payload
+
+    body = injury_payload(athlete)
+    return {"risk": body["risk"], "flags": body["flags"]}
+
+
+def _mood_today(athlete) -> dict | None:
+    from apps.health.mood import mood_json
+    from apps.health.models import MoodLog
+
+    row = MoodLog.objects.filter(athlete=athlete, date=athlete.local_today).first()
+    return mood_json(row) if row else None
 
 
 class NothingToApply(Exception):

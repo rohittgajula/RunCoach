@@ -16,7 +16,7 @@ from rest_framework.response import Response
 
 from apps.activities.models import Activity
 from apps.athletes.mixins import AthleteScopedMixin
-from apps.coaching.throttles import ChatThrottle
+from apps.coaching.throttles import ChatThrottle, ChatWriteThrottle
 
 from .models import PlannedWorkout, TrainingPlan
 from .plan_store import PlanError, accept_plan, decline_plan, rebuild_active_plan
@@ -177,6 +177,13 @@ def calendar_days(request):
         )
 
     guard_inputs = guard_base(athlete) if workouts else None
+    # R13 §4: strength sessions are calendar items of their own.
+    from .strength_service import can_send, sessions_between, strength_json
+
+    send = can_send(athlete)
+    by_day_strength: dict[dt.date, list] = {}
+    for session in sessions_between(athlete, start, end):
+        by_day_strength.setdefault(session.date, []).append(strength_json(session, send))
     days = []
     cursor = start
     while cursor <= end:
@@ -186,6 +193,8 @@ def calendar_days(request):
         ] + [
             {"type": "workout", "workout": workout_json(w, guard_inputs)}
             for w in by_day_workouts.get(cursor, [])
+        ] + [
+            {"type": "strength", "strength": s} for s in by_day_strength.get(cursor, [])
         ]
         rest = None
         if not items:
@@ -295,15 +304,21 @@ def workout_guide(request, pk: int):
     return Response({"thread_id": thread.pk}, status=status.HTTP_201_CREATED)
 
 
-@api_view(["POST"])
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
-@throttle_classes([ChatThrottle])
+@throttle_classes([ChatWriteThrottle])
 def activity_review(request, pk: int):
+    """GET: the R13 §7 post-run coach review. POST: open a chat thread reviewing it."""
     from apps.coaching.chat import start_thread_with
 
-    activity = Activity.objects.filter(athlete=request.user.athlete, pk=pk).first()
+    activity = Activity.objects.filter(athlete=request.user.athlete, pk=pk) \
+        .select_related("metrics").first()
     if activity is None:
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    if request.method == "GET":
+        from apps.activities.reviews import review_json
+
+        return Response(review_json(activity))
     thread = start_thread_with(
         request.user.athlete,
         title=f"Review: {activity.local_date:%a %-d %b} {activity.sport}"[:120],

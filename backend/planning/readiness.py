@@ -60,6 +60,9 @@ class WellnessSnapshot:
     heat_dew_point: float | None = None
     heat_hot: bool = False
     aqi: float | None = None                 # US AQI now
+    # R13 §3: the same spot sore (>= 2/3) on two of the last 3 days. watch | bad.
+    pain_spot_status: str | None = None
+    pain_spot_label: str | None = None
 
 
 @dataclass

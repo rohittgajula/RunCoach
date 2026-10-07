@@ -211,6 +211,9 @@ class ActivityMetrics(models.Model):
     # Garmin's own training effect (0-5), from the FIT session message.
     training_effect_aerobic = models.FloatField(null=True, blank=True)
     training_effect_anaerobic = models.FloatField(null=True, blank=True)
+    # R13 §3: Garmin's average ground-contact-time balance (% left), from the FIT session
+    # message when the watch has a running-dynamics sensor. NULL otherwise.
+    gct_balance_left_pct = models.FloatField(null=True, blank=True)
 
     custom_load = models.FloatField(null=True, blank=True)
     load_formula_version = models.CharField(max_length=8, blank=True)
@@ -228,3 +231,21 @@ class ActivityMetrics(models.Model):
 
     def __str__(self):
         return f"{self.run_distance_m:.0f}m run / {self.walk_distance_m:.0f}m walk"
+
+
+class RunReview(models.Model):
+    """R13 §7: the deterministic post-run coach review, built once per run after it is
+    segmented. The AI paragraph is optional (AIAnalysis kind run_review)."""
+
+    athlete = models.ForeignKey("athletes.Athlete", on_delete=models.CASCADE,
+                                related_name="run_reviews")
+    activity = models.OneToOneField(Activity, on_delete=models.CASCADE, related_name="coach_review")
+    payload = models.JSONField(default=dict)
+    ai_markdown = models.TextField(blank=True, default="")
+    ai_generated_at = models.DateTimeField(null=True, blank=True)
+    pushed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]

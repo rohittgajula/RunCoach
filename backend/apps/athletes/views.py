@@ -233,6 +233,7 @@ class AthleteDetailView(generics.RetrieveUpdateAPIView):
         athlete = self.get_object()
         days_before = (athlete.available_days, athlete.long_run_day)
         runs_before = athlete.runs_per_week
+        strength_before = athlete.strength_per_week
         with transaction.atomic():
             response = super().update(request, *args, **kwargs)
             athlete.refresh_from_db()
@@ -247,6 +248,14 @@ class AthleteDetailView(generics.RetrieveUpdateAPIView):
             response.data.update({k: getattr(athlete, k) for k in (
                 "location_lat", "location_lon", "location_name", "location_source")})
         response.data["plan_reflow"] = _merge_reflow(reflowed, relaid)
+        # R13 §4: strength sessions follow the choice and the (maybe moved) runs.
+        if athlete.strength_per_week != strength_before or (
+                (days_changed or runs_changed) and athlete.strength_per_week):
+            from apps.planning.strength_service import place_for
+
+            placed = place_for(athlete)
+            if athlete.strength_per_week != strength_before:
+                response.data["strength_reflow"] = placed
         return response
 
 

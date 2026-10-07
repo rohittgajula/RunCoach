@@ -4,9 +4,16 @@ from .models import Race
 
 
 class RaceSerializer(serializers.ModelSerializer):
+    # R13 §2: the race-day planner's inputs.
+    goal_time_s = serializers.IntegerField(min_value=600, max_value=172800, allow_null=True,
+                                           required=False)
+    start_time = serializers.TimeField(format="%H:%M", input_formats=["%H:%M", "%H:%M:%S"],
+                                       allow_null=True, required=False)
+
     class Meta:
         model = Race
-        fields = ["id", "name", "date", "distance_km", "is_target", "notes"]
+        fields = ["id", "name", "date", "distance_km", "is_target", "notes", "goal_time_s",
+                  "start_time"]
 
     def validate(self, attrs):
         athlete = self.context["request"].user.athlete

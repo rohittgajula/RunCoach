@@ -20,6 +20,11 @@ live on ReminderSettings and `map_hide_endpoints` on the Athlete row. Cached run
 
 R12: Alarm (reminders) cascades with the Athlete; the watch alarms read from Garmin live
 on GarminProfile, which already does.
+
+R13: WorkoutAdjustment and StrengthSession (planning), PainReport, MoodLog, MonthlyReport
+and MorningBriefing (health), CravingLog (habits), RunReview (activities) and DataExport
+(athletes) all cascade with the Athlete. Export ZIPs on disk (media/exports/athlete_<id>/)
+are removed with the other files.
 """
 
 import logging
@@ -60,7 +65,8 @@ def _athlete_paths(user: User) -> list[Path]:
     ]
     # The per-athlete directories themselves (see fit_upload_path, meal_photo_path),
     # so files no row points at any more go too.
-    paths += [media / "fit" / f"athlete_{athlete.pk}", media / "meals" / str(athlete.pk)]
+    paths += [media / "fit" / f"athlete_{athlete.pk}", media / "meals" / str(athlete.pk),
+              media / "exports" / f"athlete_{athlete.pk}"]
     token_root = Path(settings.GARMIN_TOKEN_DIR)
     token_dir = Path(athlete.token_dir)
     if _inside(token_root, token_dir) and token_dir.resolve() != token_root.resolve():

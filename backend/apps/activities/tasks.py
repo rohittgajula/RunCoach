@@ -26,7 +26,33 @@ def derive_one(activity_id: int) -> dict:
         return {"skipped": "gone"}
 
     metrics = derive(activity)
+    queue_after_run(activity)
     return {"activity": activity_id, "segmented": metrics is not None}
+
+
+AFTER_RUN_DAYS = 2
+
+
+def queue_after_run(activity: Activity) -> bool:
+    """R13: a recent activity (today or the 2 days before) goes on to auto-adjust, the
+    coach review and strength completion. Re-derivations of history never do."""
+    import datetime as dt
+
+    from django.db import transaction
+
+    if activity.local_date < activity.athlete.local_today - dt.timedelta(days=AFTER_RUN_DAYS):
+        return False
+
+    def send():
+        try:
+            from apps.planning.tasks import after_run_task
+
+            after_run_task.delay(activity.pk)
+        except Exception:  # noqa: BLE001 — no broker in a one-off script
+            logger.debug("could not queue after-run work for %s", activity.pk)
+
+    transaction.on_commit(send)
+    return True
 
 
 @shared_task(name="activities.derive_stale")

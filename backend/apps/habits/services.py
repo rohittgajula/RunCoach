@@ -20,6 +20,9 @@ from .models import HabitLog
 KINDS = ("smoke", "alcohol", "sugar")          # the habits the AI may ever see
 PRIVATE = "private"                             # R9 §B: never sent to the AI
 ALL_KINDS = (*KINDS, PRIVATE)
+CAFFEINE = "caffeine"                           # R13 §9: its own report, not the summary
+LOGGABLE_KINDS = (*ALL_KINDS, CAFFEINE)
+CAFFEINE_TYPES = ("coffee", "tea", "energy", "other")
 RANGES = {"4w": 28, "12w": 84, "6m": 182}
 PREVIOUS_LABELS = {"4w": "the previous 4 weeks", "12w": "the previous 12 weeks",
                    "6m": "the previous 6 months"}
@@ -30,7 +33,9 @@ EASY_PACE_SLACK_S = 30
 
 def log_json(log: HabitLog) -> dict:
     return {"id": log.pk, "kind": log.kind, "quantity": log.quantity, "at": log.at,
-            "local_date": log.local_date, "note": log.note, "created_at": log.created_at}
+            "local_date": log.local_date, "note": log.note,
+            "subtype": (log.subtype or None) if log.kind == CAFFEINE else None,
+            "created_at": log.created_at}
 
 
 def kinds_for(athlete) -> tuple[str, ...]:
@@ -55,8 +60,15 @@ def today_payload(athlete) -> dict:
         last = (HabitLog.objects.filter(athlete=athlete, kind=kind)
                 .order_by("-at").values_list("at", flat=True).first())
         last_at[kind] = last
+    caffeine = HabitLog.objects.filter(athlete=athlete, kind=CAFFEINE)
     return {"date": today, "counts": counts_on(athlete, today, include_private=True),
-            "last_at": last_at}
+            "last_at": last_at,
+            # R13 §9: kept out of `counts` so existing habit tiles are unchanged.
+            "caffeine": {
+                "count": round(caffeine.filter(local_date=today)
+                               .aggregate(total=Sum("quantity"))["total"] or 0, 2),
+                "last_at": caffeine.order_by("-at").values_list("at", flat=True).first(),
+                "on_today": athlete.caffeine_on_today}}
 
 
 def _totals(athlete, kind: str, since: dt.date | None = None) -> dict[dt.date, float]:

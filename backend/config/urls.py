@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
@@ -25,4 +24,22 @@ urlpatterns = [
 
 # Raw MEDIA_URL in development only. `static()` is a no-op when DEBUG is off; meal
 # photos then go out as signed URLs (apps/diet/media.py) and nothing else is public.
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# R13 §15: data exports live under MEDIA_ROOT/exports/ and are never served here — only
+# through the authenticated one-time download (apps/athletes/export.py).
+def media(request, path):
+    import posixpath
+
+    from django.http import Http404
+    from django.views.static import serve
+
+    clean = posixpath.normpath(path).lstrip("/")
+    if clean == "exports" or clean.startswith("exports/"):
+        raise Http404
+    return serve(request, clean, document_root=settings.MEDIA_ROOT)
+
+
+if settings.DEBUG:
+    from django.urls import re_path
+
+    prefix = settings.MEDIA_URL.lstrip("/")
+    urlpatterns += [re_path(rf"^{prefix}(?P<path>.*)$", media)]

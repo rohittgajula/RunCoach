@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .progress_views import progress, progress_review
+from .review_views import review_ai, reviews_recent
 from .views import (
     ActivityDetail, ActivityList, activity_facets, activity_route, activity_routes,
     activity_series,
@@ -15,4 +16,7 @@ urlpatterns = [
     path("activities/routes/", activity_routes, name="activity-routes"),
     path("progress/", progress, name="progress"),
     path("progress/review/", progress_review, name="progress-review"),
+    # R13 §7 (GET /activities/{id}/review/ lives with the planning views' POST).
+    path("activities/<int:pk>/review/ai/", review_ai, name="activity-review-ai"),
+    path("reviews/recent/", reviews_recent, name="reviews-recent"),
 ]

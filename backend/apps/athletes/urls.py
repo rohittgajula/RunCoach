@@ -1,5 +1,6 @@
 from django.urls import path
 
+from . import export
 from .profile_views import entries_view, entry_delete, fitness_view, profile_summary
 from .views import (
     AthleteDetailView, LoginView, LogoutView, MeView, RefreshView, RegisterView,
@@ -18,4 +19,8 @@ urlpatterns = [
     path("metrics/fitness/", fitness_view, name="metrics-fitness"),
     path("metrics/entries/", entries_view, name="metrics-entries"),
     path("metrics/entries/<int:pk>/", entry_delete, name="metrics-entry"),
+    # R13 §15
+    path("export/", export.create, name="export"),
+    path("export/latest/", export.latest, name="export-latest"),
+    path("export/<int:pk>/download/", export.download, name="export-download"),
 ]

@@ -25,6 +25,20 @@ class LogSerializer(serializers.Serializer):
     quantity = serializers.FloatField(default=1.0, min_value=0.1, max_value=MAX_QUANTITY)
     at = serializers.DateTimeField(required=False)
     note = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    # R13 §9: caffeine only.
+    subtype = serializers.ChoiceField(choices=services.CAFFEINE_TYPES, required=False,
+                                      allow_null=True)
+
+    def validate(self, attrs):
+        kind = attrs.get("kind", getattr(self.instance, "kind", None))
+        if kind == services.CAFFEINE:
+            if not attrs.get("subtype") and not getattr(self.instance, "subtype", ""):
+                attrs["subtype"] = "coffee"
+        elif attrs.get("subtype"):
+            raise serializers.ValidationError({"subtype": ["Only caffeine has a type."]})
+        else:
+            attrs.pop("subtype", None)
+        return attrs
 
     def validate_kind(self, value):
         athlete = self.context.get("athlete")
@@ -56,11 +70,12 @@ def logs(request):
         data.is_valid(raise_exception=True)
         v = data.validated_data
         log = HabitLog.objects.create(athlete=athlete, kind=v["kind"], quantity=v["quantity"],
-                                      at=v.get("at") or timezone.now(), note=v.get("note", ""))
+                                      at=v.get("at") or timezone.now(), note=v.get("note", ""),
+                                      subtype=v.get("subtype") or "")
         return Response(services.log_json(log), status=201)
     kind = request.query_params.get("kind")
-    if kind and kind not in services.ALL_KINDS:
-        return Response({"detail": "kind must be smoke, alcohol, sugar or private."},
+    if kind and kind not in services.LOGGABLE_KINDS:
+        return Response({"detail": "kind must be smoke, alcohol, sugar, private or caffeine."},
                         status=400)
     if request.method == "DELETE":
         # Bulk delete (R9 §B "Delete private logs"): only with an explicit kind, and only
@@ -97,7 +112,7 @@ def log_detail(request, pk: int):
                          context={"athlete": request.user.athlete})
     data.is_valid(raise_exception=True)
     for key, value in data.validated_data.items():
-        setattr(log, key, value)
+        setattr(log, key, value if key != "subtype" else (value or ""))
     log.save()
     return Response(services.log_json(log))
 

@@ -142,3 +142,10 @@ class WeeklyReportSummary(BaseModel):
     """R10 §C10: the optional paragraph on the weekly report card."""
 
     markdown: str = Field(description="One short markdown paragraph, 60-120 words.")
+
+
+class ShortParagraph(BaseModel):
+    """R13: the optional AI paragraph on the run review, the monthly report and the
+    morning briefing."""
+
+    markdown: str = Field(description="One short markdown paragraph, as long as asked.")

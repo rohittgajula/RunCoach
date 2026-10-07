@@ -22,6 +22,17 @@ class AthleteSerializer(serializers.ModelSerializer):
     cigarette_price = serializers.FloatField(min_value=0, max_value=10000, allow_null=True,
                                              required=False)
     location_city = serializers.CharField(max_length=120, allow_blank=True, required=False)
+    # R13
+    strength_per_week = serializers.IntegerField(min_value=0, max_value=3, required=False)
+    strength_per_week_suggested = serializers.SerializerMethodField()
+    savings_goal_name = serializers.CharField(max_length=60, allow_blank=True, required=False)
+    savings_goal_amount = serializers.FloatField(min_value=1, max_value=10_000_000,
+                                                 allow_null=True, required=False)
+
+    def get_strength_per_week_suggested(self, athlete):
+        from planning.strength import SUGGESTED_PER_WEEK
+
+        return SUGGESTED_PER_WEEK
 
     def get_runs_per_week_recommended(self, athlete):
         from apps.planning.relayout import recommended_runs
@@ -107,6 +118,9 @@ class AthleteSerializer(serializers.ModelSerializer):
             "location_city",
             # R11
             "map_hide_endpoints",
+            # R13
+            "auto_adjust_plan", "strength_per_week", "strength_per_week_suggested",
+            "caffeine_on_today", "pain_daily_check", "savings_goal_name", "savings_goal_amount",
         ]
         # System-managed. A client that could PATCH garmin_connected=True could make
         # the UI claim sync works when it does not.

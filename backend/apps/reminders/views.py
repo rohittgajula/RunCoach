@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from .models import PushSubscription
 from .push import available, send_to_athlete
 from .nudges import NUDGES, nudges_json, quiet_json, validate_patch, validate_quiet
-from .service import IOS_NOTE, REMINDERS, reminders_json, settings_for
+from .service import EVENT_REMINDERS, IOS_NOTE, REMINDERS, reminders_json, settings_for
 
 UNAVAILABLE = "Reminders aren't set up on this server yet."
 
@@ -67,6 +67,8 @@ def reminders(request):
                 if not isinstance(change["enabled"], bool):
                     return _bad(f"{key}.enabled must be true or false.")
                 updates[key] = change["enabled"]
+            if "time" in change and key in EVENT_REMINDERS:
+                return _bad(f"{key} has no time — it is sent when a run is reviewed.")
             if "time" in change:
                 try:
                     updates[f"{key}_time"] = dt.datetime.strptime(str(change["time"]),

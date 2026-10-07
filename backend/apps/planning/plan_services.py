@@ -167,7 +167,18 @@ def _checkin_extras(athlete: Athlete, day: dt.date) -> dict:
         "acwr": round(acute / chronic, 2) if chronic > 0 and enough else None,
         "last_rpe": max(rpes) if rpes else None,
         **_r8_extras(athlete, day),
+        **_pain_extras(athlete, day),
     }
+
+
+def _pain_extras(athlete: Athlete, day: dt.date) -> dict:
+    """R13 §3: a spot sore >= 2 on two of the last 3 days."""
+    from apps.health.injury import pain_signal
+
+    signal = pain_signal(athlete, day)
+    if not signal:
+        return {}
+    return {"pain_spot_status": signal["status"], "pain_spot_label": signal["label"]}
 
 
 def _r8_extras(athlete: Athlete, day: dt.date) -> dict:

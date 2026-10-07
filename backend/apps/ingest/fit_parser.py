@@ -177,5 +177,8 @@ def training_effect(path_or_fileobj) -> dict:
         return {
             "training_effect_aerobic": _value(session, "total_training_effect"),
             "training_effect_anaerobic": _value(session, "total_anaerobic_training_effect"),
+            # R13 §3: ground-contact-time balance, % left (running-dynamics sensors only).
+            "gct_balance_left_pct": _value(session, "avg_stance_time_balance"),
         }
-    return {"training_effect_aerobic": None, "training_effect_anaerobic": None}
+    return {"training_effect_aerobic": None, "training_effect_anaerobic": None,
+            "gct_balance_left_pct": None}

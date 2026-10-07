@@ -291,7 +291,9 @@ def checkin_explain_payload(today_payload: dict) -> dict:
         "date": str(today_payload["date"]),
         "verdict": today_payload["verdict"],
         "headline": today_payload["headline"],
-        "signals": [{"signal": r["signal"], "status": r["status"], "label": r["label"]}
+        # R13: a pain report's body location never goes to the model (no diagnosis).
+        "signals": [{"signal": r["signal"], "status": r["status"],
+                     "label": "Pain reported" if r["signal"] == "pain" else r["label"]}
                     for r in today_payload["reasons"]],
         "signals_missing": today_payload["signals_missing"],
         # As planned, so applying the change does not invalidate the explanation.

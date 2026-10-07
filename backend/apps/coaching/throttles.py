@@ -23,3 +23,12 @@ class ChatThrottle(FixedScopeThrottle):
     """Chat turns, Guide/Review and meal estimates: endpoints that spend money."""
 
     scope = "chat"
+
+
+class ChatWriteThrottle(ChatThrottle):
+    """R13: the chat scope for POST only — a GET on the same path is a free read."""
+
+    def allow_request(self, request, view):
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            return True
+        return super().allow_request(request, view)

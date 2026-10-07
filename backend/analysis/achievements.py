@@ -44,10 +44,17 @@ CATALOGUE: dict[str, tuple[str, list[tuple[int, str, str]]]] = {
         (14, "Two weeks of good sleep", "Fourteen nights in a row with 7 hours or more."),
         (30, "A month of good sleep", "Thirty nights in a row with 7 hours or more."),
     ]),
+    # R13 §8: cravings ridden out without smoking (only when cravings are logged).
+    "cravings": ("cravings", [
+        (1, "First craving beaten", "Didn't smoke through a craving."),
+        (10, "10 cravings beaten", "Rode out ten cravings without smoking."),
+        (50, "50 cravings beaten", "Fifty cravings resisted."),
+        (100, "100 cravings beaten", "A hundred cravings resisted."),
+    ]),
 }
 KEY_PREFIX = {"smoke_free": "smoke_free_", "consistency": "consistent_weeks_",
               "distance": "first_5k", "records": "prs_", "run_streak": "run_streak_",
-              "sleep": "sleep_7h_"}
+              "sleep": "sleep_7h_", "cravings": "cravings_resisted_"}
 
 
 def badge_key(group: str, target: int) -> str:

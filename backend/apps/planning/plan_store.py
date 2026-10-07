@@ -369,6 +369,11 @@ def accept_plan(plan: TrainingPlan) -> TrainingPlan:
 
     for activity in Activity.objects.filter(athlete=athlete, local_date=today):
         link_activity(activity)
+    # R13 §4: the new plan's strength sessions (none unless the athlete chose them).
+    if athlete.strength_per_week:
+        from .strength_service import place_for
+
+        place_for(athlete)
     return plan
 
 

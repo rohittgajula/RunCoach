@@ -109,3 +109,30 @@ def geocode(query: str) -> dict | None:
                                       top.get("country")) if x)
     return {"lat": round_coord(top["latitude"]), "lon": round_coord(top["longitude"]),
             "name": name[:120]}
+
+
+def forecast_week(lat: float, lon: float, tz: str) -> dict | None:
+    """R13 §2: hourly forecast for the next 8 days (race-day planner), cached like the rest."""
+    params = {"latitude": lat, "longitude": lon, "hourly": HOURLY, "timezone": tz,
+              "forecast_days": 8}
+    return _cached("fc8", lat, lon, tz, lambda: _get_json(FORECAST_URL, params))
+
+
+def hour_at(fc: dict | None, day, hour: int) -> dict | None:
+    """The hourly entry for local `day` at `hour` from a forecast_week response."""
+    if not fc:
+        return None
+    hourly = fc.get("hourly") or {}
+    wanted = f"{day.isoformat()}T{hour:02d}:00"
+    times = hourly.get("time") or []
+    if wanted not in times:
+        return None
+    i = times.index(wanted)
+
+    def get(key):
+        values = hourly.get(key) or []
+        return values[i] if i < len(values) else None
+
+    return {"time": wanted, "temp": get("temperature_2m"), "feels_like": get("apparent_temperature"),
+            "humidity": get("relative_humidity_2m"), "dew_point": get("dew_point_2m"),
+            "precip_prob": get("precipitation_probability"), "wind": get("wind_speed_10m")}

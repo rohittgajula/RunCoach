@@ -106,6 +106,10 @@ def signals(s: WellnessSnapshot) -> tuple[list[dict], list[str]]:
         reasons.append(_reason("pain", "bad", "Pain reported in the last 3 days", True))
     if s.illness_reported:
         reasons.append(_reason("illness", "bad", "Feeling unwell in the last 3 days", True))
+    # R13 §3: "Anything hurting?" — easier only (watch -> easy, bad -> rest).
+    if s.pain_spot_status in ("watch", "bad"):
+        reasons.append(_reason("pain", s.pain_spot_status,
+                               s.pain_spot_label or "Pain two days running", True))
 
     if s.sleep_hours is None:
         missing.append("sleep")
@@ -198,6 +202,9 @@ def verdict_for(reasons: list[dict], has_workout: bool) -> str:
     if bad >= 2:
         return "swap"
     if bad == 1 or watch >= 2:
+        return "easy"
+    # R13 §3: a sore spot two days running always means at least an easy day.
+    if any(r["signal"] == "pain" and r["status"] == "watch" for r in reasons):
         return "easy"
     return "go"
 

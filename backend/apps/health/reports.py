@@ -147,7 +147,17 @@ def report_json(report: WeeklyReport) -> dict:
         "wellness": p.get("wellness", []), "habits": habits,
         "went_well": good, "to_improve": improve, "goal": goal,
         "ai": ai_state(report),
+        # R13 §10: averages only, computed on read (older stored reports gain it too).
+        "mood": _mood(report),
     }
+
+
+def _mood(report: WeeklyReport) -> dict:
+    from .mood import block
+
+    start = report.week_start
+    return block(report.athlete, start, start + dt.timedelta(days=6),
+                 start - dt.timedelta(days=7), start - dt.timedelta(days=1))
 
 
 def ai_state(report: WeeklyReport) -> dict:

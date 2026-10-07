@@ -100,7 +100,18 @@ def record(athlete, activity: Activity, fields: dict) -> tuple[JournalEntry, boo
         entry.save()
     if fields["note"]:
         transaction.on_commit(lambda: _queue_note(entry.pk))
+    transaction.on_commit(lambda: _queue_after_checkin(activity.pk))
     return entry, created
+
+
+def _queue_after_checkin(activity_id: int) -> None:
+    """R13: the RPE can only make the plan easier (auto-adjust) and refreshes the review."""
+    try:
+        from apps.planning.tasks import after_checkin_task
+
+        after_checkin_task.delay(activity_id)
+    except Exception:  # noqa: BLE001 — no broker in a one-off script
+        pass
 
 
 def _queue_note(entry_id: int) -> None:

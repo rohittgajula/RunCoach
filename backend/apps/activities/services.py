@@ -40,7 +40,8 @@ def _dynamics(activity: Activity, segments) -> dict:
 
 def _training_effect(activity: Activity) -> dict:
     """From the stored FIT session message. A missing or unreadable file is a gap."""
-    empty = {"training_effect_aerobic": None, "training_effect_anaerobic": None}
+    empty = {"training_effect_aerobic": None, "training_effect_anaerobic": None,
+             "gct_balance_left_pct": None}
     raw = activity.raw_file
     if raw is None or not raw.file:
         return empty
@@ -52,7 +53,13 @@ def _training_effect(activity: Activity) -> dict:
     except Exception:  # noqa: BLE001 — a derived extra must not fail derivation
         logger.warning("could not read training effect for activity %s", activity.pk)
         return empty
-    return {k: (round(float(v), 1) if v is not None else None) for k, v in values.items()}
+    out = {k: (round(float(v), 1) if v is not None else None) for k, v in values.items()}
+    balance = out.get("gct_balance_left_pct")
+    # A balance outside 30–70 % is a sensor artefact, not a gait.
+    if balance is not None and not 30 <= balance <= 70:
+        out["gct_balance_left_pct"] = None
+    out.setdefault("gct_balance_left_pct", None)
+    return out
 
 
 @transaction.atomic
