@@ -1338,3 +1338,294 @@ breaker; only `alarms` is read. Device settings are never written.
 - **Deploy**: migrations `ingest.0006_r12_watch_alarms`, `reminders.0003_r12_alarm`;
   restart worker, garmin worker and beat. No new env vars or dependencies. Watch alarms
   appear after the next daily slow fetch.
+
+## R13 (SPEC_R13.md) — contract for adaptive plan, race day, injury watch, strength, briefing, reviews, quit support, caffeine, mood, monthly report, export
+
+Conventions as R10–R12: every path is under `/api/`, needs a signed-in athlete (401
+otherwise) and only reads/writes the requester's own rows (another athlete's id → 404).
+Dates `YYYY-MM-DD`; datetimes ISO 8601 with offset; clock times `"HH:MM"` (24 h, the
+athlete's timezone). `|null` = absent / not enough data — hide it. Errors are
+`400 {detail: str}` unless noted (DRF field errors `400 {field: [str]}` where a body is
+validated by a serializer, as for the Athlete / Race PATCH).
+
+### Athlete JSON (`GET/PATCH /athlete/`) — new fields
+```
+auto_adjust_plan: bool               # default true. R13 §1 "Auto-adjust plan"
+strength_per_week: int               # 0–3, default 0 (writable; else 400)
+strength_per_week_suggested: int     # read-only, always 2
+caffeine_on_today: bool              # default false — Today quick-log tile for caffeine
+pain_daily_check: bool               # default false — ask "Anything hurting?" on Today daily
+savings_goal_name: str               # ≤ 60 chars, default "" (e.g. "New shoes")
+savings_goal_amount: number|null     # ₹, 1–10,000,000, default null
+```
+A PATCH that changes `strength_per_week` re-places the future strength sessions (§4); the
+response then also carries `strength_reflow: {created, removed}` (else that key is absent).
+
+### Race JSON (`/races/`, `/races/{id}/`) — new writable fields
+`goal_time_s: int|null` (600–172800) and `start_time: "HH:MM"|null` (race start; the race
+plan assumes 06:30 when null).
+
+### §1 Auto-adjusting plan
+```
+Adjustment = { id, workout_id: int|null,           # null once the workout is deleted
+               workout_date: date, workout_title: str,
+               activity_id: int|null,                # the run that triggered it (null for a pain report)
+               trigger: "run"|"checkin"|"pain",
+               action: "shorten"|"easier"|"run_walk"|"rest"|"swap"|"extend",
+               reason: str,                          # plain sentence: why
+               chip: str,                            # "Adjusted: shortened to 20 min — your HR ran 8 bpm high yesterday"
+               signals: [{key: str, label: str}],    # what fired (keys below)
+               before: {title, kind, duration_s, date},
+               after:  {title, kind, duration_s, date},
+               group: str|null,                      # both rows of one swap share it
+               status: "applied"|"undone",
+               undoable: bool,                       # applied, workout still planned/future and unchanged since
+               created_at, undone_at: datetime|null }
+```
+- `GET /adjustments/?limit=20` (1–100) → `{enabled: bool, adjustments: [Adjustment]}`
+  newest first (the auto changes; the R6 weekly adaptation stays in plan `adjustments`).
+- `POST /adjustments/{id}/undo/` → 200 `Adjustment` (status `undone`); the workout gets its
+  `before` prescription back, is marked so auto-adjust never touches it again, and the
+  watch copy is re-sent when it was on the watch. Undoing one row of a swap undoes both.
+  Not undoable (already undone, workout done/past/edited since) → 409 `{detail}`.
+- Workout JSON (everywhere: `/calendar/`, `/today/`, `/workouts/{id}/`, plans) gains
+  `auto_adjustment: Adjustment|null` (the applied one, if any). `adjusted_by` can now
+  also be `"auto"` (changed by auto-adjust) or `"kept"` (the athlete undid one).
+- Signal keys: `rpe` (post-run RPE ≥ 8 on an easy session, or ≥ 9), `hr_high` (run HR
+  above the session's zone top by ≥ 5 bpm), `hr_drift` (> 8 %), `incomplete` (< 70 % of
+  the planned run time), `readiness` (Garmin readiness < 25), `sleep_debt` (≥ 5 h over
+  the last 7 nights), `alcohol` (≥ 3 drinks last night), `pain` (pain watch, §3),
+  `injury_risk` (injury risk high, §3), `easy_streak` (the +5 % rule).
+- Runs: after each run is ingested and segmented (within 2 days of today), again when its
+  post-run check-in is saved, and after a pain report. Disabled by `auto_adjust_plan`.
+
+### §2 Race-day planner — `GET /races/{id}/plan/?strategy=even|negative` (default even)
+```
+{ race: Race, strategy: "even"|"negative", available: bool,
+  reason: null|"no_target",                 # no goal and no prediction → splits []
+  start_time: "HH:MM", start_time_source: "race"|"default",
+  days_to_race: int,
+  target: null | {time_s: int, pace_s_per_km: int, source: "goal"|"prediction"|"garmin",
+                  goal_time_s: int|null, predicted_time_s: int|null, note: str|null},
+  splits: [{km: float, split_s: int, pace_s_per_km: int, elapsed_s: int}],   # last may be partial (e.g. 10.0, 21.1)
+  fueling: {duration_s: int|null, carbs_g_per_h: int, fluid_ml_per_h: int,
+            electrolytes: bool,
+            items: [{at_s: int, at_km: float|null, what: str, amount: str}],   # before, during, after
+            notes: [str]},
+  weather: null | {date, hour: "HH:MM", temp_c, feels_like_c, humidity, dew_point,
+                   precip_prob, wind_kmh: number|null, heat: "cool"|"warm"|"hot"|"very_hot",
+                   pace_slowdown_pct: int, advice: [str]},     # only when the race is ≤ 7 days away and a forecast is available
+  warmup: [{label: str, duration_s: int, detail: str}],
+  taper: {starts_on: date, in_taper: bool,                     # final 10 days
+          items: [{key: "sleep"|"carbs"|"kit"|"route"|"bib"|"shoes",
+                   label: str, detail: str, due_on: date|null,
+                   status: "ok"|"warn"|"todo"|"info"}]},
+  morning: [{time: "HH:MM", label: str, detail: str}] }   # wake, breakfast, leave/arrive, warm-up, start
+```
+404 for another athlete's race. Past races still answer (no weather).
+
+### §3 Injury watch
+- `GET /health/injury/` →
+```
+{ date, risk: "low"|"moderate"|"high",
+  flags: [{kind: "ramp"|"long_run_share"|"cadence_drop"|"gct_balance"|"shoe"|"pain",
+           level: "watch"|"high", text: str, since: date|null, value: number|null}],
+  pains: [Pain],                    # the last 14 days, newest first
+  guidance: [str],                  # e.g. "See a physio if it persists" — never a diagnosis
+  note: str }                       # what the flags are (plain language)
+Pain = {id, date, location: "foot"|"ankle"|"shin"|"calf"|"knee"|"hamstring"|"quad"|"hip"|"lower_back",
+        side: "left"|"right"|"both"|"center", severity: 1|2|3, activity_id: int|null,
+        note: str, created_at}
+```
+- `GET /health/pain/?days=30` (1–365) → `[Pain]` newest first.
+- `POST /health/pain/ {location, side, severity, date? (default today; ≤ today, ≥ today−14),
+  activity_id?, note? (≤ 200)}` → 201 `Pain`; the same date+location+side again updates it
+  (200). Bad value → 400. Another athlete's activity_id → 400.
+- `DELETE /health/pain/{id}/` → 204.
+- Risk: high = any `high` flag or ≥ 3 watch flags; moderate = 1–2 watch flags; else low.
+- Morning check-in (`GET /today/`) gains a `pain` reason when the same spot was ≥ 2 on two
+  of the last 3 days: `watch` (both 2) or `bad` (a 3) — label "Knee (left) sore 2 days".
+  It can only make the verdict easier. `GET /today/` also gains `injury: {risk, flags}`
+  and `mood: Mood|null` (§10).
+
+### §4 Strength sessions
+```
+Strength = { id, date, title: str, duration_s: int (1200), level: int,      # level 1.. (every 2 weeks)
+             exercises: [{key: "calf"|"bridge"|"split"|"plank"|"side"|"clam"|"askip"|"hipflexor",
+                          name: str, sets: int, reps: int|null, seconds: int|null,
+                          per_side: bool, rest_s: int, cue: str}],
+             status: "planned"|"completed"|"skipped", completed_activity_id: int|null,
+             auto_completed: bool, after_run: bool,          # placed on a run day (after an easy run)
+             garmin_status: "none"|"synced"|"changed", garmin_workout_id: int|null,
+             can_send_to_watch: bool }
+```
+- `GET /strength/?start=&end=` (default today−7 … today+28, ≤ 62 days) →
+  `{per_week, suggested: 2, can_send_to_watch: bool, sessions: [Strength]}`.
+- `PATCH /strength/{id}/ {status?, date?}` → `Strength` (date not in the past).
+- `POST /strength/{id}/garmin/` → 202 `{queued: true}` (409 when it cannot be sent:
+  not planned, past, Garmin not connected). `DELETE /strength/{id}/garmin/` → 202.
+- `/calendar/` day `items` gain `{type: "strength", strength: Strength}`;
+  `/calendar/month/` days gain `strength: {id, title, status}|null`.
+- A Garmin strength activity on that date marks the session completed (`auto_completed`).
+
+### §6 Morning briefing — `GET /briefing/today/`
+```
+{ date, ready: bool,                 # false before 04:00 local (then the rest is null/[])
+  built_at: datetime|null, dismissed: bool, wake_time: "HH:MM"|null,
+  greeting: str,
+  readiness: {score: int|null, label: str|null, source: "garmin"|null},
+  checkin: {verdict: str, headline: str},
+  session: {workout: {id, title, kind, duration_s}|null, adjustment: Adjustment|null,
+            strength: {id, title}|null},
+  weather: null | {best_window: {start, end, reason}|null, feels_like_max: number|null,
+                   heat: str|null, hydration: {before_ml, during_ml_per_h, after_note, electrolytes}|null},
+  fuel: null | {kcal: int, carbs_g: int, protein_g: int, water_ml: int},
+  focus: {key: str, text: str},
+  notes: [{kind: "injury"|"habit"|"sleep"|"mood"|"review", text: str}],
+  ai: {status: "none"|"ready", text: str, generated_at: datetime|null} }
+```
+- `POST /briefing/today/dismiss/` → `{dismissed: true}`.
+- `POST /briefing/today/ai/?refresh=1` → `{status, text, generated_at}` (lite tier, cached per
+  day; 503 `{detail}` when AI is unavailable / budget used; 429 throttle `chat`). The model
+  gets only the briefing's aggregates (no habit counts for the private habit, no notes text
+  about pain locations).
+
+### §7 Post-run coach review
+- `GET /activities/{id}/review/` (the existing `POST` on this path still opens a chat thread) →
+```
+{ activity_id, date, available: bool, reason: null|"not_a_run"|"no_metrics",
+  kind: str|null,                    # the planned kind, else "EASY"
+  bucket: "lt2"|"2to5"|"5to8"|"8plus"|null, compared_with: int,   # similar past runs (0 = none)
+  metrics: [{key: "pace"|"hr_at_pace"|"hr_drift"|"cadence"|"run_fraction",
+             label, unit, this_run: number|null, typical: number|null,
+             delta: number|null, better: bool|null}],
+  went_well: [str], to_improve: [str], next_time: [str],
+  ai: {status: "none"|"ready", markdown: str, generated_at: datetime|null},
+  created_at: datetime|null }
+```
+- `POST /activities/{id}/review/ai/?refresh=1` → `{status, markdown, generated_at}` (coach tier,
+  cached; 503 / 429 as above).
+- `GET /reviews/recent/` → `{review: RunReview|null}` — the newest review built in the last
+  24 h (the Today card).
+
+### §8 Quit-smoking support
+```
+Craving = { id, at, local_date, intensity: 1–5, trigger: "coffee"|"alcohol"|"stress"|"after_meal"|
+            "boredom"|"social"|"work_break"|"morning"|"other", place: str, mood: int|null (1–5),
+            smoked: bool, cigarette_log_id: int|null, note: str, created_at }
+```
+- `GET /habits/cravings/?days=90` (1–730) → `[Craving]` newest first.
+- `POST /habits/cravings/ {intensity, trigger, at?, place? (≤ 60), mood?, smoked? (default
+  false), note? (≤ 200)}` → 201 `Craving`. `smoked: true` also logs one cigarette (HabitLog
+  smoke at the same time) and links it.
+- `PATCH /habits/cravings/{id}/` any of the fields → `Craving` (smoked false→true logs the
+  cigarette; true→false deletes the linked one). `DELETE /habits/cravings/{id}/` → 204
+  (the linked cigarette log stays).
+- `GET /habits/cravings/summary/?range=4w` (R12 period params) →
+```
+{ range, start, end, period, total: int, resisted: int, resisted_pct: int|null,
+  avg_intensity: number|null,
+  by_trigger: [{trigger, label, count, resisted}],          # count desc
+  by_hour: [{hour: 0..23, count}],
+  top_places: [{place, count}],                             # ≤ 5
+  peak_hours: [{hour, count}],                              # top 3 hours with ≥ 1
+  trend: {this_period: int, previous_period: int, change_pct: int|null,
+          direction: "down"|"up"|"flat"|null},
+  savings: null | Savings }
+Savings = {name, amount, saved: number, remaining: number, pct: int, reached: bool,
+           per_day: number|null, eta: date|null}   # money_saved since the quit date (R8)
+```
+- Achievements gain group `cravings` (`cravings_resisted_1|10|50|100`, unit "cravings").
+
+### §9 Caffeine
+- `HabitLog.kind` gains `caffeine` (cups) and every log gains `subtype: "coffee"|"tea"|
+  "energy"|"other"|null` (only for caffeine; default `coffee`). `POST /habits/logs/` accepts
+  `subtype`. Bulk `DELETE /habits/logs/?kind=caffeine` works. Caffeine is not part of the
+  smoke/alcohol/sugar summary, its AI or chat.
+- `GET /habits/today/` gains top-level `caffeine: {count: number, last_at: datetime|null,
+  on_today: bool}` (`counts` unchanged).
+- `GET /habits/caffeine/?range=4w` (R12 period params) →
+```
+{ range, start, end, period, total: number, per_day_avg: number|null,
+  by_type: {coffee, tea, energy, other: number}, late_cutoff: "14:00", late_days: int,
+  series: [{date, count: number, late: bool}],
+  impact: [{metric: "sleep_score"|"deep_sleep_min"|"awake_min", label, unit,
+            late_avg: number|null, other_avg: number|null, diff: number|null,
+            n_late: int, n_other: int, direction: "better"|"worse"|"no_clear_difference",
+            enough_data: bool, sentence: str}],
+  caveat: str }
+```
+  Late = a caffeine log at or after 14:00 that day; compared with the night that ended next
+  morning, vs caffeine-free-after-14:00 days. `enough_data` needs ≥ 4 nights each side.
+- Compare catalogue (`/health/compare/metrics/`) gains `caffeine` (group `habits`, cups,
+  summed in week/month buckets).
+
+### §10 Mood & energy
+```
+Mood = {date, mood: 1–5, energy: 1–5, note: str, updated_at}
+```
+- `GET /mood/?start=&end=` (default the last 30 days, ≤ 366) → `[Mood]` oldest first.
+- `POST /mood/ {mood, energy, date? (default today; ≤ today, ≥ today−7), note? (≤ 200)}` →
+  201 (created) / 200 (updated) `Mood` — one per day.
+- `GET /mood/today/` → `{date, entry: Mood|null}`. `DELETE /mood/{date}/` → 204.
+- Compare catalogue gains `mood` and `energy` (group `wellness`, unit "1–5").
+- Weekly report gains `mood: {mood_avg, energy_avg, days, previous_mood_avg,
+  previous_energy_avg}` (numbers|null, days int). Mood never goes to the AI except these
+  averages.
+
+### §11 Monthly report
+- `GET /reports/monthly/?month=YYYY-MM` (default last complete month; the current or a future
+  month → 400) →
+```
+{ id, month: "YYYY-MM", start, end, generated_at,
+  runs: {count: int, km: number, run_km: number, time_s: int, longest_km: number,
+         previous_count: int, previous_km: number, planned: int, planned_done: int},
+  prs: [{key, label, display, date}],
+  fitness: {vo2max: Change, fitness_age: Change},      # Change = {start: number|null, end: number|null, change: number|null}
+  wellness: [{metric: "hrv"|"rhr"|"sleep"|"sleep_score", label, unit, this_month,
+              previous_month, delta, better}],
+  habits: [{habit: "smoke"|"alcohol"|"sugar"|"caffeine"|"private", label, this_month: number,
+            previous_month: number, delta: number, better: bool|null}],
+  smoke_free_days: int|null,                            # null when smoking is not tracked
+  mood: {mood_avg, energy_avg, days, previous_mood_avg, previous_energy_avg},
+  weight: null | {start: number, end: number, change: number},
+  injury: {flags: int, pain_days: int},
+  went_well: [str], to_improve: [str], goal: str,       # ≤ 3, ≤ 3, 1
+  ai: {status: "none"|"ready", markdown: str, generated_at: datetime|null} }
+```
+- `GET /reports/monthly/list/` → `[{id, month, runs_done, km, generated_at}]` newest first, ≤ 24.
+- `POST /reports/monthly/ai/?month=&refresh=1` → `{status, markdown, generated_at}` (coach
+  tier; 503 / 429 as weekly). The model gets the report minus the private habit and mood
+  notes (averages only).
+- Built on the 1st at 06:xx local by an hourly beat (idempotent), or on first read.
+
+### §15 Data export
+```
+Export = { id, status: "pending"|"running"|"ready"|"failed"|"expired"|"downloaded",
+           created_at, finished_at: datetime|null, size_bytes: int|null,
+           expires_at: datetime|null,                # ready + 24 h
+           download_url: str|null,                   # "/api/export/{id}/download/?token=…" while ready
+           error: str }
+```
+- `POST /export/` → 202 `Export` (built by a Celery task). At most one per hour: 429
+  `{detail, retry_after_s}`.
+- `GET /export/latest/` → `{export: Export|null}`.
+- `GET /export/{id}/download/?token=` → the ZIP (`application/zip`,
+  `Content-Disposition: attachment; filename="runcoach-export-YYYY-MM-DD.zip"`). Needs the
+  signed-in owner **and** the token; works once (then 410), and not after `expires_at` (410).
+  A missing/wrong token → 404. The frontend must fetch it with the Authorization header and
+  save the blob (a plain link has no token header). The file is deleted after download or
+  expiry.
+- ZIP contents: `athlete.json` (settings, no secrets) and CSVs `activities.csv`,
+  `laps.csv` (run/walk segments summary), `daily_wellness.csv`, `intraday_daily.csv`,
+  `habits.csv`, `cravings.csv`, `mood.csv`, `water.csv`, `meals.csv`, `weights.csv`,
+  `plans.csv`, `workouts.csv`, `strength.csv`, `pain.csv`, `reports_weekly.csv`,
+  `reports_monthly.csv`, plus `README.txt`.
+
+### Reminders (`GET/PATCH /reminders/`) — two new reminder keys
+`morning_briefing` ("Good morning" briefing; time default `06:30` — sent at the wake
+planner's wake time for today when it is between 04:00 and 11:00, else at this time) and
+`run_reviewed` ("Run reviewed", sent when a post-run review is built; **`time: null`**, a
+PATCH with `time` for it → 400). Both off by default. Payloads: `{title: "Good morning",
+url: "/", tag: "briefing"}`, `{title: "Run reviewed", url: "/activities/{id}", tag:
+"run_review"}` — no numbers.
