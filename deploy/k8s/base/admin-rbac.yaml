@@ -1,0 +1,65 @@
+# Read-only Kubernetes access for the in-app admin page (R14 §14): pod/job/cronjob
+# status in this namespace, plus node usage via metrics-server. Only the backend
+# Deployment uses this ServiceAccount; every other pod keeps `default` (no token).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend
+imagePullSecrets:
+  - name: ghcr-pull
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: admin-readonly
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list]
+  - apiGroups: [metrics.k8s.io]
+    resources: [pods]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backend-admin-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: admin-readonly
+subjects:
+  - kind: ServiceAccount
+    name: backend
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: runcoach-node-readonly
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
+  - apiGroups: [metrics.k8s.io]
+    resources: [nodes]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: runcoach-backend-node-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: runcoach-node-readonly
+subjects:
+  - kind: ServiceAccount
+    name: backend
+    namespace: runcoach

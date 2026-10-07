@@ -29,6 +29,7 @@ spec:
       labels:
         app.kubernetes.io/name: backend
     spec:
+      serviceAccountName: backend
       terminationGracePeriodSeconds: 40
       securityContext:
         runAsUser: 10001

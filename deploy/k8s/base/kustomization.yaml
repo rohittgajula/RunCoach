@@ -18,6 +18,7 @@ labels:
 resources:
   - namespace.yaml
   - serviceaccount.yaml
+  - admin-rbac.yaml
   - config.yaml
   - storage.yaml
   - postgres.yaml
