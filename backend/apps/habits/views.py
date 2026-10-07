@@ -108,19 +108,14 @@ def today(request):
     return Response(services.today_payload(request.user.athlete))
 
 
-def _range(request):
-    value = request.query_params.get("range") or services.DEFAULT_RANGE
-    return value if value in services.RANGES else None
-
-
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def summary(request):
-    range_key = _range(request)
-    if range_key is None:
-        return Response({"detail": "range must be one of 4w, 12w, 6m."}, status=400)
+    from apps.health.period import LEGACY, parse_period
+
     athlete = request.user.athlete
-    payload = services.summary_payload(athlete, range_key)
+    period = parse_period(request, athlete, services.DEFAULT_RANGE, extra=LEGACY)
+    payload = services.summary_payload(athlete, period)
     if request.method == "GET":
         return Response(payload)
     return _generate(request, athlete, payload)

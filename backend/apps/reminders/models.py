@@ -60,3 +60,26 @@ class ReminderSettings(OwnedByAthlete):
         verbose_name_plural = "reminder settings"
         constraints = [models.UniqueConstraint(fields=["athlete"],
                                                name="uniq_reminder_settings_athlete")]
+
+
+def all_days() -> list[int]:
+    return [0, 1, 2, 3, 4, 5, 6]
+
+
+class Alarm(OwnedByAthlete):
+    """R12 §B: "My alarm" and the wake planner's inputs. Not a phone alarm — a web app
+    cannot set one — but it can push a notification at that time."""
+
+    time = models.TimeField(null=True, blank=True)
+    days = models.JSONField(default=all_days)
+    enabled = models.BooleanField(default=False)
+    push = models.BooleanField(default=False)
+    run_time = models.TimeField(null=True, blank=True)
+    bedtime_reminder = models.BooleanField(default=False)
+    bedtime_lead_min = models.PositiveSmallIntegerField(default=30)
+    # {"alarm": "YYYY-MM-DD", "bedtime": "YYYY-MM-DD"} — once a local day each.
+    last_sent = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["athlete"], name="uniq_alarm_athlete")]

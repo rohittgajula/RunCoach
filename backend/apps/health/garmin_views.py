@@ -17,7 +17,10 @@ from analysis.training_status import status_key
 from apps.activities.models import Activity
 from apps.ingest.models import BodyComposition, GarminProfile, LactateThreshold, PersonalRecord
 
-from .common import first_last_change, metrics_rows, parse_range, ranged, window
+from analysis.buckets import bucket
+
+from .common import first_last_change, metrics_rows
+from .period import as_period, parse_period
 
 ZONES_UPDATED_DAYS = 14
 STATUS_LOOKBACK_DAYS = 60
@@ -49,8 +52,9 @@ def zones_json(athlete):
 
 # --- B1/B3 fitness ------------------------------------------------------------------
 
-def fitness_payload(athlete, range_key: str) -> dict:
-    start, end = window(athlete, range_key)
+def fitness_payload(athlete, period) -> dict:
+    period = as_period(athlete, period)
+    start, end, freq = period.start, period.end, period.freq
     rows = metrics_rows(athlete, start, end)
     profile = GarminProfile.objects.filter(athlete=athlete).first()
 
@@ -81,26 +85,28 @@ def fitness_payload(athlete, range_key: str) -> dict:
                        for r in lt_rows if start <= r.measured_on <= end],
         }
 
+    if lactate is not None:
+        lactate["series"] = bucket(lactate["series"], freq, "last")
     return {
-        **ranged(range_key, start, end),
+        **period.ranged(),
         "vo2max": {"current": vo2[-1]["value"] if vo2 else None,
                    "change": first_last_change([p["value"] for p in vo2], 1),
-                   "series": vo2},
+                   "series": bucket(vo2, freq, "last")},
         "fitness_age": {"current": ages[-1]["value"] if ages else None,
                         "chronological_age": profile.chronological_age if profile else None,
                         "achievable": profile.achievable_fitness_age if profile else None,
                         "change": first_last_change([p["value"] for p in ages], 1),
-                        "series": ages},
+                        "series": bucket(ages, freq, "last")},
         "endurance_score": {"current": endurance[-1]["value"] if endurance else None,
                             "level": level or None,
                             "change": first_last_change([p["value"] for p in endurance], 0),
-                            "series": endurance},
+                            "series": bucket(endurance, freq, "last")},
         "race_predictions": {
             "current": _pred(preds[-1]) if preds else None,
             "previous": _pred(preds[0]) if len(preds) > 1 else None,
             "as_of": preds[-1].metric_date if preds else None,
             "previous_as_of": preds[0].metric_date if len(preds) > 1 else None,
-            "series": [{"date": r.metric_date, **_pred(r)} for r in preds],
+            "series": bucket([{"date": r.metric_date, **_pred(r)} for r in preds], freq, "last"),
         },
         "lactate_threshold": lactate,
         "zones": zones_json(athlete),
@@ -110,22 +116,28 @@ def fitness_payload(athlete, range_key: str) -> dict:
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def fitness(request):
-    return Response(fitness_payload(request.user.athlete, parse_range(request, "6m")))
+    athlete = request.user.athlete
+    return Response(fitness_payload(athlete, parse_period(request, athlete, "6m")))
 
 
 # --- B2 training status -------------------------------------------------------------
 
-def training_status_payload(athlete) -> dict:
+def training_status_payload(athlete, period=None) -> dict:
+    period = as_period(athlete, period or "4w")
     today = athlete.local_today
     rows = metrics_rows(athlete, today - dt.timedelta(days=STATUS_LOOKBACK_DAYS), today)
+    history_rows = metrics_rows(athlete, period.start, period.end)
     status_row = next((r for r in reversed(rows) if r.training_status), None)
     load_row = next((r for r in reversed(rows)
                      if r.acute_load is not None or r.chronic_load is not None), None)
     focus_row = next((r for r in reversed(rows) if r.load_focus), None)
-    cut = today - dt.timedelta(days=27)
     acute = load_row.acute_load if load_row else None
     chronic = load_row.chronic_load if load_row else None
+    history = [{"date": r.metric_date, "status_key": status_key(r.training_status),
+                "acute_load": r.acute_load, "chronic_load": r.chronic_load}
+               for r in history_rows if r.training_status or r.acute_load is not None]
     return {
+        **period.ranged(),
         "date": status_row.metric_date if status_row else None,
         "status": status_row.training_status if status_row else None,
         "status_key": status_key(status_row.training_status) if status_row else None,
@@ -135,17 +147,16 @@ def training_status_payload(athlete) -> dict:
                         "feedback": focus_row.load_focus.get("feedback"),
                         "items": focus_row.load_focus.get("items", [])}
                        if focus_row else None),
-        "history": [{"date": r.metric_date, "status_key": status_key(r.training_status),
-                     "acute_load": r.acute_load, "chronic_load": r.chronic_load}
-                    for r in rows if r.metric_date >= cut and (
-                        r.training_status or r.acute_load is not None)],
+        "history": bucket(history, period.freq,
+                          {"status_key": "last", "*": "mean"}, digits=1),
     }
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def training_status(request):
-    return Response(training_status_payload(request.user.athlete))
+    athlete = request.user.athlete
+    return Response(training_status_payload(athlete, parse_period(request, athlete, "4w")))
 
 
 # --- B4 sleep -------------------------------------------------------------------------
@@ -171,12 +182,31 @@ def _public(night: dict) -> dict:
     return {k: v for k, v in night.items() if not k.endswith("_dt")}
 
 
-def sleep_payload(athlete, range_key: str) -> dict:
+def _clock_h(value: dt.datetime | None, bedtime: bool) -> float | None:
+    if value is None:
+        return None
+    hours = value.hour + value.minute / 60
+    if bedtime and hours < 12:
+        hours += 24          # after midnight counts as 24:xx
+    return round(hours, 2)
+
+
+def _sleep_point(n: dict) -> dict:
+    return {"date": n["date"], "sleep_s": n["sleep_s"], "need_s": n["need_s"],
+            "score": n["score"], "deep_s": n["deep_s"], "light_s": n["light_s"],
+            "rem_s": n["rem_s"], "awake_s": n["awake_s"],
+            "restless_moments": n["restless_moments"], "spo2_avg": n["spo2_avg"],
+            "breathing_rate": n["breathing_rate"],
+            "bedtime_h": _clock_h(n["bedtime_dt"], True),
+            "wake_h": _clock_h(n["wake_dt"], False)}
+
+
+def sleep_payload(athlete, period) -> dict:
     from apps.habits.services import _runs
 
-    start, end = window(athlete, range_key)
-    length = (end - start).days + 1
-    prev_start, prev_end = start - dt.timedelta(days=length), start - dt.timedelta(days=1)
+    period = as_period(athlete, period)
+    start, end = period.start, period.end
+    prev_start, prev_end = period.compare_start, period.compare_end
     nights = [_night(r) for r in metrics_rows(athlete, start, end) if _has_sleep(r)]
     previous = [_night(r) for r in metrics_rows(athlete, prev_start, prev_end) if _has_sleep(r)]
     recent = [_night(r) for r in metrics_rows(athlete, end - dt.timedelta(days=6), end)
@@ -187,9 +217,11 @@ def sleep_payload(athlete, range_key: str) -> dict:
     runs = _runs(athlete, start, end)
     pairs = [(hours.get(day), values.get("easy_hr")) for day, values in runs.items()]
     need = debt["need_s"] or sleep_maths.median([n["need_s"] for n in recent])
+    digits = {"*": 0, "breathing_rate": 1, "spo2_avg": 1, "bedtime_h": 2, "wake_h": 2}
     return {
-        **ranged(range_key, start, end),
+        **period.ranged(),
         "nights": [_public(n) for n in nights],
+        "series": bucket([_sleep_point(n) for n in nights], period.freq, "mean", digits=digits),
         "averages": sleep_maths.averages(nights),
         "previous": sleep_maths.averages(previous),
         "regularity": sleep_maths.regularity([n["bedtime_dt"] for n in nights],
@@ -204,13 +236,15 @@ def sleep_payload(athlete, range_key: str) -> dict:
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def sleep(request):
-    return Response(sleep_payload(request.user.athlete, parse_range(request, "4w")))
+    athlete = request.user.athlete
+    return Response(sleep_payload(athlete, parse_period(request, athlete, "4w")))
 
 
 # --- B5 running form --------------------------------------------------------------------
 
-def form_payload(athlete, range_key: str) -> dict:
-    start, end = window(athlete, range_key)
+def form_payload(athlete, period) -> dict:
+    period = as_period(athlete, period)
+    start, end = period.start, period.end
     runs = []
     for a in (Activity.objects.filter(athlete=athlete, sport__icontains="run",
                                       local_date__gte=start, local_date__lte=end)
@@ -228,14 +262,22 @@ def form_payload(athlete, range_key: str) -> dict:
             "run_km": round(m.run_distance_m / 1000, 2),
             "run_pace_s_per_km": round(m.run_pace_s_per_km) if m.run_pace_s_per_km else None,
         })
-    return {**ranged(range_key, start, end), "has_dynamics": form_maths.has_dynamics(runs),
-            "runs": runs, "metrics": form_maths.metric_rows(runs)}
+    series = [{"date": dt.date.fromisoformat(r["date"]),
+               **{k: r[k] for k in ("cadence_spm", "ground_contact_ms", "vertical_oscillation_cm",
+                                    "stride_length_m", "run_pace_s_per_km", "run_km")}}
+              for r in runs]
+    series = bucket(series, period.freq, {"run_km": "sum", "*": "mean"},
+                    digits={"stride_length_m": 2, "run_km": 2, "ground_contact_ms": 0,
+                            "run_pace_s_per_km": 0, "*": 1})
+    return {**period.ranged(), "has_dynamics": form_maths.has_dynamics(runs),
+            "runs": runs, "series": series, "metrics": form_maths.metric_rows(runs)}
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def form(request):
-    return Response(form_payload(request.user.athlete, parse_range(request, "3m")))
+    athlete = request.user.athlete
+    return Response(form_payload(athlete, parse_period(request, athlete, "3m")))
 
 
 # --- B6 personal records --------------------------------------------------------------
@@ -282,11 +324,12 @@ def records(request):
 
 # --- B7 body composition ----------------------------------------------------------------
 
-def body_payload(athlete, range_key: str) -> dict:
+def body_payload(athlete, period) -> dict:
     from apps.athletes.models import MetricEntry
     from .common import zone_of
 
-    start, end = window(athlete, range_key)
+    period = as_period(athlete, period)
+    start, end = period.start, period.end
     garmin = [{"date": b.measured_on, "weight_kg": b.weight_kg, "body_fat_pct": b.body_fat_pct,
                "bmi": b.bmi, "muscle_mass_kg": b.muscle_mass_kg}
               for b in BodyComposition.objects.filter(athlete=athlete, measured_on__gte=start,
@@ -301,7 +344,7 @@ def body_payload(athlete, range_key: str) -> dict:
     merged = body_maths.merge(garmin, list(manual.values()))
     latest = merged[-1] if merged else None
     return {
-        **ranged(range_key, start, end),
+        **period.ranged(),
         "profile_weight_kg": athlete.weight_kg,
         "latest": ({"date": latest["date"], "weight_kg": latest.get("weight_kg"),
                     "body_fat_pct": latest.get("body_fat_pct"), "bmi": latest.get("bmi"),
@@ -310,14 +353,15 @@ def body_payload(athlete, range_key: str) -> dict:
         "change": {"weight_kg": body_maths.change(merged, "weight_kg"),
                    "body_fat_pct": body_maths.change(merged, "body_fat_pct")},
         "trend_kg_per_week": body_maths.trend(merged),
-        "series": [{"date": p["date"], "weight_kg": p.get("weight_kg"),
-                    "body_fat_pct": p.get("body_fat_pct"), "source": p["source"]}
-                   for p in merged],
+        "series": bucket([{"date": p["date"], "weight_kg": p.get("weight_kg"),
+                           "body_fat_pct": p.get("body_fat_pct"), "source": p["source"]}
+                          for p in merged], period.freq, "last"),
     }
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def body(request):
-    return Response(body_payload(request.user.athlete, parse_range(request, "6m")))
+    athlete = request.user.athlete
+    return Response(body_payload(athlete, parse_period(request, athlete, "6m")))
 

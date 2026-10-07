@@ -53,26 +53,34 @@ def _rho_text(rho: float) -> str:
     return f"{rho:.2f}".replace("-", "−")
 
 
-def sentence(x_noun: str, y_noun: str, lag: int, rho: float | None, n: int) -> str:
+UNITS = {"day": ("days", "Days", "day"), "week": ("weeks", "Weeks", "week"),
+         "month": ("months", "Months", "month")}
+
+
+def sentence(x_noun: str, y_noun: str, lag: int, rho: float | None, n: int,
+             freq: str = "day") -> str:
+    plural, capital, single = UNITS.get(freq, UNITS["day"])
     if n < MIN_N:
-        return (f"Not enough days with both {x_noun} and {y_noun} yet "
+        return (f"Not enough {plural} with both {x_noun} and {y_noun} yet "
                 f"(n = {n}; at least {MIN_N} needed).")
     if rho is None:
         return f"One of these didn't change over the range, so there is no pattern to show (n = {n})."
     stats = f"(ρ = {_rho_text(rho)}, n = {n})"
     if strength(rho) == "none":
-        when = " the next day" if lag else ""
+        when = f" the next {single}" if lag else ""
         return f"No clear link between {x_noun} and {y_noun}{when} {stats}."
     direction = "higher" if rho > 0 else "lower"
     if lag:
-        return (f"Days with more {x_noun} tended to be followed by {direction} {y_noun} "
-                f"the next day {stats}.")
-    return f"Days with more {x_noun} tended to come with {direction} {y_noun} {stats}."
+        return (f"{capital} with more {x_noun} tended to be followed by {direction} {y_noun} "
+                f"the next {single} {stats}.")
+    return f"{capital} with more {x_noun} tended to come with {direction} {y_noun} {stats}."
 
 
 def compare(xs: dict[dt.date, float], ys: dict[dt.date, float], lag: int,
-            x_noun: str, y_noun: str) -> dict:
-    points = pair(xs, ys, lag)
+            x_noun: str, y_noun: str, freq: str = "day", pre_shifted: bool = False) -> dict:
+    """With `pre_shifted`, ys is already keyed so that the same key means "lag later"
+    (bucketed series); `lag` then only changes the wording."""
+    points = pair(xs, ys, 0 if pre_shifted else lag)
     n = len(points)
     rho = spearman([p["x"] for p in points], [p["y"] for p in points]) if n >= 3 else None
     rho = round(rho, 2) if rho is not None else None
@@ -85,6 +93,6 @@ def compare(xs: dict[dt.date, float], ys: dict[dt.date, float], lag: int,
                       if enough and strength(rho) != "none" else None),
         "enough_data": enough,
         "trend": trend(points),
-        "sentence": sentence(x_noun, y_noun, lag, rho, n),
+        "sentence": sentence(x_noun, y_noun, lag, rho, n, freq),
         "caveat": CAVEAT,
     }

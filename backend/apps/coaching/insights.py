@@ -124,13 +124,14 @@ def _easy_band(athlete: Athlete) -> tuple[int, int]:
     return athlete.hr_easy_min, athlete.hr_easy_max
 
 
-def _running(athlete: Athlete, start: dt.date) -> tuple[dict, dict]:
+def _running(athlete: Athlete, start: dt.date, end: dt.date | None = None) -> tuple[dict, dict]:
     """The "How you're running" card, plus the inputs the focus rules need."""
     from apps.planning.models import PlannedWorkout
 
+    end = end or athlete.local_today
     runs = [
         a for a in Activity.objects.filter(athlete=athlete, sport__icontains="run",
-                                           local_date__gte=start)
+                                           local_date__gte=start, local_date__lte=end)
         .select_related("metrics").prefetch_related("segments").order_by("local_date")
         if getattr(a, "metrics", None) and a.metrics.run_block_count > 0
     ]
@@ -232,16 +233,40 @@ def _summary(athlete: Athlete, today: dt.date) -> dict:
             "generated_at": row.created_at}
 
 
-def insights_payload(athlete: Athlete, range_key: str) -> dict:
+def _bucket_series(payload: dict, freq: str) -> None:
+    """R12 §A: fold the chart series into week/month points (identity for day)."""
+    from analysis.buckets import bucket
+
+    if freq == "day":
+        return
+    for key, digits in (("hrv", 0), ("sleep", 0), ("resting_hr", 0), ("body_battery", 0),
+                        ("stress", 0), ("respiration", 1)):
+        block = payload.get(key)
+        if block and block.get("series"):
+            block["series"] = bucket(block["series"], freq, "mean", digits=digits)
+    if payload.get("vo2max"):
+        payload["vo2max"]["series"] = bucket(payload["vo2max"]["series"], freq, "last")
+    running = payload["running"]
+    for key, digits in (("run_fraction_trend", 2), ("longest_run_trend", 0),
+                        ("easy_pace_trend", 0)):
+        running[key] = bucket(running[key], freq, "mean", digits=digits)
+
+
+def insights_payload(athlete: Athlete, range_key) -> dict:
+    """`range_key`: a preset key or an R12 Period (custom start/end, freq). The series
+    cover the period; readiness, load and focus are always as of today."""
+    from apps.health.period import LEGACY, as_period
+
+    period = as_period(athlete, range_key, extra=LEGACY)
     today = athlete.local_today
-    start = today - dt.timedelta(days=RANGES[range_key] - 1)
+    start, end = period.start, period.end
     rows = list(DailyMetrics.objects.filter(athlete=athlete, metric_date__gte=start,
-                                            metric_date__lte=today).order_by("metric_date"))
+                                            metric_date__lte=end).order_by("metric_date"))
     load = _load(athlete, today)
-    payload = {"range": range_key, "today": today,
+    payload = {**period.ranged(), "today": today,
                **_wellness(athlete, rows, today,
                            None if load["status"] == "insufficient_data" else load["form"])}
-    running, focus_inputs = _running(athlete, start)
+    running, focus_inputs = _running(athlete, start, end)
     payload["running"] = running
     payload["load"] = load
 
@@ -262,6 +287,7 @@ def insights_payload(athlete: Athlete, range_key: str) -> dict:
         **_habit_inputs(athlete, today),
     ))
     payload["summary"] = _summary(athlete, today)
+    _bucket_series(payload, period.freq)
     return payload
 
 
@@ -288,18 +314,16 @@ def _habit_inputs(athlete: Athlete, today: dt.date) -> dict:
     }
 
 
-def _range(request) -> str | None:
-    value = request.query_params.get("range") or DEFAULT_RANGE
-    return value if value in RANGES else None
+def _period(request):
+    from apps.health.period import LEGACY, parse_period
+
+    return parse_period(request, request.user.athlete, DEFAULT_RANGE, extra=LEGACY)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def insights(request):
-    range_key = _range(request)
-    if range_key is None:
-        return Response({"detail": "range must be one of 4w, 12w, 6m."}, status=400)
-    return Response(insights_payload(request.user.athlete, range_key))
+    return Response(insights_payload(request.user.athlete, _period(request)))
 
 
 @api_view(["POST"])
@@ -310,16 +334,14 @@ def insights_summary(request):
     from .client import AIUnavailable
     from .services import insights_overview
 
-    range_key = _range(request)
-    if range_key is None:
-        return Response({"detail": "range must be one of 4w, 12w, 6m."}, status=400)
+    period = _period(request)
     athlete = request.user.athlete
     existing = _summary(athlete, athlete.local_today)
     # Cached per day: a second tap returns today's overview; ?refresh=1 rewrites it.
     if existing["status"] == "ready" and request.query_params.get("refresh") != "1":
         return Response(existing)
     try:
-        insights_overview(athlete, insights_payload(athlete, range_key))
+        insights_overview(athlete, insights_payload(athlete, period))
     except AIUnavailable as exc:
         return Response({"detail": str(exc) or "The coach is unavailable right now."},
                         status=http.HTTP_503_SERVICE_UNAVAILABLE)

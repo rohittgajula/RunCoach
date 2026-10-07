@@ -9,7 +9,8 @@ account leaves the rest of the fetch intact, and anything absent is stored as nu
 
 Real method names on garminconnect 0.3.10 (checked against the installed package):
 get_endurance_score, get_fitnessage_data, get_lactate_threshold, get_personal_record,
-get_body_composition, get_user_profile, get_gear, get_gear_stats. Training status /
+get_body_composition, get_user_profile, get_gear, get_gear_stats; R12 adds get_devices and
+get_device_settings (read-only, for the watch alarms). Training status /
 load focus and sleep details come from get_training_status / get_sleep_data, which the
 daily wellness sync already stores verbatim (see garmin_wellness.fields_from_raw).
 """
@@ -332,6 +333,44 @@ def store_gear(athlete: Athlete, gear_list, call=None) -> int:
     return stored
 
 
+# --- R12 §B4: watch alarms (read-only) --------------------------------------------------
+
+MAX_DEVICES = 3
+
+
+def store_watch_alarms(athlete: Athlete, profile: GarminProfile, call) -> int | None:
+    """Read the alarms configured on the athlete's devices: get_devices(), then
+    get_device_settings(deviceId) per device (each through the spaced runner). Only
+    the `alarms` key is read; nothing is ever written to the device. Returns how many
+    alarms were found, or None when the check is unavailable."""
+    from analysis.wake import parse_alarm
+
+    devices = call("devices", lambda: call.client.get_devices())
+    alarms: list[dict] = []
+    read_any = False
+    for device in (devices if isinstance(devices, list) else [])[:MAX_DEVICES]:
+        if not isinstance(device, dict) or not device.get("deviceId"):
+            continue
+        device_id = device["deviceId"]
+        settings_payload = call("device settings",
+                                lambda d=device_id: call.client.get_device_settings(d))
+        if not isinstance(settings_payload, dict):
+            continue
+        read_any = True
+        name = (device.get("productDisplayName") or device.get("displayName")
+                or device.get("deviceTypeName") or None)
+        for raw in settings_payload.get("alarms") or []:
+            parsed = parse_alarm(raw, str(name)[:60] if name else None)
+            if parsed:
+                alarms.append(parsed)
+    profile.watch_alarms = alarms if read_any else []
+    profile.watch_alarms_available = read_any
+    profile.watch_alarms_checked_on = athlete.local_today
+    profile.save(update_fields=["watch_alarms", "watch_alarms_available",
+                                "watch_alarms_checked_on", "updated_at"])
+    return len(alarms) if read_any else None
+
+
 # --- the daily run --------------------------------------------------------------------
 
 def sync_slow(athlete: Athlete, client, *, force: bool = False) -> dict:
@@ -360,6 +399,7 @@ def sync_slow(athlete: Athlete, client, *, force: bool = False) -> dict:
         if pk:
             gear = call("gear", lambda: client.get_gear(str(pk)))
             done["shoes"] = store_gear(athlete, gear, call) if gear else 0
+        done["watch_alarms"] = store_watch_alarms(athlete, profile, call)
     except RateLimited as exc:
         logger.warning("garmin slow sync rate limited for %s: %s", athlete.pk, exc)
         return {**done, "rate_limited": True, "calls": call.calls}

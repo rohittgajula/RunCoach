@@ -9,8 +9,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .common import BadRequest, parse_range, window
+from .common import BadRequest
 from .day_service import day_json, summary_json, trends_json
+from .period import parse_period
 
 MAX_DAYS_BACK = 365
 
@@ -48,6 +49,4 @@ def day_summary(request):
 @permission_classes([IsAuthenticated])
 def day_trends(request):
     athlete = request.user.athlete
-    range_key = parse_range(request, "4w")
-    start, end = window(athlete, range_key)
-    return Response(trends_json(athlete, range_key, start, end))
+    return Response(trends_json(athlete, parse_period(request, athlete, "4w")))

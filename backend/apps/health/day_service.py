@@ -226,10 +226,15 @@ def _next_runs(athlete, start: dt.date, end: dt.date) -> dict:
     return {d: {"easy_hr": easy.get(d), "efficiency": eff.get(d)} for d in set(easy) | set(eff)}
 
 
-def trends_json(athlete, range_key: str, start: dt.date, end: dt.date) -> dict:
+def trends_json(athlete, period) -> dict:
+    from analysis.buckets import bucket
+
+    from .period import as_period
+
+    period = as_period(athlete, period)
+    start, end = period.start, period.end
     days = day_rows(athlete, start, end)
-    length = (end - start).days + 1
-    prev = day_rows(athlete, start - dt.timedelta(days=length), start - dt.timedelta(days=1))
+    prev = day_rows(athlete, period.compare_start, period.compare_end)
     stress_by_day = dict(IntradayDay.objects.filter(athlete=athlete, day__gte=start, day__lte=end)
                          .values_list("day", "stress"))
     goal_days = {d["date"]: (d["steps"], d["step_goal"]) for d in days}
@@ -237,8 +242,8 @@ def trends_json(athlete, range_key: str, start: dt.date, end: dt.date) -> dict:
     adaptive = maths.adaptive_goal(history)
     goal_days = {d: (s, g or adaptive) for d, (s, g) in goal_days.items()}
     return {
-        "range": range_key, "start": start, "end": end,
-        "days": days,
+        **period.ranged(),
+        "days": bucket(days, period.freq, {"steps": "sum", "*": "mean"}, digits=0),
         "averages": day_trends.averages(days),
         "previous": day_trends.averages(prev),
         "weeks": day_trends.weeks(days),

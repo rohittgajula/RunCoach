@@ -17,6 +17,9 @@ PersonalRecord, BodyComposition, LactateThreshold (ingest), Shoe and ShoeAssignm
 R11: IntradayDay (ingest) and WaterLog (diet) cascade with the Athlete; the nudge settings
 live on ReminderSettings and `map_hide_endpoints` on the Athlete row. Cached run routes
 (`route:v1:…`, `route-overlay:v1:…`) are dropped explicitly with the other cache keys.
+
+R12: Alarm (reminders) cascades with the Athlete; the watch alarms read from Garmin live
+on GarminProfile, which already does.
 """
 
 import logging

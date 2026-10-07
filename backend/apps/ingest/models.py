@@ -162,6 +162,12 @@ class GarminProfile(OwnedByAthlete):
     user_profile_pk = models.BigIntegerField(null=True, blank=True)
     chronological_age = models.IntegerField(null=True, blank=True)
     achievable_fitness_age = models.FloatField(null=True, blank=True)
+    # R12 §B4: alarms read (never written) from the watch's device settings.
+    # None = never checked; [] = checked, none set. `watch_alarms_available` false when
+    # the account has no device or the call failed.
+    watch_alarms = models.JSONField(null=True, blank=True)
+    watch_alarms_available = models.BooleanField(default=False)
+    watch_alarms_checked_on = models.DateField(null=True, blank=True)
     raw = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 

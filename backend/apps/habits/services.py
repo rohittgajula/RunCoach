@@ -139,13 +139,14 @@ def _window(start: dt.date, today: dt.date, tracking: dt.date | None) -> list[dt
     return [first + dt.timedelta(days=i) for i in range((today - first).days + 1)]
 
 
-def _smoke(athlete, totals, start, today) -> dict:
+def _smoke(athlete, totals, start, end) -> dict:
+    today = athlete.local_today
     tracking = _tracking_start(totals, athlete.smoke_quit_date)
-    days = _window(start, today, tracking)
-    points = maths.series(totals, start, today)
+    days = _window(start, end, tracking)
+    points = maths.series(totals, start, end)
     tracked = [p for p in points if days and p["date"] >= days[0].isoformat()]
     total = round(sum(totals.get(d, 0) for d in days), 1)
-    denominator = avg_days(start, today, tracking)
+    denominator = avg_days(start, end, tracking)
     quit_at = quit_moment(athlete)
     smoked_since = 0.0
     if quit_at is not None:
@@ -205,14 +206,26 @@ def _goals(athlete) -> dict:
     return goals
 
 
-def summary_payload(athlete, range_key: str, with_report: bool = True) -> dict:
+def previous_label(period) -> str:
+    if period.range_key in PREVIOUS_LABELS:
+        return PREVIOUS_LABELS[period.range_key]
+    if period.range_key == "7d":
+        return "the previous 7 days"
+    return f"the previous {period.days} days"
+
+
+def summary_payload(athlete, range_key, with_report: bool = True) -> dict:
+    """`range_key`: a preset key or an R12 Period (custom start/end, freq)."""
+    from analysis.buckets import bucket
+
+    from apps.health.period import LEGACY, as_period
+
     from .ai import summary_state
 
+    period = as_period(athlete, range_key, extra=LEGACY)
     today = athlete.local_today
-    length = RANGES[range_key]
-    start = today - dt.timedelta(days=length - 1)
-    prev_end = start - dt.timedelta(days=1)
-    prev_start = start - dt.timedelta(days=length)
+    start, end = period.start, period.end
+    prev_start, prev_end = period.compare_start, period.compare_end
     kinds = kinds_for(athlete)
     totals = {k: _totals(athlete, k) for k in kinds}
     history_start = prev_start
@@ -222,39 +235,43 @@ def summary_payload(athlete, range_key: str, with_report: bool = True) -> dict:
     history_start = max(history_start, today - dt.timedelta(days=MAX_HISTORY_DAYS))
     mornings = _mornings(athlete, history_start, today + dt.timedelta(days=1))
     runs = _runs(athlete, history_start, today)
+    window_end = end
     impact, impact_prev, tracking = [], [], {}
     for kind in kinds:
         extra = athlete.smoke_quit_date if kind == "smoke" else None
         tracking[kind] = _tracking_start(totals[kind], extra)
-        days = [d for d in _window(start, today, tracking[kind]) if d < today]
+        days = [d for d in _window(start, window_end, tracking[kind]) if d < today]
         if days:
             impact += maths.impact(kind, totals[kind], days, mornings, runs)
         prev_days = [d for d in _window(prev_start, prev_end, tracking[kind])]
         if with_report and prev_days:
             impact_prev += maths.impact(kind, totals[kind], prev_days, mornings, runs)
     payload = {
-        "range": range_key, "today": today,
-        "smoke": _smoke(athlete, totals["smoke"], start, today),
-        "alcohol": _simple(totals["alcohol"], start, today, weekly=True),
-        "sugar": _simple(totals["sugar"], start, today, weekly=False),
+        **period.ranged(), "today": today,
+        "smoke": _smoke(athlete, totals["smoke"], start, window_end),
+        "alcohol": _simple(totals["alcohol"], start, window_end, weekly=True),
+        "sugar": _simple(totals["sugar"], start, window_end, weekly=False),
         "impact": impact,
-        "weekly": maths.weekly(start, today, totals, mornings, runs),
+        "weekly": maths.weekly(start, window_end, totals, mornings, runs),
         "goals": _goals(athlete),
         "summary": summary_state(athlete, today),
     }
     if PRIVATE in kinds:
-        payload[PRIVATE] = _simple(totals[PRIVATE], start, today, weekly=False)
+        payload[PRIVATE] = _simple(totals[PRIVATE], start, window_end, weekly=False)
+    for kind in ("smoke", "alcohol", "sugar", PRIVATE):
+        if kind in payload:
+            payload[kind]["series"] = bucket(payload[kind]["series"], period.freq, "sum")
     if with_report:
-        label = PREVIOUS_LABELS[range_key]
+        label = previous_label(period)
         habits = [maths.habit_report(
-            kind, totals=totals[kind], start=start, end=today, prev_start=prev_start,
+            kind, totals=totals[kind], start=start, end=window_end, prev_start=prev_start,
             prev_end=prev_end, tracking=tracking[kind], impact_rows=impact,
             prev_impact_rows=impact_prev, mornings=mornings, runs=runs,
-            late_days=(_late_days(athlete, kind, start, today)
+            late_days=(_late_days(athlete, kind, start, window_end)
                        if kind in maths.TIMING_HABITS else None),
             quit_date=athlete.smoke_quit_date if kind == "smoke" else None,
             previous_label=label) for kind in kinds if _tracked(athlete, kind, totals[kind])]
-        garmin = maths.garmin_compare(mornings, runs, start, today, prev_start, prev_end)
+        garmin = maths.garmin_compare(mornings, runs, start, window_end, prev_start, prev_end)
         payload["report"] = maths.report(habits, garmin, label)
     return payload
 

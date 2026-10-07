@@ -1,6 +1,8 @@
 from django.urls import path
 
-from . import achievements, compare_views, day_views, forecast_views, garmin_views, reports
+from . import (
+    achievements, compare_views, day_views, forecast_views, garmin_views, reports, wake_views,
+)
 
 urlpatterns = [
     path("health/fitness/", garmin_views.fitness, name="health-fitness"),
@@ -18,6 +20,10 @@ urlpatterns = [
     path("health/day/", day_views.day, name="health-day"),
     path("health/day/summary/", day_views.day_summary, name="health-day-summary"),
     path("health/day/trends/", day_views.day_trends, name="health-day-trends"),
+    # R12
+    path("health/wake-plan/", wake_views.wake_plan_view, name="health-wake-plan"),
+    path("health/watch-alarms/", wake_views.watch_alarms_view, name="health-watch-alarms"),
+    path("alarm/", wake_views.alarm_view, name="alarm"),
     path("reports/weekly/", reports.weekly, name="weekly-report"),
     path("reports/weekly/list/", reports.weekly_list, name="weekly-report-list"),
     path("reports/weekly/ai/", reports.weekly_ai, name="weekly-report-ai"),

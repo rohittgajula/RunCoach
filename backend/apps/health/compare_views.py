@@ -17,7 +17,12 @@ from analysis import compare as maths
 from analysis.sleep import minutes_after_noon
 from apps.activities.models import Activity
 
-from .common import BadRequest, metrics_rows, parse_range, ranged, window
+from analysis.buckets import bucket_map, shift_back
+
+from .common import BadRequest, metrics_rows
+from .period import parse_period
+
+SUM_KEYS = {"steps", "smoke", "alcohol", "sugar", "private", "run_km", "training_load"}
 
 # key -> (label, unit, group, noun)
 CATALOGUE: dict[str, tuple[str, str, str, str]] = {
@@ -184,7 +189,7 @@ def metrics(request):
 @permission_classes([IsAuthenticated])
 def compare(request):
     athlete = request.user.athlete
-    range_key = parse_range(request, "3m")
+    period = parse_period(request, athlete, "3m")
     x, y = request.query_params.get("x"), request.query_params.get("y")
     keys = available_keys(athlete)
     for name, value in (("x", x), ("y", y)):
@@ -198,13 +203,22 @@ def compare(request):
     if lag_raw not in ("0", "1"):
         raise BadRequest("lag must be 0 or 1.")
     lag = int(lag_raw)
-    start, end = window(athlete, range_key)
-    xs = series_for(athlete, x, start, end)
-    ys = series_for(athlete, y, start, end + dt.timedelta(days=lag))
-    result = maths.compare(xs, ys, lag, CATALOGUE[x][3], CATALOGUE[y][3])
+    start, end, freq = period.start, period.end, period.freq
+    if freq == "day":
+        xs = series_for(athlete, x, start, end)
+        ys = series_for(athlete, y, start, end + dt.timedelta(days=lag))
+        result = maths.compare(xs, ys, lag, CATALOGUE[x][3], CATALOGUE[y][3])
+    else:
+        # Buckets first (sum for counts, mean otherwise); lag 1 = the next bucket.
+        reach = end + (dt.timedelta(days=31) if lag else dt.timedelta(0))
+        xs = bucket_map(series_for(athlete, x, start, end), freq, "sum" if x in SUM_KEYS else "mean")
+        ys = bucket_map(series_for(athlete, y, start, reach), freq, "sum" if y in SUM_KEYS else "mean")
+        if lag:
+            ys = shift_back(ys, freq)
+        result = maths.compare(xs, ys, lag, CATALOGUE[x][3], CATALOGUE[y][3], freq=freq,
+                               pre_shifted=True)
 
     def meta(key):
         return {"key": key, "label": CATALOGUE[key][0], "unit": CATALOGUE[key][1]}
 
-    return Response({"x": meta(x), "y": meta(y), **ranged(range_key, start, end), "lag": lag,
-                     **result})
+    return Response({"x": meta(x), "y": meta(y), **period.ranged(), "lag": lag, **result})
