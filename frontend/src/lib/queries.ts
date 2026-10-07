@@ -14,6 +14,7 @@ import type {
   HealthFitness, TrainingStatus, HealthSleep, HealthForm, HealthRecords, GearResponse, Shoe,
   LungRecovery, WeeklyReport, WeeklyReportListItem, CompareMetric, CompareResult,
   RemindersResponse, Reminder, Achievements, ReadinessForecast, HealthBody,
+  HealthDay, DaySummary, DayTrends, ActivityRoute, WaterDay, WaterLog, Nudge,
 } from './types'
 
 export const errorText = (error: unknown, fallback = 'Something went wrong.'): string =>
@@ -854,14 +855,23 @@ export function useDeleteShoe() {
 export const useReminders = () =>
   useQuery({ queryKey: ['reminders'], queryFn: () => optional<RemindersResponse>('/reminders/'), retry: false })
 
+type ReminderPatch = Record<string, Partial<Pick<Reminder, 'enabled' | 'time'>> & Partial<Omit<Nudge, 'key' | 'label' | 'description'>>> & {
+  quiet_hours?: { start?: string; end?: string }
+}
+
 export function usePatchReminders() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (patch: Record<string, Partial<Pick<Reminder, 'enabled' | 'time'>>>) =>
+    mutationFn: (patch: ReminderPatch) =>
       api<RemindersResponse>('/reminders/', { method: 'PATCH', ...json(patch) }),
     onMutate: (patch) => {
       client.setQueryData<RemindersResponse | null>(['reminders'], (old) =>
-        old ? { ...old, reminders: old.reminders.map((r) => (patch[r.key] ? { ...r, ...patch[r.key] } : r)) } : old)
+        old ? {
+          ...old,
+          reminders: old.reminders.map((r) => (patch[r.key] ? { ...r, ...patch[r.key] } : r)),
+          nudges: old.nudges?.map((n) => (patch[n.key] ? { ...n, ...patch[n.key] } : n)),
+          quiet_hours: patch.quiet_hours && old.quiet_hours ? { ...old.quiet_hours, ...patch.quiet_hours } : old.quiet_hours,
+        } : old)
     },
     onSuccess: (data) => client.setQueryData(['reminders'], data),
     onError: () => client.invalidateQueries({ queryKey: ['reminders'] }),
@@ -894,3 +904,62 @@ export function useMarkBadgesSeen() {
 
 export const useBody = (range = '6m') =>
   useQuery({ queryKey: ['health-body', range], queryFn: () => optional<HealthBody>(`/health/body/?range=${range}`), retry: false })
+
+// --- R11 (docs/API_NOTES.md "R11") ------------------------------------------------------
+
+/** Health → Day. 400 (future / too old) → null, like a day with no data. */
+export const useHealthDay = (date: string) =>
+  useQuery({
+    queryKey: ['health-day', date],
+    queryFn: async () => {
+      try {
+        return await optional<HealthDay>(`/health/day/?date=${date}`)
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 400) return null
+        throw error
+      }
+    },
+    placeholderData: keep,
+    retry: false,
+  })
+
+export const useDaySummary = () =>
+  useQuery({ queryKey: ['health-day-summary'], queryFn: () => optional<DaySummary>('/health/day/summary/'), retry: false, staleTime: 60_000 })
+
+export const useDayTrends = (range: string) =>
+  useQuery({ queryKey: ['health-day-trends', range], queryFn: () => optional<DayTrends>(`/health/day/trends/?range=${range}`), placeholderData: keep, retry: false })
+
+export const useActivityRoute = (id: number | null) =>
+  useQuery({
+    queryKey: ['activity-route', id],
+    queryFn: () => optional<ActivityRoute>(`/activities/${id}/route/`),
+    enabled: id != null,
+    retry: false,
+    staleTime: 10 * 60_000,
+  })
+
+// Water
+
+export const useWater = (date: string) =>
+  useQuery({ queryKey: ['water', date], queryFn: () => optional<WaterDay>(`/diet/water/?date=${date}`), retry: false, placeholderData: keep })
+
+function storeWater(client: QueryClient, day: WaterDay) {
+  client.setQueryData(['water', day.date], day)
+  client.setQueryData<DietDay>(['diet-day', day.date], (old) => (old ? { ...old, water: day } : old))
+}
+
+export function useAddWater() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { ml: number; at?: string }) => api<{ log: WaterLog; day: WaterDay }>('/diet/water/', { method: 'POST', ...json(body) }),
+    onSuccess: (r) => storeWater(client, r.day),
+  })
+}
+
+export function useDeleteWater() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api<WaterDay>(`/diet/water/${id}/`, { method: 'DELETE' }),
+    onSuccess: (day) => storeWater(client, day),
+  })
+}

@@ -1,0 +1,135 @@
+/* ============================================================================
+   R11 — Day (intraday timeline + cards), water log, move/breathing reminders,
+   run maps. Same kit as R10: topic colours, ▲/▼ + green/red for better/worse.
+   ========================================================================== */
+
+/* ---------- day stepper ---------- */
+.day-stepper { display: flex; align-items: center; gap: 8px; }
+.day-stepper .grow { min-width: 0; text-align: center; display: flex; flex-direction: column; }
+.day-stepper-label { font-size: 17px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-stepper-sub { font-size: 12px; color: var(--muted); font-weight: 600; }
+.day-links { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- timeline ---------- */
+.day-timeline { position: relative; width: 100%; min-width: 0; user-select: none; -webkit-user-select: none; }
+.day-timeline svg { display: block; touch-action: pan-y; cursor: crosshair; }
+.day-timeline svg:focus-visible { outline: 2px solid var(--run); outline-offset: 2px; border-radius: 8px; }
+.tl-label { fill: var(--muted); font-size: 11px; font-weight: 700; font-family: var(--font); }
+.tl-none { fill: var(--faint); font-size: 11px; font-weight: 600; font-family: var(--font); }
+.tl-tick { fill: var(--axis); font-size: 10px; font-family: var(--font); font-variant-numeric: tabular-nums; }
+.tl-base { stroke: var(--line); stroke-width: 1; }
+.tl-now { stroke: var(--faint); stroke-dasharray: 3 3; }
+.tl-cursor { stroke: var(--fg); stroke-width: 1.5; opacity: 0.55; }
+.tl-band.is-sleep { fill: var(--sleep); opacity: 0.08; }
+.tl-band.is-nap { fill: var(--sleep); opacity: 0.06; }
+.tl-band.is-run { fill: var(--run); opacity: 0.1; }
+.tl-rail.is-sleep, .tl-rail.is-nap { fill: var(--sleep); }
+.tl-rail.is-run { fill: var(--run); }
+.tl-dot.is-habit { fill: var(--habits); stroke: var(--card); stroke-width: 1.5; }
+.tl-tip { position: absolute; top: 0; min-width: 136px; pointer-events: none; z-index: 3; }
+.tl-tip .chart-tip-line { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.tl-tip .chart-tip-line i { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+.tl-tip-mark { opacity: 0.85; font-weight: 600; }
+.tl-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 6px; }
+.tl-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.tl-legend i { width: 12px; height: 8px; border-radius: 3px; display: inline-block; }
+
+/* ---------- day cards ---------- */
+.score-sentence { font-size: 16px; font-weight: 700; line-height: 1.4; }
+.steps-hero { display: flex; gap: 16px; align-items: center; }
+.steps-hero .grow { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.stack-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; gap: 2px; background: var(--card-2); }
+.stack-bar span { min-width: 3px; height: 100%; }
+.stack-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin-top: 10px; font-size: 13px; }
+.stack-legend div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.stack-legend i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.stack-legend b { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; }
+.st-sed { background: var(--walk); }
+.st-act { background: var(--run-soft); }
+.st-int { background: var(--run); }
+.str-rest { background: var(--recovery-tint); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--recovery) 25%, transparent); }
+.str-low { background: color-mix(in srgb, var(--recovery) 40%, var(--card)); }
+.str-med { background: color-mix(in srgb, var(--recovery) 70%, var(--card)); }
+.str-high { background: var(--recovery); }
+.callout { background: var(--card-2); border-radius: 14px; padding: 10px 12px; font-size: 14px; line-height: 1.4; margin-top: 12px; }
+.callout b { font-variant-numeric: tabular-nums; }
+.week-pattern { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; align-items: end; height: 64px; margin-top: 12px; }
+.week-pattern div { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.week-pattern span.bar { width: 70%; border-radius: 4px; min-height: 3px; background: var(--recovery); }
+.week-pattern small { font-size: 10px; color: var(--muted); font-weight: 600; }
+.bb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.bb-item { display: flex; align-items: center; gap: 10px; min-height: 44px; border-top: 1px solid var(--line); font-size: 14px; }
+.bb-item:first-child { border-top: none; }
+.bb-item .grow { min-width: 0; }
+.bb-item .bb-when { font-size: 12px; color: var(--muted); }
+.bb-delta { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bb-delta.is-up { color: var(--good-fg); }
+.bb-delta.is-down { color: var(--bad-fg); }
+.bb-ends { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+.dnr-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.dnr-row:first-of-type { border-top: none; }
+.dnr-row b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dnr-head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; font-size: 11px; color: var(--muted); font-weight: 700; }
+
+/* ---------- Today so far ---------- */
+.so-far { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; text-decoration: none; color: inherit; align-items: center; }
+.so-far > div { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; text-align: center; min-height: 44px; justify-content: center; }
+.so-far .so-num { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.so-far .so-num small { font-size: 12px; color: var(--muted); font-weight: 600; }
+.so-far .so-lbl { font-size: 11px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.so-far-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.so-far-wrap { display: flex; flex-direction: column; text-decoration: none; color: inherit; }
+
+/* ---------- water ---------- */
+.water-log { display: flex; flex-direction: column; gap: 8px; }
+.water-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; align-items: baseline; flex-wrap: wrap; }
+.water-row .num-strong { color: var(--fg); }
+.water-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.water-buttons .btn { flex: 1 1 0; min-width: 72px; padding-inline: 8px; }
+.water-custom { display: flex; gap: 8px; align-items: center; }
+.water-custom input { flex: 1; min-height: 44px; min-width: 0; }
+.water-undo { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; background: var(--run-tint); color: var(--run-ink); border-radius: 12px; padding: 4px 4px 4px 12px; }
+.water-undo .btn { min-height: 40px; }
+.fuel-today-link { display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: inherit; }
+
+/* ---------- reminders (R11 rows) ---------- */
+.reminder-extra { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 0 0 10px; font-size: 13px; }
+.reminder-extra label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 600; }
+.reminder-extra input[type='time'], .reminder-extra select { width: auto; min-height: 44px; padding: 6px 8px; }
+.reminder-note { font-size: 12px; color: var(--muted); padding-bottom: 10px; }
+
+/* ---------- run map ---------- */
+.route-map { display: flex; flex-direction: column; gap: 8px; }
+.route-map-canvas { height: 260px; border-radius: 16px; overflow: hidden; background: var(--card-2); z-index: 0; isolation: isolate; }
+.route-map-canvas .leaflet-container { font-family: var(--font); }
+.route-map .leaflet-control-attribution { font-size: 10px; }
+.route-map .leaflet-bar a { width: 36px; height: 36px; line-height: 36px; }
+.route-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--muted); font-weight: 600; align-items: center; }
+.route-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.route-legend i { width: 18px; height: 6px; border-radius: 3px; display: inline-block; }
+.route-readout { font-size: 14px; min-height: 22px; font-variant-numeric: tabular-nums; margin: 0; }
+.map-pin { display: flex !important; align-items: center; justify-content: center; border-radius: 50%; font-size: 11px; color: #fff; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
+.map-pin.is-start { background: var(--ok); }
+.map-pin.is-finish { background: var(--primary); color: var(--on-primary); }
+.map-km { display: flex !important; align-items: center; justify-content: center; border-radius: 50%; background: var(--card); color: var(--fg); font-size: 10px; font-weight: 800; border: 1.5px solid var(--fg); font-family: var(--font); }
+.map-empty { height: 120px; display: flex; align-items: center; justify-content: center; text-align: center; border-radius: 16px; background: var(--card-2); color: var(--muted); font-size: 13px; padding: 12px; }
+.elev { display: flex; flex-direction: column; gap: 2px; }
+.elev-head { display: flex; justify-content: space-between; gap: 8px; }
+.elev svg { display: block; touch-action: pan-y; cursor: crosshair; }
+.elev svg:focus-visible { outline: 2px solid var(--run); outline-offset: 2px; border-radius: 8px; }
+.elev-area { fill: var(--run); opacity: 0.12; }
+.elev-line { stroke: var(--run); stroke-width: 2; }
+:root { --walk-map: #8a94a3; }
+
+:root[data-theme='dark'] .route-map-canvas .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88); }
+:root[data-theme='dark'] .route-map .leaflet-bar a, :root[data-theme='dark'] .route-map .leaflet-control-attribution { background: var(--card); color: var(--fg); }
+:root[data-theme='dark'] .route-map .leaflet-control-attribution a { color: var(--run); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .route-map-canvas .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88); }
+  :root:not([data-theme='light']) .route-map .leaflet-bar a, :root:not([data-theme='light']) .route-map .leaflet-control-attribution { background: var(--card); color: var(--fg); }
+  :root:not([data-theme='light']) .route-map .leaflet-control-attribution a { color: var(--run); }
+}
+
+/* settings toggle row */
+.toggle-row { display: flex; align-items: center; gap: 12px; min-height: 56px; }
+.toggle-row .grow { min-width: 0; }

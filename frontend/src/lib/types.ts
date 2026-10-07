@@ -352,6 +352,14 @@ export type DietDay = {
   meals: Meal[]
   fueling: Array<Fueling & { workout_id: number; title: string }>
   missing_profile: string[]
+  /** R11 §D */
+  water?: WaterDay | null
+}
+
+export type WaterLog = { id: number; at: string; local_date: ISODate; ml: number }
+export type WaterDay = {
+  date: ISODate; target_ml: number; bonus_ml: number; drunk_ml: number; remaining_ml: number
+  pct: number; quick_add: number[]; logs: WaterLog[]
 }
 
 export type MealEstimate = Macros & {
@@ -979,7 +987,7 @@ export type WeeklyReport = {
 
 export type WeeklyReportListItem = { id: number; week_start: ISODate; week_end: ISODate; runs_done: number; km: number; generated_at: ISODateTime }
 
-export type CompareMetric = { key: string; label: string; unit: string; group: 'wellness' | 'habits' | 'runs'; noun: string }
+export type CompareMetric = { key: string; label: string; unit: string; group: 'wellness' | 'day' | 'habits' | 'runs' | (string & {}); noun: string }
 
 export type CompareResult = {
   x: { key: string; label: string; unit: string }
@@ -1000,7 +1008,19 @@ export type CompareResult = {
 }
 
 export type Reminder = { key: string; label: string; description: string; enabled: boolean; time: string }
-export type RemindersResponse = { available: boolean; public_key: string | null; subscriptions: number; ios_note: string; reminders: Reminder[] }
+export type RemindersResponse = {
+  available: boolean; public_key: string | null; subscriptions: number; ios_note: string; reminders: Reminder[]
+  /** R11 §C — move / breathing / water nudges (absent on an older server). */
+  nudges?: Nudge[]
+  quiet_hours?: { start: string; end: string }
+  data_as_of?: string | null
+}
+export type NudgeKey = 'move' | 'breathing' | 'water'
+export type Nudge = {
+  key: NudgeKey; label: string; description: string; enabled: boolean
+  start: string; end: string; max_per_day: number
+  after_min: number | null; threshold: number | null; every_h: number | null
+}
 
 export type Badge = {
   key: string
@@ -1045,4 +1065,106 @@ export type HealthBody = {
   change: { weight_kg: number | null; body_fat_pct: number | null }
   trend_kg_per_week: number | null
   series: Array<{ date: ISODate; weight_kg: number | null; body_fat_pct: number | null; source: 'garmin' | 'manual' }>
+}
+
+// --- R11 (docs/API_NOTES.md "R11") ---------------------------------------------------
+
+/** [minute of the local day, value] */
+export type MinPoint = [number, number]
+export type DayMarker = {
+  type: 'run' | 'sleep' | 'nap' | 'habit'; start_min: number; end_min: number | null
+  label: string; activity_id: number | null; kind: string | null
+}
+export type DayHour = { hour: number; label: string; steps: number }
+export type DayStretch = { start: string; end: string; minutes: number; avg: number; peak: number }
+export type BBEvent = {
+  type: 'charge' | 'drain'; cause: 'sleep' | 'nap' | 'run' | 'stress' | 'rest' | 'activity'
+  start: string; end: string; amount: number; from_value: number; to_value: number
+}
+export type HealthDay = {
+  date: ISODate; is_today: boolean; available: boolean; complete: boolean
+  fetched_at: string | null; data_as_of: string | null
+  prev_date: ISODate | null; next_date: ISODate | null
+  awake: { start: string; end: string; source: 'sleep' | 'steps' | 'default' } | null
+  timeline: { hr: MinPoint[]; stress: MinPoint[]; body_battery: MinPoint[]; steps: MinPoint[]; markers: DayMarker[] }
+  steps: {
+    total: number | null; goal: number | null; goal_source: 'garmin' | 'adaptive' | null
+    adaptive_goal: number | null; pct: number | null; met: boolean | null; streak_days: number
+    trend: { last7_avg: number | null; prev7_avg: number | null; change_pct: number | null }
+    most_active_hour: DayHour | null; least_active_hour: DayHour | null; hourly: Array<{ hour: number; steps: number }>
+    run_days_avg: number | null; rest_days_avg: number | null; run_days_n: number; rest_days_n: number
+  }
+  activity: {
+    sedentary_min: number | null; active_min: number | null; intense_min: number | null; sleeping_min: number | null
+    source: 'garmin' | 'steps' | null
+    longest_sedentary: { minutes: number; start: string; end: string } | null
+  }
+  stress: {
+    avg: number | null; max: number | null; rest_min: number; low_min: number; medium_min: number; high_min: number
+    stressful_min: number; peak: { start: string; end: string; avg: number } | null; stretches: DayStretch[]
+  }
+  body_battery: {
+    start: number | null; end: number | null; high: number | null; low: number | null
+    charged: number | null; drained: number | null; at_wake: number | null; at_bedtime: number | null; now: number | null
+    events: BBEvent[]
+  }
+  heart_rate: {
+    resting: number | null; awake_min: number | null; awake_max: number | null; awake_avg: number | null
+    trend: { this_week_avg: number | null; prev_week_avg: number | null; change: number | null }
+  }
+  score_card: { status: 'good' | 'ok' | 'low' | 'no_data'; sentence: string; bullets: string[]; tips: string[] }
+  now: { steps: number | null; stress: number | null; stress_at: string | null; body_battery: number | null; body_battery_at: string | null }
+}
+export type DaySummary = {
+  date: ISODate; available: boolean; steps: number | null; step_goal: number | null
+  goal_source: 'garmin' | 'adaptive' | null; pct: number | null
+  stress: number | null; stress_at: string | null; body_battery: number | null; body_battery_at: string | null
+  data_as_of: string | null; fetched_at: string | null
+}
+export type DayTrendAvg = {
+  steps: number | null; active_min: number | null; sedentary_min: number | null; stress_avg: number | null
+  stress_high_min: number | null; awake_hr_avg: number | null; bb_at_bedtime: number | null
+}
+export type DayTrendRow = {
+  date: ISODate; steps: number | null; step_goal: number | null; active_min: number | null; sedentary_min: number | null
+  stress_avg: number | null; stress_high_min: number | null; stressful_min: number | null; awake_hr_avg: number | null
+  bb_charged: number | null; bb_drained: number | null; bb_at_wake: number | null; bb_at_bedtime: number | null
+}
+export type DnrRow = {
+  metric: string; label: string; unit: string; high: number | null; low: number | null
+  n_high: number; n_low: number; diff: number | null; enough_data: boolean; sentence: string
+}
+export type DnrGroup = {
+  key: 'stress' | 'steps' | (string & {}); label: string; split: number | null
+  high_label: string; low_label: string; n_high: number; n_low: number; rows: DnrRow[]
+}
+export type DayTrends = {
+  range: string; start: ISODate; end: ISODate
+  days: DayTrendRow[]; averages: DayTrendAvg; previous: DayTrendAvg
+  weeks: Array<{ week_start: ISODate; n: number; steps_avg: number | null; active_min_avg: number | null; stress_avg: number | null; awake_hr_avg: number | null }>
+  awake_hr_trend: { per_week: number | null; direction: 'up' | 'down' | 'flat' | null; sentence: string }
+  weekday_pattern: {
+    by_weekday: Array<{ weekday: number; label: string; n: number; steps_avg: number | null; stress_avg: number | null }>
+    stress_peak_weekdays: { start: string; end: string; avg: number } | null
+    stress_peak_weekends: { start: string; end: string; avg: number } | null
+    sentence: string | null
+  }
+  goal_streak: number
+  day_night_run: { caveat: string; groups: DnrGroup[] } | null
+}
+
+export type RoutePoint = {
+  lat: number; lon: number; dist_m: number; t_s: number
+  pace_s_per_km: number | null; hr: number | null; segment: 'run' | 'walk' | 'stop' | null; ele_m: number | null
+}
+export type ActivityRoute = {
+  activity_id: number; available: boolean; reason: null | 'no_gps' | (string & {})
+  hidden_endpoints: boolean; trimmed_m: number; total_distance_m: number; sampled_from: number
+  bounds: { south: number; west: number; north: number; east: number } | null
+  start: { lat: number; lon: number } | null; finish: { lat: number; lon: number } | null
+  has_hr: boolean; has_elevation: boolean; has_segments: boolean
+  pace_range: { min: number; max: number } | null; hr_range: { min: number; max: number } | null
+  elevation: { gain_m: number; loss_m: number; min_m: number; max_m: number } | null
+  km_markers: Array<{ km: number; lat: number; lon: number; index: number }>
+  points: RoutePoint[]
 }

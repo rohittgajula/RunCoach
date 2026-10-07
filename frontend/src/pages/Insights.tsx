@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { DaySection } from '../components/day/DaySection'
+import { DayTrendsSection } from '../components/day/DayTrendsSection'
 import { GuidesSection } from '../components/guides/GuidesSection'
 import { HabitsPage } from '../components/habits/HabitsSection'
 import { CompareSection } from '../components/health/CompareSection'
@@ -33,6 +35,7 @@ const LONG: Option[] = [
 /** Section chips, in order. `range` = the header switch for that section (none = hidden). */
 const SECTIONS: Array<{ key: string; to: string; label: string; end?: boolean; range?: Option[]; initial?: string }> = [
   { key: 'overview', to: '/health', label: 'Overview', end: true, range: INSIGHT, initial: '4w' },
+  { key: 'day', to: '/health/day', label: 'Day' },
   { key: 'fitness', to: '/health/fitness', label: 'Fitness', range: LONG, initial: '6m' },
   { key: 'sleep', to: '/health/sleep', label: 'Sleep', range: SHORT, initial: '4w' },
   { key: 'habits', to: '/health/habits', label: 'Habits', range: INSIGHT, initial: '4w' },
@@ -85,6 +88,8 @@ export default function Health() {
       <RangeContext.Provider value={value}>
         <Routes>
           <Route index element={<OverviewSection />} />
+          <Route path="day" element={<DaySection />} />
+          <Route path="day/trends" element={<DayTrendsSection />} />
           <Route path="fitness" element={<FitnessSection />} />
           <Route path="sleep" element={<SleepSection />} />
           <Route path="habits" element={<HabitsPage />} />

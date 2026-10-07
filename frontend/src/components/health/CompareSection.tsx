@@ -15,12 +15,15 @@ const LAGS = [
   { value: '0', label: 'Same day' },
   { value: '1', label: 'Next day' },
 ]
-const GROUP: Record<string, string> = { wellness: 'Body & sleep', habits: 'Habits', runs: 'Runs' }
+const GROUP: Record<string, string> = { wellness: 'Body & sleep', day: 'Your day', habits: 'Habits', runs: 'Runs' }
+const ORDER = ['wellness', 'day', 'runs', 'habits']
 
 const fmt = (v: number) => (Math.abs(v) >= 100 ? Math.round(v).toString() : Math.abs(v) >= 10 ? v.toFixed(1).replace(/\.0$/, '') : v.toFixed(2).replace(/0$/, ''))
 
 function Picker({ label, value, onChange, metrics, other }: { label: string; value: string; onChange: (v: string) => void; metrics: CompareMetric[]; other: string }) {
-  const groups = ['wellness', 'runs', 'habits'].map((g) => [g, metrics.filter((m) => m.group === g)] as const).filter(([, list]) => list.length)
+  // Known groups first, then anything newer the catalogue adds (R11 adds day metrics).
+  const names = [...ORDER, ...new Set(metrics.map((m) => m.group).filter((g) => !ORDER.includes(g)))]
+  const groups = names.map((g) => [g, metrics.filter((m) => m.group === g)] as const).filter(([, list]) => list.length)
   return (
     <label className="field">
       <span className="field-label">{label}</span>

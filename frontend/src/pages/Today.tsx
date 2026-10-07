@@ -8,6 +8,7 @@ import { AvatarButton } from '../components/Kit'
 import { ErrorState } from '../components/States'
 import { ForecastCard } from '../components/today/ForecastCard'
 import { FuelToday } from '../components/today/FuelToday'
+import { TodaySoFar } from '../components/today/TodaySoFar'
 import { ThisWeek } from '../components/today/ThisWeek'
 import { TodayWorkout } from '../components/today/TodayWorkout'
 import { WeatherCard } from '../components/today/WeatherCard'
@@ -76,6 +77,7 @@ export default function Today() {
         <ErrorState message={errorText(week.error, 'Today’s plan did not load.')} onRetry={() => week.refetch()} />
       )}
       <TodayWorkout day={day} loading={week.isPending} />
+      <TodaySoFar />
       <WeatherCard />
       <section className="card">
         <QuickLogRow label="Log now" aside={<SmokeFree />} />
