@@ -2113,3 +2113,155 @@ Invite = {id, code, note, max_uses, uses, expires_at|null, created_at, usable: b
   `GEMINI_API_KEY`, `GCP_TRIAL_END` (default 2027-01-03), `GCP_CREDIT_INR`, `GIT_SHA`. No
   new Python dependencies. Make an admin with `python manage.py shell -c "from
   django.contrib.auth.models import User; User.objects.filter(username='rohit').update(is_staff=True)"`.
+
+## R15 — contract for Gemini robustness, provider compare, run summary on the watch, share data
+
+All additive except the reminder merge (§C: `run_reviewed` → `run_summary`).
+
+### §A Gemini robustness (admin; staff only, as R14 §14)
+
+**Live model lists.** `GET /admin/ai/providers/` (optional `?refresh=1` bypasses the 1-h cache)
+— each provider gains:
+```
+models: [str],                       # live models.list(), filtered to text chat models;
+                                     # the price table rows when the live list can't be read
+models_source: "live"|"price_table",
+models_fetched_at: datetime|null,
+model_info: [ModelInfo]              # one per entry of `models`, same order
+ModelInfo = { id: str, priced: bool,                    # has a ModelPrice row
+              status: "ok"|"busy"|"no_quota"|"unavailable"|"error"|"unknown",
+              checked_at: datetime|null,                # last "Check models" probe
+              note: str|null }                          # human sentence for non-ok
+```
+Filtered out: ids containing tts, image, embedding/embed, audio, live, robotics, computer-use,
+transcribe, nano-banana, omni, customtools, realtime, whisper, dall-e, moderation, imagen,
+veo, aqa. Gemini keeps `gemini*`/`gemma*` ids (the `models/` prefix is stripped); OpenAI
+keeps `gpt-*`, `o1*`, `o3*`, `o4*`, `chatgpt*`.
+
+**Check models.** `POST /admin/ai/models/check/ {provider, models?: [str] (≤ 12), force?: bool}`
+→ 202 `{provider, queued: [str], skipped: [str]}`. Runs in the background (Celery `ai` queue):
+each queued model gets one tiny prompt ("Reply with OK.", max 5 output tokens), 1.5 s apart,
+at most 12 per run, one attempt each (no retry, no fallback). Without `models` the candidates
+are the provider's filtered list, never-checked first then oldest-checked. A model checked
+in the last 24 h is skipped (listed in `skipped`) unless `force: true`. Results appear in
+`model_info` (poll `GET /admin/ai/providers/`). Probes are logged as operation
+`admin_check` (no athlete, no budget). 400 for an unknown/unconfigured provider.
+
+Status meaning: `ok` answered; `busy` 503/overloaded (or a per-minute rate 429);
+`no_quota` 429 quota/billing (free tier: Pro models need billing); `unavailable` 404 / not
+offered to this key; `error` anything else (auth, bad request, timeout).
+
+**Per-tier fallback.** `GET|PUT /admin/ai/config/` — each `Tier` gains:
+```
+fallback_provider: str|null, fallback_model: str|null,   # the stored choice (null = env default)
+fallback: {provider, model, source: "db"|"env"} | null,  # the effective fallback; null when it
+                                                         # would equal the primary route or its
+                                                         # provider has no key
+model_status: "ok"|"busy"|"no_quota"|"unavailable"|"error"|"unknown",   # of the primary model
+warning: str|null                                        # set when model_status is not ok/unknown
+```
+PUT items may carry `fallback_provider` + `fallback_model` (both, or both null to go back to
+the env default). The primary and fallback model must be in the price table **or** in the
+provider's live list (else 400). PUT still succeeds for a non-ok model — show `warning`.
+
+**Call policy** (every app feature; not the admin test/compare/check, which are one shot):
+1. Primary route = the tier's `AIConfig` (else env).
+2. A 503/500/502/504, an overloaded message, a per-minute 429 or a timeout is retried at most
+   2 times with exponential backoff + jitter (≈1.5–3 s, then 3–4.5 s; total sleep ≤ 12 s).
+   A quota 429, 404, 401/403 or 400 is not retried.
+3. If the primary still fails (any error, including validation failures after its retries),
+   the call is made once more on the tier's fallback route (default: the env route for that
+   tier, i.e. `AI_PROVIDER` + `AI_<TIER>_MODEL`), with the same retry rule. No fallback
+   when it equals the primary.
+4. Logging: the failed primary attempt is an `AIRequestLog` row with **`status: "fallback"`**
+   (its `error`, `error_kind`, latency); the fallback attempt is its own row (`ok` or `error`).
+   Only `ok`/`invalid` rows count towards the monthly budget, so a fallback costs the athlete
+   one call.
+
+**Error kinds.** `AIRequestLog.error_kind`: `busy|no_quota|unavailable|auth|bad_request|timeout|other`
+(blank for ok rows). `GET /admin/ai/stats/` changes:
+- `totals.fallbacks: int` (rows with status fallback in range).
+- `by_error_kind: [{error_kind, count}]` (error + fallback + invalid rows in range).
+- `recent_errors[]` items now include rows with `status: "fallback"` and gain
+  `error_kind: str|null` and `hint: str` — a plain sentence, e.g.
+  "Pro models need billing on your Google AI Studio key." (no_quota + gemini + a pro model),
+  "Google says this model is busy right now (503); calls were retried and then fell back.",
+  "This model isn't available to your key (retired or not offered to new users) — pick another."
+
+### §B Compare providers (admin)
+```
+CompareResult = { index: int, provider, model, ok: bool, status: "ok"|"error",
+                  error_kind: str|null, error: str|null, hint: str|null,
+                  text: str (≤ 8000), latency_ms: int, input_tokens: int, output_tokens: int,
+                  cost_usd: number, rating: int|null (1–5) }
+CompareRun = { id, created_at, created_by: {id, username},
+               prompt: str,                      # what was sent (the rendered operation prompt
+                                                 # when `operation` was used)
+               operation: "insights_summary"|"run_review"|null,
+               context_note: str|null,           # e.g. "Insights (last 4 weeks), aggregates only"
+               results: [CompareResult] }
+```
+- `POST /admin/ai/compare/ {prompt?: str (1–4000), targets: [{provider, model}] (2–4, distinct,
+  provider configured), operation?: "insights_summary"|"run_review", athlete_id?: int}` →
+  201 `CompareRun`. `prompt` is required without `operation`; with an operation it is
+  optional and, when given, appended as an extra instruction. `athlete_id` = whose data the
+  operation replays (default: your own athlete row); 404 if it doesn't exist; 400 if there is
+  nothing to replay (no review for `run_review`). Context = the same aggregate payload the
+  feature sends (insights: 4-week aggregates; run_review: the newest run review's comparison
+  rows and bullets) — no name, no notes, never the private habit.
+  Targets run one after another, one attempt each (no retry, no fallback), each logged as an
+  `AIRequestLog` row with operation **`admin_compare`** (no athlete, no budget).
+- `GET /admin/ai/compare/?limit=` (1–50, default 20) → `[CompareRun]` newest first.
+- `GET /admin/ai/compare/{id}/` → `CompareRun`.
+- `PATCH /admin/ai/compare/{id}/ {ratings: [{index, rating: 1–5|null}]}` → `CompareRun`.
+
+### §C Run summary on the watch (web push)
+- Reminders: the R13 `run_reviewed` reminder is **replaced** by
+  `{key: "run_summary", label: "Run summary", description: "After each run: distance, time,
+  pace and heart rate. Shows on your Garmin watch when Garmin Connect mirrors this app's
+  notifications.", enabled, time: null}`. **Default ON.** `PATCH /reminders/ {run_summary:
+  {enabled}}`; `run_reviewed` is still accepted in PATCH as an alias (deprecated); `time`
+  → 400 as before.
+- Sent once per run when its post-run review is built (runs that started in the last 24 h
+  only). During the athlete's quiet hours it is held and sent at quiet-hours end (5-min beat).
+- Payload (service worker shows `title` + `body`; `body` has at most 2 lines split by "\n",
+  each ≤ 60 chars; `title` ≤ 30 chars):
+```
+{ title: "Run 5.2 km · 43:10",
+  body: "Pace 6:58 (3 s faster than usual) · HR 141 on target\nNext: rest day",
+  url: "/activities/{id}", tag: "run_summary-{id}", kind: "run_summary" }
+```
+  Pace = run-block pace (else moving pace); "faster/slower than usual" compares with similar
+  past runs (the review's typical pace; omitted when within 3 s or no history). HR = run HR,
+  "on target"/"above target" against the planned workout's zone top (omitted with no plan).
+  "Next:" = the next planned workout's title (shortened) or "rest day" when tomorrow has none;
+  the line is left out with no active plan.
+  Numbers are in this push only (the athlete's own device); no habit data.
+- Frontend: the service worker should use `tag` (replaces an older one for the same run) and
+  must not set `silent`. Settings copy: "To see it on your watch: Garmin Connect → Devices →
+  Notifications → allow your browser / RunCoach."
+
+### §D Share data — `GET /activities/{id}/share-data/` (own activities only; else 404)
+```
+{ activity_id, sport, title: str,               # "Morning run" | "Lunch run" | "Afternoon run" |
+                                                # "Evening run" | "Night run" (local start hour)
+  workout_title: str|null,                      # the planned workout this run completed
+  date: date, started_at: datetime, start_local: "YYYY-MM-DDTHH:MM",
+  distance_m: number, distance_km: number (2 dp),
+  moving_s: int, elapsed_s: int,
+  avg_pace_s_per_km: int|null,                  # moving time / distance
+  run_pace_s_per_km: int|null,                  # run blocks only (segmentation), if known
+  avg_hr: int|null, max_hr: int|null, cadence_spm: int|null,
+  elevation_gain_m: number|null, calories: int|null,
+  splits: [{km: int, pace_s: int, hr: int|null, distance_m: number, partial: bool}],
+                                                # whole km; a last partial split ≥ 100 m has
+                                                # partial: true and pace normalised to /km
+  best_km: {km: int, pace_s: int} | null,       # fastest whole km
+  weather: {temp_c, feels_like_c, humidity, dew_point_c} | null,   # at run start, if fetched
+  route: { available: bool, reason: str|null, hidden_endpoints: bool, trimmed_m: int,
+           bounds: {south, west, north, east}|null,
+           points: [[lat, lon]],                # ≤ 800, simplified, endpoint-trimmed
+           km_markers: [{km, lat, lon}] } }
+```
+Endpoint trimming follows the athlete's `map_hide_endpoints` (first/last 200 m never leave
+the server), exactly as `/activities/{id}/route/`.
