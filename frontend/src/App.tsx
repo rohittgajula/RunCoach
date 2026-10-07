@@ -3,18 +3,21 @@ import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-do
 import { Shell } from './components/Shell'
 import { Loading } from './components/States'
 import { useAuth } from './lib/AuthContext'
+import { pages } from './lib/preload'
 import Today from './pages/Today'
 
 // R13 §16: Today is the first screen, so it stays in the main chunk; every other tab
 // (and the auth/onboarding screens a signed-in user never sees) loads on demand.
-const Plan = lazy(() => import('./pages/Calendar'))
-const Chat = lazy(() => import('./pages/Chat'))
-const ChatIndex = lazy(() => import('./pages/Chat').then((m) => ({ default: m.ChatIndex })))
-const Diet = lazy(() => import('./pages/Diet'))
-const Health = lazy(() => import('./pages/Insights'))
-const Me = lazy(() => import('./pages/Me'))
+// Smooth UI: the loaders are shared with lib/preload, so a chunk warmed at idle or on
+// touch-down is the very promise the route renders from.
+const Plan = lazy(pages.calendar)
+const Chat = lazy(pages.chat)
+const ChatIndex = lazy(() => pages.chat().then((m) => ({ default: m.ChatIndex })))
+const Diet = lazy(pages.diet)
+const Health = lazy(pages.insights)
+const Me = lazy(pages.me)
 // R14: weather report and the staff-only admin panel, each its own chunk.
-const Weather = lazy(() => import('./pages/Weather'))
+const Weather = lazy(pages.weather)
 const AdminPanel = lazy(() => import('./pages/AdminPanel'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Login = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Login })))

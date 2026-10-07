@@ -20,6 +20,7 @@ import './styles/r11.css'
 import './styles/r12.css'
 import './styles/r13.css'
 import './styles/r14.css'
+import './styles/motion.css'
 
 // Before the first paint, so a dark-theme device never flashes white.
 applyTheme()
@@ -29,6 +30,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
+      // Smooth UI: keep a left tab's data for half an hour, so going back to it paints
+      // the cached screen at once and refreshes in the background (stale-while-revalidate).
+      gcTime: 30 * 60_000,
       retry: 1,
       // Coming back to the app after a run is exactly when data changed.
       refetchOnWindowFocus: true,

@@ -1,5 +1,5 @@
 import {
-  useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient,
+  infiniteQueryOptions, queryOptions, useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient,
 } from '@tanstack/react-query'
 import { ApiError, api, json } from './auth'
 import { addDays, todayISO } from './format'
@@ -73,18 +73,19 @@ export function useDeleteMetric() {
 
 // --- plans -----------------------------------------------------------------------
 
-export const useActivePlan = () =>
-  useQuery({
-    queryKey: ['plan-active'],
-    queryFn: async () => {
-      try {
-        return await api<Plan>('/plans/active/')
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 404) return null
-        throw error
-      }
-    },
-  })
+const activePlanQuery = queryOptions({
+  queryKey: ['plan-active'],
+  queryFn: async () => {
+    try {
+      return await api<Plan>('/plans/active/')
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null
+      throw error
+    }
+  },
+})
+
+export const useActivePlan = () => useQuery(activePlanQuery)
 
 export const usePlan = (id: number | null) =>
   useQuery({
@@ -110,9 +111,8 @@ export function usePlanDecision() {
 type Window = { start: string; end: string }
 const SPAN = 14
 
-export function useCalendar() {
-  const today = todayISO()
-  return useInfiniteQuery({
+const calendarQuery = (today: string) =>
+  infiniteQueryOptions({
     queryKey: ['calendar'],
     initialPageParam: { start: addDays(today, -SPAN), end: addDays(today, SPAN) } as Window,
     queryFn: ({ pageParam }) =>
@@ -122,6 +122,9 @@ export function useCalendar() {
     // Each page is ~29 days; keep enough to scroll a season either way.
     maxPages: 14,
   })
+
+export function useCalendar() {
+  return useInfiniteQuery(calendarQuery(todayISO()))
 }
 
 /** Monday of the week containing `iso` (athlete-local). */
@@ -273,8 +276,8 @@ export type { ActivityCard }
 
 // --- chat ------------------------------------------------------------------------
 
-export const useThreads = () =>
-  useQuery({ queryKey: ['threads'], queryFn: () => api<ThreadListItem[]>('/chat/threads/') })
+const threadsQuery = queryOptions({ queryKey: ['threads'], queryFn: () => api<ThreadListItem[]>('/chat/threads/') })
+export const useThreads = () => useQuery(threadsQuery)
 
 export const useMessages = (threadId: number | null) =>
   useQuery({
@@ -338,12 +341,29 @@ export function useDeleteMemory() {
 
 // --- diet ------------------------------------------------------------------------
 
+const dietDayQuery = (date: string) =>
+  queryOptions({ queryKey: ['diet-day', date], queryFn: () => api<DietDay>(`/diet/day/?date=${date}`) })
+
 export const useDietDay = (date: string) =>
-  useQuery({
-    queryKey: ['diet-day', date],
-    queryFn: () => api<DietDay>(`/diet/day/?date=${date}`),
-    placeholderData: (previous) => previous,
-  })
+  useQuery({ ...dietDayQuery(date), placeholderData: (previous) => previous })
+
+/**
+ * Smooth UI: fetch the first screen's data of a tab before it is shown — on the finger
+ * touching the tab, and once at idle after launch — so a first visit opens on content
+ * rather than skeletons. Fresh data (staleTime) is not refetched.
+ */
+export function prefetchTab(client: QueryClient, path: string) {
+  const top = path.split('/')[1]
+  const quiet = (p: Promise<unknown>) => { p.catch(() => undefined) }
+  if (top === 'plan') {
+    quiet(client.prefetchInfiniteQuery(calendarQuery(todayISO())))
+    quiet(client.prefetchQuery(activePlanQuery))
+  } else if (top === 'chat') {
+    quiet(client.prefetchQuery(threadsQuery))
+  } else if (top === 'diet') {
+    quiet(client.prefetchQuery(dietDayQuery(todayISO())))
+  }
+}
 
 export const useDietTrend = (range: Range) =>
   useQuery({
@@ -439,12 +459,11 @@ export function useDeleteRace() {
 export type PeriodQuery = string
 export const periodQs = (p: PeriodQuery) => (p.includes('=') ? p : `range=${p}`)
 
+export const insightsQuery = (range: PeriodQuery | InsightRange) =>
+  queryOptions({ queryKey: ['insights', periodQs(range)], queryFn: () => api<Insights>(`/insights/?${periodQs(range)}`) })
+
 export const useInsights = (range: PeriodQuery | InsightRange) =>
-  useQuery({
-    queryKey: ['insights', periodQs(range)],
-    queryFn: () => api<Insights>(`/insights/?${periodQs(range)}`),
-    placeholderData: (previous) => previous,
-  })
+  useQuery({ ...insightsQuery(range), placeholderData: (previous) => previous })
 
 /** Cached per day server-side; `refresh` rewrites today's overview. */
 export function useInsightsSummary(range: PeriodQuery | InsightRange) {
@@ -770,14 +789,18 @@ async function optional<T>(path: string): Promise<T | null> {
 
 const keep = <T,>(previous: T | undefined) => previous
 
+export const healthFitnessQuery = (range: string) =>
+  queryOptions({ queryKey: ['health-fitness', periodQs(range)], queryFn: () => optional<HealthFitness>(`/health/fitness/?${periodQs(range)}`), retry: false })
 export const useHealthFitness = (range: string) =>
-  useQuery({ queryKey: ['health-fitness', periodQs(range)], queryFn: () => optional<HealthFitness>(`/health/fitness/?${periodQs(range)}`), placeholderData: keep, retry: false })
+  useQuery({ ...healthFitnessQuery(range), placeholderData: keep })
 
 export const useTrainingStatus = (range?: PeriodQuery) =>
   useQuery({ queryKey: ['training-status', range ? periodQs(range) : ''], queryFn: () => optional<TrainingStatus>(`/health/training-status/${range ? `?${periodQs(range)}` : ''}`), placeholderData: keep, retry: false, staleTime: 5 * 60_000 })
 
+export const healthSleepQuery = (range: string) =>
+  queryOptions({ queryKey: ['health-sleep', periodQs(range)], queryFn: () => optional<HealthSleep>(`/health/sleep/?${periodQs(range)}`), retry: false })
 export const useHealthSleep = (range: string) =>
-  useQuery({ queryKey: ['health-sleep', periodQs(range)], queryFn: () => optional<HealthSleep>(`/health/sleep/?${periodQs(range)}`), placeholderData: keep, retry: false })
+  useQuery({ ...healthSleepQuery(range), placeholderData: keep })
 
 export const useHealthForm = (range: string) =>
   useQuery({ queryKey: ['health-form', periodQs(range)], queryFn: () => optional<HealthForm>(`/health/form/?${periodQs(range)}`), placeholderData: keep, retry: false })
@@ -921,8 +944,8 @@ export const useBody = (range = '6m') =>
 // --- R11 (docs/API_NOTES.md "R11") ------------------------------------------------------
 
 /** Health → Day. 400 (future / too old) → null, like a day with no data. */
-export const useHealthDay = (date: string) =>
-  useQuery({
+export const healthDayQuery = (date: string) =>
+  queryOptions({
     queryKey: ['health-day', date],
     queryFn: async () => {
       try {
@@ -932,15 +955,17 @@ export const useHealthDay = (date: string) =>
         throw error
       }
     },
-    placeholderData: keep,
     retry: false,
   })
+export const useHealthDay = (date: string) => useQuery({ ...healthDayQuery(date), placeholderData: keep })
 
 export const useDaySummary = () =>
   useQuery({ queryKey: ['health-day-summary'], queryFn: () => optional<DaySummary>('/health/day/summary/'), retry: false, staleTime: 60_000 })
 
+export const dayTrendsQuery = (range: string) =>
+  queryOptions({ queryKey: ['health-day-trends', periodQs(range)], queryFn: () => optional<DayTrends>(`/health/day/trends/?${periodQs(range)}`), retry: false })
 export const useDayTrends = (range: string) =>
-  useQuery({ queryKey: ['health-day-trends', periodQs(range)], queryFn: () => optional<DayTrends>(`/health/day/trends/?${periodQs(range)}`), placeholderData: keep, retry: false })
+  useQuery({ ...dayTrendsQuery(range), placeholderData: keep })
 
 export const useActivityRoute = (id: number | null) =>
   useQuery({

@@ -1,27 +1,32 @@
-import { lazy, Suspense, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { RangeContext, type Preset, type RangeValue } from '../components/health/healthRange'
 import { RangePill, RangeSheet, useSectionSelection } from '../components/health/RangeControl'
 import { OverviewSection } from '../components/insights/OverviewSection'
 import { PageHeader } from '../components/PageHeader'
 import { Skeleton } from '../components/States'
+import { intentHandlers, isPlainClick, navigateSmooth } from '../lib/navMotion'
+import { prefetchSection, sections } from '../lib/healthSections'
+import { whenIdle } from '../lib/preload'
 
-// R13 §16: each Health section is its own chunk; Overview stays with the tab.
-const DaySection = lazy(() => import('../components/day/DaySection').then((m) => ({ default: m.DaySection })))
-const DayTrendsSection = lazy(() => import('../components/day/DayTrendsSection').then((m) => ({ default: m.DayTrendsSection })))
-const GuidesSection = lazy(() => import('../components/guides/GuidesSection').then((m) => ({ default: m.GuidesSection })))
-const HabitsPage = lazy(() => import('../components/habits/HabitsSection').then((m) => ({ default: m.HabitsPage })))
-const CompareSection = lazy(() => import('../components/health/CompareSection').then((m) => ({ default: m.CompareSection })))
-const FitnessSection = lazy(() => import('../components/health/FitnessSection').then((m) => ({ default: m.FitnessSection })))
-const ReportsSection = lazy(() => import('../components/health/ReportsSection').then((m) => ({ default: m.ReportsSection })))
-const MonthlyReportsPage = lazy(() => import('../components/health/ReportsSection').then((m) => ({ default: m.MonthlyReportsPage })))
-const SleepSection = lazy(() => import('../components/health/SleepSection').then((m) => ({ default: m.SleepSection })))
-const ProgressSection = lazy(() => import('../components/progress/ProgressSection').then((m) => ({ default: m.ProgressSection })))
+// R13 §16: each Health section is its own chunk; Overview stays with the tab. The
+// loaders live in lib/healthSections so idle/touch warming and the route share one promise.
+const DaySection = lazy(() => sections.day().then((m) => ({ default: m.DaySection })))
+const DayTrendsSection = lazy(() => sections.dayTrends().then((m) => ({ default: m.DayTrendsSection })))
+const GuidesSection = lazy(() => sections.guides().then((m) => ({ default: m.GuidesSection })))
+const HabitsPage = lazy(() => sections.habits().then((m) => ({ default: m.HabitsPage })))
+const CompareSection = lazy(() => sections.compare().then((m) => ({ default: m.CompareSection })))
+const FitnessSection = lazy(() => sections.fitness().then((m) => ({ default: m.FitnessSection })))
+const ReportsSection = lazy(() => sections.reports().then((m) => ({ default: m.ReportsSection })))
+const MonthlyReportsPage = lazy(() => sections.reports().then((m) => ({ default: m.MonthlyReportsPage })))
+const SleepSection = lazy(() => sections.sleep().then((m) => ({ default: m.SleepSection })))
+const ProgressSection = lazy(() => sections.progress().then((m) => ({ default: m.ProgressSection })))
 // R14: More → Experiments, Goals, Heart (each its own chunk).
-const MoreSection = lazy(() => import('../components/health/MoreSection').then((m) => ({ default: m.MoreSection })))
-const ExperimentsSection = lazy(() => import('../components/experiments/ExperimentsSection').then((m) => ({ default: m.ExperimentsSection })))
-const GoalsSection = lazy(() => import('../components/goals/GoalsSection').then((m) => ({ default: m.GoalsSection })))
-const HeartSection = lazy(() => import('../components/heart/HeartSection').then((m) => ({ default: m.HeartSection })))
+const MoreSection = lazy(() => sections.more().then((m) => ({ default: m.MoreSection })))
+const ExperimentsSection = lazy(() => sections.experiments().then((m) => ({ default: m.ExperimentsSection })))
+const GoalsSection = lazy(() => sections.goals().then((m) => ({ default: m.GoalsSection })))
+const HeartSection = lazy(() => sections.heart().then((m) => ({ default: m.HeartSection })))
 
 /**
  * Section chips, in order. `range` = that section's default for the shared range
@@ -59,6 +64,26 @@ export default function Health() {
   const [period, setSelection] = useSectionSelection(key, section?.range ?? '4w')
   const [sheet, setSheet] = useState(false)
   const chips = useRef<HTMLElement>(null)
+  const navigate = useNavigate()
+  // Smooth UI: the tapped chip lights up at once; the section follows in a transition.
+  const [pending, setPending] = useState<string | null>(null)
+  useEffect(() => { setPending(null) }, [pathname])
+  // …and lands on content: the main sections' data is fetched once Health is idle, and
+  // again (if stale) on the finger touching a chip.
+  const client = useQueryClient()
+  useEffect(() => {
+    whenIdle(() => { for (const k of ['overview', 'sleep', 'fitness', 'day']) prefetchSection(client, k) }, 3000)
+  }, [client])
+  const chipList = SECTIONS.filter((s) => s.chip !== false)
+  const chipIndex = (key?: string) => chipList.findIndex((c) => c.key === key)
+  const current = section?.more ? chipIndex('more') : chipIndex(section?.key === 'day/trends' ? 'day' : section?.key)
+  const onChip = (event: MouseEvent, to: string, index: number) => {
+    if (!isPlainClick(event)) return
+    event.preventDefault()
+    if (pathname === to) return
+    setPending(to)
+    navigateSmooth(navigate, to, current < 0 || index === current ? 'fade' : index > current ? 'fwd' : 'back')
+  }
 
   // Each section starts at its top (the Shell only does this per tab).
   useLayoutEffect(() => {
@@ -80,12 +105,15 @@ export default function Health() {
           right={key ? <RangePill period={period} onClick={() => setSheet(true)} /> : undefined}
         />
         <nav className="section-chips" aria-label="Health sections" ref={chips}>
-          {SECTIONS.filter((s) => s.chip !== false).map((s) => (
+          {chipList.map((s, index) => (
             <NavLink
               key={s.key}
               to={s.to}
               end={s.end}
-              className={({ isActive }) => `section-chip ${isActive || (s.key === 'more' && section?.more) ? 'is-active' : ''}`}
+              className={({ isActive }) => `section-chip ${(pending ? pending === s.to : isActive || (s.key === 'more' && section?.more)) ? 'is-active' : ''}`}
+              onClick={(event) => onChip(event, s.to, index)}
+              {...intentHandlers(s.to)}
+              onPointerDown={() => { intentHandlers(s.to).onPointerDown(); prefetchSection(client, s.key) }}
             >
               {s.label}
             </NavLink>
