@@ -2,7 +2,7 @@ import { useId } from 'react'
 
 /** Tiny SVG trend for the profile cards — no axes, no library. */
 export function Sparkline({
-  values, area = false, color = '#1f7ae0', height = 64,
+  values, area = false, color = 'var(--run)', height = 64,
 }: { values: number[]; area?: boolean; color?: string; height?: number }) {
   const gradient = useId().replace(/:/g, '')
   const clean = values.filter((v) => Number.isFinite(v))
@@ -29,7 +29,7 @@ export function Sparkline({
           <path d={`${line} L${width},${height} L0,${height} Z`} fill={`url(#${gradient})`} />
         </>
       )}
-      <path d={line} fill="none" stroke={color} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+      <path d={line} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   )
 }

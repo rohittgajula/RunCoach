@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { ApiError } from '../../lib/auth'
 import { errorText, useDeleteHabitLog, useHabitsToday, useLogHabit } from '../../lib/queries'
 import type { HabitKind, HabitLog } from '../../lib/types'
 import { MoreHIcon } from '../Icons'
+import { HabitIcon } from './HabitIcon'
 import { HabitLogSheet } from './HabitLogSheet'
 import { habitMeta, loggableHabits, loggedText } from './habitUtil'
 
@@ -15,7 +16,7 @@ type Toast = { text: string; log: HabitLog | null }
  * 🚬 🍺 🍫 — tap logs one now (with Undo); long-press or ⋯ opens the full form.
  * 🌙 only when the private habit is enabled AND set to show on today's card.
  */
-export function QuickLogRow({ label = 'Log' }: { label?: string }) {
+export function QuickLogRow({ label = 'Log', aside }: { label?: string; aside?: ReactNode }) {
   const { athlete } = useAuth()
   const habits = loggableHabits(athlete, 'today')
   const today = useHabitsToday()
@@ -76,8 +77,11 @@ export function QuickLogRow({ label = 'Log' }: { label?: string }) {
 
   return (
     <div className="quicklog" aria-label="Quick log">
-      <span className="quicklog-label">{label}</span>
-      <div className="quicklog-buttons" style={{ gridTemplateColumns: `repeat(${habits.length}, minmax(0, 1fr)) 40px` }}>
+      <div className="quicklog-head">
+        <span className="quicklog-label">{label}</span>
+        {aside && <span className="quicklog-aside">{aside}</span>}
+      </div>
+      <div className="quicklog-buttons" style={{ gridTemplateColumns: `repeat(${habits.length}, minmax(0, 1fr)) 44px` }}>
         {habits.map((h) => {
           const n = counts?.[h.kind] ?? 0
           return (
@@ -93,12 +97,12 @@ export function QuickLogRow({ label = 'Log' }: { label?: string }) {
               onPointerCancel={pressEnd}
               onContextMenu={(e) => e.preventDefault()}
             >
-              <span className="quicklog-emoji" aria-hidden="true">{h.emoji}</span>
+              <HabitIcon kind={h.kind} />
               <span className="quicklog-count">{Number.isInteger(n) ? n : n.toFixed(1)}</span>
             </button>
           )
         })}
-        <button type="button" className="icon-btn quicklog-more" aria-label="Log with quantity, time or note, or fix today’s entries" onClick={() => setSheet('smoke')}>
+        <button type="button" className="quicklog-btn quicklog-more" aria-label="Log with quantity, time or note, or fix today’s entries" onClick={() => setSheet('smoke')}>
           <MoreHIcon size={20} />
         </button>
       </div>

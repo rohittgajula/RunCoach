@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChipButton } from '../components/ChipButton'
-import { ChevronRight, GearIcon, MoreHIcon } from '../components/Icons'
-import { PageHeader } from '../components/PageHeader'
+import { ChevronRight, MoreHIcon } from '../components/Icons'
 import { PlanTimeline } from '../components/PlanTimeline'
 import { useShell } from '../components/Shell'
 import { Sparkline } from '../components/Sparkline'
@@ -38,7 +36,8 @@ function Metric({
   )
 }
 
-export default function Profile() {
+/** Me: who you are, fitness, plan, races, memory (the pre-R10 Profile tab). */
+export function ProfileCards() {
   const { openSettings } = useShell()
   const navigate = useNavigate()
   const summary = useProfileSummary()
@@ -50,14 +49,7 @@ export default function Profile() {
   const s = summary.data
 
   return (
-    <div className="page">
-      <PageHeader
-        right={
-          <ChipButton label="Settings" onClick={openSettings}>
-            <GearIcon />
-          </ChipButton>
-        }
-      />
+    <>
 
       {summary.isPending && (
         <>
@@ -123,7 +115,7 @@ export default function Profile() {
             <button type="button" className="card mini-card" onClick={() => setFitnessView('status')}>
               <span className="mini-card-label">Training Status</span>
               <span className="mini-card-value">{STATUS_LABEL[s.fitness.status] ?? s.fitness.status}</span>
-              <Sparkline values={s.status_spark} color="#9a9aa6" />
+              <Sparkline values={s.status_spark} color="var(--faint)" />
             </button>
             <button type="button" className="card mini-card" onClick={() => setFitnessView('fitness')}>
               <span className="mini-card-label">Fitness</span>
@@ -171,6 +163,6 @@ export default function Profile() {
       <FitnessSheet view={fitnessView} onClose={() => setFitnessView(null)} />
       <PlanDetailSheet planId={planId} onClose={() => setPlanId(null)} />
       <MemorySheet open={memoryOpen} onClose={() => setMemoryOpen(false)} />
-    </div>
+    </>
   )
 }

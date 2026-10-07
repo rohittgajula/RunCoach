@@ -3,27 +3,27 @@ import { useAuth } from '../../lib/AuthContext'
 import { ApiError } from '../../lib/auth'
 import { errorText, useHabitSummary, useLogHabit } from '../../lib/queries'
 import type { HabitKind, HabitReportHabit, HabitSummary, InsightRange } from '../../lib/types'
-import { INSIGHT_RANGES } from '../insights/InsightChartSheet'
 import { InsightCard } from '../insights/Tile'
-import { RangeSwitch } from '../RangeSwitch'
+import { useHealthRange } from '../health/healthRange'
 import { Empty, ErrorState, Skeleton } from '../States'
 import { HabitCard } from './HabitCard'
 import { HabitSummaryCard } from './HabitSummaryCard'
 import { HealthReportCard } from './HealthReportCard'
 import { ImpactCards } from './ImpactCards'
 import { LogHistory } from './LogHistory'
+import { LungRecoveryCard } from './LungRecoveryCard'
 import { QuickLogRow } from './QuickLogRow'
 import { SinceQuit } from './SinceQuitCard'
 import { HABITS, PRIVATE_HABIT, PRIVATE_SHOWN_KEY, habitMeta, readFlag, writeFlag } from './habitUtil'
 
 const fmt = (v: number | null | undefined, digits = 1) => (v == null ? '--' : v.toFixed(digits))
-const COLORS: Record<HabitKind, string> = { smoke: '#8a8d99', alcohol: '#d9861a', sugar: '#8d6be8', private: '#5a6fd8' }
+const COLORS: Record<HabitKind, string> = { smoke: 'var(--habits)', alcohol: 'var(--habits)', sugar: 'var(--habits)', private: 'var(--habits)' }
 const RANGE_LABEL: Record<InsightRange, string> = { '4w': '4 weeks', '12w': '12 weeks', '6m': '6 months' }
 
 /** Insights → Habits: range, health report, a card per habit, since-quit, impact, AI, history. */
 export function HabitsPage() {
   const { athlete } = useAuth()
-  const [range, setRange] = useState<InsightRange>('4w')
+  const [range] = useHealthRange<InsightRange>()
   const [privateShown, setPrivateShown] = useState(() => readFlag(PRIVATE_SHOWN_KEY))
   const summary = useHabitSummary(range)
   const data = summary.data
@@ -50,7 +50,6 @@ export function HabitsPage() {
 
   return (
     <div className="stack">
-      <RangeSwitch value={range} onChange={setRange} options={INSIGHT_RANGES} />
       <section className="card habits-log">
         <QuickLogRow label="Log now" />
       </section>
@@ -95,6 +94,8 @@ export function HabitsPage() {
               )}
             </InsightCard>
           )}
+
+          <LungRecoveryCard enabled={!!athlete?.smoke_quit_date} />
 
           <InsightCard title="Impact detail">
             <ImpactCards impact={data.impact ?? []} hidePrivate={!privateShown} title={false} />

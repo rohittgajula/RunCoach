@@ -4,12 +4,11 @@ import { ActivityCardView, WorkoutCard } from '../components/Cards'
 import { ChipButton } from '../components/ChipButton'
 import { MonthView } from '../components/calendar/MonthView'
 import { ActivitySheet, WorkoutSheet } from '../components/DetailSheets'
-import { PendingCheckins } from '../components/checkin/PendingCheckins'
-import { TodayCard } from '../components/checkin/TodayCard'
 import { WeekGarminMenu } from '../components/workout/WeekGarminMenu'
-import { CalendarIcon, ChevronDown, GearIcon, RefreshIcon } from '../components/Icons'
+import { CalendarIcon, ChevronDown, ChevronRight, RefreshIcon } from '../components/Icons'
 import { PageHeader } from '../components/PageHeader'
-import { useShell } from '../components/Shell'
+import { PhasePill } from '../components/PhasePill'
+import { PlanDetailSheet } from '../components/profile/PlanDetailSheet'
 import { ErrorState, Loading, Skeleton } from '../components/States'
 import { useCoachLaunch } from '../components/useCoachLaunch'
 import { addDays, dur, monthDay, parseDate, todayISO, weekday } from '../lib/format'
@@ -18,8 +17,8 @@ import type { ActivityCard, CalDay, CalWeek, Workout } from '../lib/types'
 
 export const BUILD_PLAN_PROMPT = 'Build a plan for me to run 10k.'
 
+/** Plan tab: the month/week calendar and the plan (the pre-R10 Calendar minus today). */
 export default function Calendar() {
-  const { openSettings } = useShell()
   const navigate = useNavigate()
   const launch = useCoachLaunch()
   const calendar = useCalendar()
@@ -38,6 +37,7 @@ export default function Calendar() {
   const [openActivity, setOpenActivity] = useState<ActivityCard | null>(null)
   const [toast, setToast] = useState('')
   const [view, setView] = useState<'list' | 'month'>('list')
+  const [planOpen, setPlanOpen] = useState(false)
   const listScroll = useRef<number | null>(null)
 
   const pages = calendar.data?.pages
@@ -142,13 +142,10 @@ export default function Calendar() {
   return (
     <div className="page cal-page" ref={scrollRef}>
       <PageHeader
-        left={
-          <ChipButton label="Sync Garmin" onClick={runSync} disabled={sync.isPending}>
-            <RefreshIcon className={sync.isPending ? 'spin' : ''} />
-          </ChipButton>
-        }
-        title={
-          <div className="segmented segmented-sm" role="tablist" aria-label="Calendar view">
+        title="Plan"
+        right={
+          <>
+          <div className="segmented segmented-compact" role="tablist" aria-label="Calendar view">
             {(['list', 'month'] as const).map((option) => (
               <button
                 key={option}
@@ -162,11 +159,10 @@ export default function Calendar() {
               </button>
             ))}
           </div>
-        }
-        right={
-          <ChipButton label="Settings" onClick={openSettings}>
-            <GearIcon />
+          <ChipButton label="Sync Garmin" onClick={runSync} disabled={sync.isPending} className="chip-plain">
+            <RefreshIcon className={sync.isPending ? 'spin' : ''} />
           </ChipButton>
+          </>
         }
       />
       {toast && <div className="toast" role="status">{toast}</div>}
@@ -183,6 +179,20 @@ export default function Calendar() {
             Ask the coach
           </button>
         </section>
+      )}
+
+      {activePlan.data && (
+        <button type="button" className="card plan-strip" onClick={() => setPlanOpen(true)}>
+          <span className="grow">
+            <span className="lbl">Your plan</span>
+            <span className="plan-strip-name">{activePlan.data.name}</span>
+          </span>
+          {(() => {
+            const phase = activePlan.data.phases.find((p) => p.id === activePlan.data!.current_phase_id)
+            return phase ? <PhasePill kind={phase.kind} name={phase.name} /> : null
+          })()}
+          <ChevronRight size={18} className="muted" />
+        </button>
       )}
 
       {view === 'month' && (
@@ -231,12 +241,6 @@ export default function Calendar() {
                     canSend={!!activePlan.data && week.end >= today && week.start <= addDays(today, 7)}
                   />
                 )}
-                {day.date === today && (
-                  <div className="today-pin" data-anchor="today">
-                    <PendingCheckins />
-                    <TodayCard />
-                  </div>
-                )}
                 {!hidden && (
                   <DayRow
                     day={day}
@@ -262,6 +266,7 @@ export default function Calendar() {
       </div>
 
       <WorkoutSheet workout={openWorkout} onClose={() => setOpenWorkout(null)} />
+      <PlanDetailSheet planId={planOpen && activePlan.data ? activePlan.data.id : null} onClose={() => setPlanOpen(false)} />
       <ActivitySheet activity={openActivity} onClose={() => setOpenActivity(null)} />
     </div>
   )

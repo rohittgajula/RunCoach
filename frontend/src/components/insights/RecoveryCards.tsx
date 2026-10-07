@@ -50,7 +50,7 @@ export function RecoveryCard({ data, onChart }: Props) {
           better={CHARTS.sleep.better} delta={CHARTS.sleep.delta ?? CHARTS.sleep.format} onClick={() => onChart('sleep')}
         />
         <Tile label="Body Battery" value={n(bb?.avg)} sub="average" points={pts('body_battery')} better={CHARTS.body_battery.better} delta={CHARTS.body_battery.delta ?? CHARTS.body_battery.format} onClick={() => onChart('body_battery')} />
-        <Tile label="Stress" value={n(stress?.avg)} sub="average" points={pts('stress')} better={CHARTS.stress.better} delta={CHARTS.stress.delta ?? CHARTS.stress.format} onClick={() => onChart('stress')} color="#d9861a" />
+        <Tile label="Stress" value={n(stress?.avg)} sub="average" points={pts('stress')} better={CHARTS.stress.better} delta={CHARTS.stress.delta ?? CHARTS.stress.format} onClick={() => onChart('stress')} color="var(--recovery)" />
       </div>
     </InsightCard>
   )

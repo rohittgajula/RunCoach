@@ -27,10 +27,11 @@ export function HabitBarChart({
           <Bar
             dataKey="value"
             fill={color}
-            fillOpacity={0.55}
+            fillOpacity={0.35}
             activeBar={{ fill: color, fillOpacity: 1 }}
-            radius={[4, 4, 0, 0]}
+            radius={[6, 6, 6, 6]}
             maxBarSize={22}
+            minPointSize={2}
             isAnimationActive={false}
           />
         </BarChart>

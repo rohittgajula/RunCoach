@@ -66,10 +66,13 @@ export type ChartConfig = {
   better: Better
   /** How a change is written ("12 s" for paces); defaults to `format`. */
   delta?: (v: number) => string
+  /** R10 topic colour for the chart. */
+  topic?: 'run' | 'recovery' | 'sleep'
 }
 
 export const CHARTS: Record<ChartKey, ChartConfig> = {
   run_fraction: {
+    topic: 'run',
     better: 'higher', delta: (v) => `${Math.round(v)} pts`,
     title: 'Running share', unit: '% of distance run',
     format: (v) => `${Math.round(v)}%`,
@@ -77,6 +80,7 @@ export const CHARTS: Record<ChartKey, ChartConfig> = {
     about: 'How much of each outing you ran rather than walked. Rising slowly is the goal — it means your run blocks are getting longer.',
   },
   longest_run: {
+    topic: 'run',
     better: 'higher',
     title: 'Longest continuous run', unit: 'per outing',
     format: (v) => (v >= 3600 ? dur(v) : clock(v)),
@@ -84,6 +88,7 @@ export const CHARTS: Record<ChartKey, ChartConfig> = {
     about: 'The longest stretch you ran without a walk break. Add 30–60 s at a time.',
   },
   easy_pace: {
+    topic: 'run',
     better: 'lower', delta: (v) => `${Math.round(v)} s`,
     title: 'Easy-pace efficiency', unit: 'pace at Z2 heart rate',
     format: (v) => pace(v), reversed: true,
@@ -91,6 +96,7 @@ export const CHARTS: Record<ChartKey, ChartConfig> = {
     about: 'Your pace while heart rate stays in zone 2. Getting faster at the same effort is aerobic fitness improving.',
   },
   cadence: {
+    topic: 'run',
     better: null, delta: (v) => `${Math.round(v)} spm`,
     title: 'Cadence', unit: 'steps per minute',
     format: (v) => String(Math.round(v)),
@@ -104,6 +110,7 @@ export const CHARTS: Record<ChartKey, ChartConfig> = {
     about: 'Steps per minute while running. Shorter, quicker steps (160–175) land under your hips and are easier on knees and shins.',
   },
   hrv: {
+    topic: 'recovery',
     better: 'higher', delta: (v) => `${Math.round(v)} ms`,
     title: 'HRV', unit: 'ms, overnight',
     format: (v) => String(Math.round(v)),
@@ -115,6 +122,7 @@ export const CHARTS: Record<ChartKey, ChartConfig> = {
     about: 'Heart-rate variability overnight. Inside your baseline band is normal; several nights below it means recovery is lagging — keep runs easy.',
   },
   rhr: {
+    topic: 'recovery',
     better: 'lower', delta: (v) => `${Math.round(v)} bpm`,
     title: 'Resting heart rate', unit: 'bpm',
     format: (v) => String(Math.round(v)),
@@ -122,6 +130,7 @@ export const CHARTS: Record<ChartKey, ChartConfig> = {
     about: 'A slowly falling resting heart rate is a sign of improving fitness. A jump of 5+ bpm can mean fatigue or illness.',
   },
   sleep: {
+    topic: 'sleep',
     better: 'higher', delta: (v) => `${Math.round(v * 60)} min`,
     title: 'Sleep', unit: 'hours per night',
     format: (v) => hm(v * 3600),
@@ -130,6 +139,7 @@ export const CHARTS: Record<ChartKey, ChartConfig> = {
     about: 'Most adaptation happens while you sleep. Under 7 hours on average makes every run harder to recover from.',
   },
   body_battery: {
+    topic: 'recovery',
     better: 'higher',
     title: 'Body Battery', unit: 'Garmin, 0–100',
     format: (v) => String(Math.round(v)),
@@ -137,6 +147,7 @@ export const CHARTS: Record<ChartKey, ChartConfig> = {
     about: 'Garmin’s estimate of your energy reserve. Waking up high means you recharged overnight.',
   },
   stress: {
+    topic: 'recovery',
     better: 'lower',
     title: 'Stress', unit: 'Garmin, 0–100',
     format: (v) => String(Math.round(v)),
@@ -144,6 +155,7 @@ export const CHARTS: Record<ChartKey, ChartConfig> = {
     about: 'All-day stress from heart-rate variability. Life stress counts as training stress too.',
   },
   respiration: {
+    topic: 'recovery',
     better: null,
     title: 'Breathing', unit: 'breaths per minute',
     format: (v) => v.toFixed(1),
@@ -151,6 +163,7 @@ export const CHARTS: Record<ChartKey, ChartConfig> = {
     about: 'Breathing rate, mostly measured during sleep. A rise above your usual level can be an early sign of illness — run easy only.',
   },
   vo2max: {
+    topic: 'run',
     better: 'higher',
     title: 'VO2max', unit: 'ml/kg/min, Garmin',
     format: (v) => v.toFixed(0),

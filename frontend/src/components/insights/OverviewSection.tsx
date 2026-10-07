@@ -1,20 +1,38 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import { pace } from '../../lib/format'
 import { errorText, useInsights } from '../../lib/queries'
-import type { InsightRange } from '../../lib/types'
-import { TodayCard } from '../checkin/TodayCard'
+import type { InsightRange, Insights } from '../../lib/types'
+import { Bullets } from '../Bullets'
+import { trendOf, type Trend } from '../chartUtil'
+import { useHealthRange } from '../health/healthRange'
+import { TrainingStatusCard } from '../health/TrainingStatusCard'
+import { ChevronRight, ReportIcon, ScatterIcon } from '../Icons'
+import { Arrow, Delta, MetricTile, TopicRing } from '../Kit'
 import { FitnessSheet } from '../profile/FitnessSheet'
-import { RangeSwitch } from '../RangeSwitch'
+import { Sparkline } from '../Sparkline'
 import { ErrorState, Skeleton } from '../States'
+import { ForecastCard } from '../today/ForecastCard'
 import { FocusCard, LoadCard, SummaryCard } from './AdviceCards'
-import { INSIGHT_RANGES, InsightChartSheet } from './InsightChartSheet'
-import type { ChartKey } from './charts'
-import { BreathingCard, FitnessCard, RecoveryCard } from './RecoveryCards'
-import { ReadinessCard, RunningCard } from './RunningCards'
+import { InsightChartSheet } from './InsightChartSheet'
+import { CHARTS, type ChartKey } from './charts'
 import { HabitsTeaser, ProgressTeaser } from './Teasers'
 
-/** Insights → Overview: today's cards; Progress and Habits are one-row teasers. */
+const PERIOD: Record<InsightRange, string> = { '4w': 'last month', '12w': 'the quarter before', '6m': 'earlier this year' }
+
+const values = (data: Insights, key: ChartKey) =>
+  CHARTS[key].points(data).map((p) => p.value).filter((v): v is number => v != null && Number.isFinite(v))
+const lastOf = (v: number[]) => (v.length ? v[v.length - 1] : null)
+const halves = (v: number[]) => {
+  if (v.length < 4) return null
+  const mid = Math.floor(v.length / 2)
+  const mean = (a: number[]) => a.reduce((s, x) => s + x, 0) / a.length
+  return { before: mean(v.slice(0, mid)), now: mean(v.slice(mid)) }
+}
+
+/** Health → Overview: summary + rings, metric tiles, status, what changed, tomorrow, links. */
 export function OverviewSection() {
-  const [range, setRange] = useState<InsightRange>('4w')
+  const [range] = useHealthRange<InsightRange>()
   const [chart, setChart] = useState<ChartKey | null>(null)
   const [fitnessOpen, setFitnessOpen] = useState(false)
   const insights = useInsights(range)
@@ -22,33 +40,188 @@ export function OverviewSection() {
 
   return (
     <>
-      <TodayCard compact />
-      <RangeSwitch value={range} onChange={setRange} options={INSIGHT_RANGES} />
-
       {insights.isPending && [0, 1, 2].map((i) => (
         <section key={i} className="card"><Skeleton lines={4} /></section>
       ))}
       {insights.isError && !data && (
-        <ErrorState message={errorText(insights.error, 'Insights did not load.')} onRetry={() => insights.refetch()} />
+        <ErrorState message={errorText(insights.error, 'Health did not load.')} onRetry={() => insights.refetch()} />
       )}
 
       {data && (
         <div className={`stack ${insights.isPlaceholderData ? 'is-stale' : ''}`}>
-          <ReadinessCard data={data} />
-          <RunningCard data={data} onChart={setChart} />
-          <ProgressTeaser />
-          <RecoveryCard data={data} onChart={setChart} />
-          <BreathingCard data={data} onChart={setChart} />
-          <FitnessCard data={data} onChart={setChart} />
-          <LoadCard load={data.load} onOpen={() => setFitnessOpen(true)} />
+          <SummaryHero data={data} range={range} />
+          <Tiles data={data} onChart={setChart} />
+          <TrainingStatusCard />
+          <WhatChanged data={data} range={range} />
+          <ForecastCard detailed />
           <FocusCard focus={data.focus ?? []} hasRuns={(data.running?.runs ?? 0) > 0} />
-          <HabitsTeaser />
+          <LoadCard load={data.load} onOpen={() => setFitnessOpen(true)} />
           <SummaryCard summary={data.summary} range={range} />
+          <ProgressTeaser />
+          <HabitsTeaser />
+          <LinkRow to="/health/reports" icon={<ReportIcon />} title="Weekly reports" text="Every Monday: last week’s runs, recovery and habits in one card" />
+          <LinkRow to="/health/compare" icon={<ScatterIcon />} title="Compare any two" text="Sleep vs easy-run HR, drinks vs HRV — does one move with the other?" />
         </div>
       )}
 
       <InsightChartSheet chart={chart} initialRange={range} onClose={() => setChart(null)} />
       <FitnessSheet view={fitnessOpen ? 'status' : null} onClose={() => setFitnessOpen(false)} />
     </>
+  )
+}
+
+export function LinkRow({ to, icon, title, text }: { to: string; icon: ReactNode; title: string; text: string }) {
+  return (
+    <Link to={to} className="card link-row">
+      <span className="link-row-icon">{icon}</span>
+      <span className="grow">
+        <span className="link-row-title">{title}</span>
+        <span className="link-row-text">{text}</span>
+      </span>
+      <ChevronRight size={18} className="muted" />
+    </Link>
+  )
+}
+
+function SummaryHero({ data, range }: { data: Insights; range: InsightRange }) {
+  const hrv = trendOf(values(data, 'hrv'), 'higher')
+  const rhr = trendOf(values(data, 'rhr'), 'lower')
+  const sleep = trendOf(values(data, 'sleep'), 'higher', 1 / 6)
+  const recovery = [hrv, rhr].filter((t): t is Trend => !!t)
+  const good = recovery.filter((t) => t.tone === 'good').length
+  const bad = recovery.filter((t) => t.tone === 'bad').length
+  const headline = !recovery.length
+    ? 'Keep syncing — your trends build up over a few weeks'
+    : bad === 0 && good > 0
+      ? `You're recovering better than ${PERIOD[range]}`
+      : bad > 0 && good === 0
+        ? 'Recovery has been under more strain lately'
+        : 'Recovery is holding steady'
+  const word = (t: Trend | null, name: string, up: string, down: string) =>
+    !t ? null : t.tone === 'flat' ? `${name} steady` : `${name} ${t.delta > 0 ? up : down}`
+  const sub = [word(hrv, 'HRV', 'up', 'down'), word(rhr, 'resting HR', 'up', 'down'), word(sleep, 'sleep', 'longer', 'shorter')]
+    .filter(Boolean).join(', ')
+
+  const sleepScore = trendOf(data.sleep?.series.map((p) => p.score) ?? [], 'higher')
+  const share = values(data, 'run_fraction')
+  const shareTrend = trendOf(share, 'higher')
+  const rings: Array<{ key: string; name: string; topic: 'recovery' | 'sleep' | 'run'; value: number | null; trend: Trend | null; better: 'higher' | 'lower' }> = [
+    { key: 'r', name: 'Readiness', topic: 'recovery', value: data.readiness?.score ?? null, trend: null, better: 'higher' },
+    { key: 's', name: 'Sleep score', topic: 'sleep', value: data.sleep?.avg_score ?? null, trend: sleepScore, better: 'higher' },
+    { key: 'f', name: 'Running share', topic: 'run', value: lastOf(share), trend: shareTrend, better: 'higher' },
+  ]
+  const shown = rings.filter((r) => r.value != null)
+
+  return (
+    <section className="card hero-summary">
+      <p className="hero-summary-title">{headline}</p>
+      {sub && <p className="muted small">{sub[0].toUpperCase() + sub.slice(1)}.</p>}
+      {shown.length > 0 && (
+        <div className="ring-row" style={{ gridTemplateColumns: `repeat(${shown.length}, minmax(0, 1fr))` }}>
+          {shown.map((r) => (
+            <div key={r.key}>
+              <TopicRing value={r.value} topic={r.topic} size={84} label={r.name} />
+              <span className="ring-name">{r.name}</span>
+              {r.trend && r.trend.tone !== 'flat' ? (
+                <span className="arrow-line">
+                  <Arrow value={r.trend.delta} better={r.better} /> {Math.round(Math.abs(r.trend.delta))}
+                </span>
+              ) : r.trend ? <span className="arrow-line muted">— steady</span> : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function Tiles({ data, onChart }: { data: Insights; onChart: (k: ChartKey) => void }) {
+  type Def = { key: ChartKey; label: string; value: string | null; unit?: string; bars?: boolean }
+  const v = (k: ChartKey) => lastOf(values(data, k))
+  const sleepAvg = data.sleep?.avg_s ?? null
+  const defs: Def[] = [
+    { key: 'hrv', label: 'HRV', value: data.hrv?.last_night_ms != null ? String(Math.round(data.hrv.last_night_ms)) : v('hrv') != null ? String(Math.round(v('hrv')!)) : null, unit: 'ms' },
+    { key: 'rhr', label: 'Resting HR', value: data.resting_hr?.current != null ? String(Math.round(data.resting_hr.current)) : null, unit: 'bpm' },
+    { key: 'sleep', label: 'Sleep', value: sleepAvg ? `${Math.floor(sleepAvg / 3600)}:${String(Math.round((sleepAvg % 3600) / 60)).padStart(2, '0')}` : null, unit: 'h', bars: true },
+    { key: 'stress', label: 'Stress', value: data.stress?.avg != null ? String(Math.round(data.stress.avg)) : null },
+    { key: 'body_battery', label: 'Body battery', value: data.body_battery?.avg != null ? String(Math.round(data.body_battery.avg)) : null, unit: 'avg' },
+    { key: 'vo2max', label: 'VO2max', value: data.vo2max?.value != null ? String(Math.round(data.vo2max.value)) : null },
+    { key: 'respiration', label: 'Breathing', value: data.respiration?.sleep_avg_rpm != null ? data.respiration.sleep_avg_rpm.toFixed(1) : null, unit: '/min' },
+    { key: 'easy_pace', label: 'Easy pace', value: v('easy_pace') != null ? pace(v('easy_pace')) : null, unit: '/km' },
+    { key: 'run_fraction', label: 'Running share', value: v('run_fraction') != null ? String(Math.round(v('run_fraction')!)) : null, unit: '%' },
+    { key: 'longest_run', label: 'Longest run', value: v('longest_run') != null ? CHARTS.longest_run.format(v('longest_run')!) : null },
+    { key: 'cadence', label: 'Cadence', value: data.running?.cadence.avg != null ? String(Math.round(data.running.cadence.avg)) : null, unit: 'spm' },
+  ]
+  const shown = defs.filter((d) => d.value != null)
+  if (!shown.length) return null
+  return (
+    <div className="mt-grid">
+      {shown.map((d) => {
+        const cfg = CHARTS[d.key]
+        const vals = values(data, d.key)
+        const t = trendOf(vals, cfg.better)
+        const color = `var(--${cfg.topic ?? 'run'})`
+        return (
+          <MetricTile
+            key={d.key}
+            label={d.label}
+            value={d.value}
+            unit={d.unit}
+            onClick={() => onChart(d.key)}
+            chip={t ? <Delta value={t.tone === 'flat' ? 0 : t.delta} better={cfg.better} format={cfg.delta ?? cfg.format} steadyText="0" /> : undefined}
+          >
+            {d.bars && vals.length >= 2 ? (
+              <MiniBars values={vals.slice(-7)} color={color} />
+            ) : vals.length >= 2 ? (
+              <Sparkline values={cfg.reversed ? vals.map((x) => -x) : vals} height={36} color={color} />
+            ) : null}
+          </MetricTile>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Last N values as soft bars, the latest in full colour. */
+export function MiniBars({ values, color }: { values: number[]; color: string }) {
+  const max = Math.max(...values, 1)
+  return (
+    <span className="mini-bars" aria-hidden="true">
+      {values.map((v, i) => (
+        <span key={i} style={{ height: `${Math.max(8, (v / max) * 100)}%`, background: color, opacity: i === values.length - 1 ? 1 : 0.35 }} />
+      ))}
+    </span>
+  )
+}
+
+/** "HRV averaged 45 ms, up from 41 ms" — the later half of the range vs the earlier half. */
+function WhatChanged({ data, range }: { data: Insights; range: InsightRange }) {
+  const rows: Array<{ tone: string; text: string }> = []
+  const add = (key: ChartKey, name: string, fmt: (v: number) => string, unit: string, flat: number) => {
+    const h = halves(values(data, key))
+    if (!h) return
+    const d = h.now - h.before
+    const better = CHARTS[key].better
+    if (Math.abs(d) <= flat) {
+      rows.push({ tone: 'neutral', text: `${name} about the same (${fmt(h.now)}${unit})` })
+      return
+    }
+    const good = better == null ? null : (d > 0) === (better === 'higher')
+    const dir = key === 'easy_pace' ? (d < 0 ? 'faster' : 'slower') : d > 0 ? 'up' : 'down'
+    rows.push({ tone: good == null ? 'neutral' : good ? 'good' : 'bad', text: `${name} averaged ${fmt(h.now)}${unit}, ${dir} from ${fmt(h.before)}${unit}` })
+  }
+  add('hrv', 'HRV', (v) => String(Math.round(v)), ' ms', 1)
+  add('rhr', 'Resting HR', (v) => String(Math.round(v)), ' bpm', 0.7)
+  add('sleep', 'Sleep', (v) => `${Math.floor(v)}h ${String(Math.round((v % 1) * 60)).padStart(2, '0')}m`, '', 1 / 6)
+  add('easy_pace', 'Easy pace', (v) => pace(v), ' /km', 3)
+  add('stress', 'Stress', (v) => String(Math.round(v)), '', 1.5)
+  if (!rows.length) return null
+  rows.sort((a, b) => (a.tone === 'good' ? 0 : a.tone === 'bad' ? 1 : 2) - (b.tone === 'good' ? 0 : b.tone === 'bad' ? 1 : 2))
+  return (
+    <section className="card">
+      <h2 className="kit-title" style={{ marginBottom: 10 }}>What changed {range === '4w' ? 'this month' : 'in this range'}</h2>
+      <Bullets items={rows} />
+      <p className="chart-caption" style={{ marginTop: 8 }}>Second half of the range vs the first half.</p>
+    </section>
   )
 }

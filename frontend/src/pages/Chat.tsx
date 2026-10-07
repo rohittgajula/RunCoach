@@ -5,13 +5,12 @@ import { ActivityAttachment, WorkoutAttachment } from '../components/Cards'
 import { ChatListSheet } from '../components/ChatListSheet'
 import { ChipButton, ChipGroup } from '../components/ChipButton'
 import { ActivitySheet, WorkoutSheet } from '../components/DetailSheets'
-import { ArrowUpIcon, ChevronDown, CloseIcon, GearIcon, ListIcon, NewChatIcon, PlusIcon } from '../components/Icons'
+import { ArrowUpIcon, ChevronDown, CloseIcon, ListIcon, NewChatIcon, PlusIcon } from '../components/Icons'
 import { LogMealSheet } from '../components/LogMealSheet'
 import { Markdown } from '../components/Markdown'
 import { MealSummary } from '../components/MealCard'
 import { PageHeader } from '../components/PageHeader'
 import { PlanProposalCard } from '../components/PlanProposalCard'
-import { useShell } from '../components/Shell'
 import { ErrorState, Loading } from '../components/States'
 import { clearPendingChat, getPendingChat } from '../lib/pending'
 import { createThread, errorText, sendMessage, useMessages, useThreads } from '../lib/queries'
@@ -51,7 +50,6 @@ export default function Chat() {
   const location = useLocation()
   const navigate = useNavigate()
   const client = useQueryClient()
-  const { openSettings } = useShell()
   const messages = useMessages(threadId)
 
   const pending = getPendingChat(search.get('pending'))
@@ -200,11 +198,7 @@ export default function Chat() {
             </ChipButton>
           </ChipGroup>
         }
-        right={
-          <ChipButton label="Settings" onClick={openSettings}>
-            <GearIcon />
-          </ChipButton>
-        }
+        title="Coach"
       />
 
       <div className="chat-scroll" ref={scrollRef} onScroll={onScroll}>

@@ -751,3 +751,298 @@ export type GuidesContext = {
 } & Record<string, unknown>
 
 export type GuidesResponse = { for_you: GuideForYou[]; context: GuidesContext }
+
+// --- R10 (docs/API_NOTES.md "R10") ---------------------------------------------------
+// Every field the watch may not provide is nullable; the UI hides what is missing.
+
+export type HealthRange = '7d' | '4w' | '3m' | '6m' | '1y'
+export type ValuePoint = { date: ISODate; value: number }
+export type RacePred = { '5k_s': number | null; '10k_s': number | null; half_s: number | null; marathon_s: number | null }
+
+export type AthleteZones = {
+  resting_hr?: number | null
+  max_hr?: number | null
+  max_source?: string
+  zones: Array<{ name: string; label: string; low: number; high: number; purpose: string }>
+  source?: 'heart_rate_reserve' | 'lactate_threshold'
+  lt_hr?: number | null
+  lt_date?: ISODate | null
+  updated_at?: ISODateTime | null
+  capped?: boolean
+}
+
+export type HealthFitness = {
+  range: string
+  start: ISODate
+  end: ISODate
+  vo2max?: { current: number | null; change: number | null; series: ValuePoint[] } | null
+  fitness_age?: { current: number | null; chronological_age: number | null; achievable: number | null; change: number | null; series: ValuePoint[] } | null
+  endurance_score?: { current: number | null; level: string | null; change: number | null; series: ValuePoint[] } | null
+  race_predictions?: {
+    current: RacePred | null
+    previous: RacePred | null
+    as_of: ISODate | null
+    previous_as_of: ISODate | null
+    series: Array<{ date: ISODate } & Partial<RacePred>>
+  } | null
+  lactate_threshold?: {
+    hr: number | null
+    pace_s_per_km: number | null
+    date: ISODate
+    source: 'garmin'
+    zones_updated: boolean
+    zones_updated_at: ISODateTime | null
+    series: Array<{ date: ISODate; hr: number | null; pace_s_per_km: number | null }>
+  } | null
+  zones?: AthleteZones | null
+}
+
+export type LoadFocusItem = {
+  key: 'low_aerobic' | 'high_aerobic' | 'anaerobic' | string
+  label: string
+  value: number
+  target_min: number | null
+  target_max: number | null
+  state: 'below' | 'in_range' | 'above' | null
+}
+
+export type TrainingStatus = {
+  date: ISODate | null
+  status: string | null
+  status_key: string | null
+  acute_load: number | null
+  chronic_load: number | null
+  acwr: number | null
+  load_focus: { date: ISODate; feedback: string | null; period_days: number; items: LoadFocusItem[] } | null
+  history: Array<{ date: ISODate; status_key: string | null; acute_load: number | null; chronic_load: number | null }>
+}
+
+export type SleepNight = {
+  date: ISODate
+  sleep_s: number | null
+  need_s: number | null
+  score: number | null
+  deep_s: number | null
+  light_s: number | null
+  rem_s: number | null
+  awake_s: number | null
+  bedtime: string | null
+  wake_time: string | null
+  restless_moments: number | null
+  spo2_avg: number | null
+  spo2_low: number | null
+  breathing_rate: number | null
+}
+
+export type SleepAvg = {
+  sleep_s: number | null
+  need_s: number | null
+  score: number | null
+  deep_s: number | null
+  rem_s: number | null
+  spo2_avg: number | null
+  breathing_rate: number | null
+  restless_moments: number | null
+  bedtime: string | null
+  wake_time: string | null
+}
+
+export type HealthSleep = {
+  range: string
+  start: ISODate
+  end: ISODate
+  nights: SleepNight[]
+  averages: SleepAvg | null
+  previous: SleepAvg | null
+  regularity: { bedtime_sd_min: number | null; previous_bedtime_sd_min: number | null; n: number; better: boolean | null } | null
+  debt: { need_s: number | null; debt_s: number | null; short_nights: number; nights: number; short_by_s: number | null } | null
+  sleep_vs_runs: {
+    short_h: number
+    long_h: number
+    short: { easy_hr: number | null; n: number }
+    long: { easy_hr: number | null; n: number }
+    diff_bpm: number | null
+    enough_data: boolean
+    sentence: string | null
+  } | null
+  tonight: { need_s: number | null; wake_time: string | null; bedtime: string | null } | null
+}
+
+export type FormMetric = {
+  key: 'cadence' | 'ground_contact' | 'vertical_oscillation' | 'stride_length' | string
+  label: string
+  unit: string
+  current: number | null
+  previous: number | null
+  change: number | null
+  better: boolean | null
+  trend_per_week: number | null
+  n: number
+}
+
+export type HealthForm = {
+  range: string
+  start: ISODate
+  end: ISODate
+  has_dynamics: boolean
+  runs: Array<{
+    activity_id: number
+    date: ISODate
+    cadence_spm: number | null
+    ground_contact_ms: number | null
+    vertical_oscillation_cm: number | null
+    stride_length_m: number | null
+    run_km: number
+    run_pace_s_per_km: number | null
+  }>
+  metrics: FormMetric[]
+}
+
+export type PersonalRecord = {
+  key: string
+  label: string
+  source: 'garmin' | 'computed'
+  unit: 's' | 'm'
+  value: number
+  display: string
+  date: ISODate | null
+  activity_id: number | null
+  garmin_activity_id: number | null
+  is_new: boolean
+}
+
+export type HealthRecords = { records: PersonalRecord[]; new_count: number; synced_on: ISODate | null }
+
+export type Shoe = {
+  id: number
+  name: string
+  brand: string
+  source: 'garmin' | 'local'
+  is_default: boolean
+  retired: boolean
+  retire_km: number
+  start_km: number
+  distance_km: number
+  activities: number
+  in_use_since: ISODate | null
+  last_used: ISODate | null
+  remaining_km: number
+  replace_soon: boolean
+  replace_due: boolean
+  garmin_uuid: string | null
+  created_at: ISODateTime
+}
+
+export type GearResponse = { shoes: Shoe[]; default_retire_km: number }
+
+export type LungMetric = {
+  key: 'sleep_breathing_rate' | 'spo2' | 'resting_hr' | 'easy_hr' | string
+  label: string
+  unit: string
+  before: number | null
+  before_n: number
+  now: number | null
+  now_n: number
+  change: number | null
+  better: boolean | null
+  enough_data: boolean
+  series: ValuePoint[]
+  sentence: string
+}
+
+export type LungRecovery = {
+  available: boolean
+  reason: null | 'no_quit_date' | 'quit_date_in_future'
+  quit_date: ISODate | null
+  days_since_quit: number | null
+  metrics: LungMetric[]
+  milestones: Array<{ label: string; reached: boolean; at: ISODateTime }>
+  note: string
+}
+
+export type WeeklyReport = {
+  id: number
+  week_start: ISODate
+  week_end: ISODate
+  generated_at: ISODateTime
+  runs: { done: number; planned: number; planned_done: number; km: number; run_km: number; time_s: number; previous_done: number; previous_km: number }
+  zones: Partial<Record<'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5' | 'below', number>>
+  zones_total_s: number
+  prs: Array<{ key: string; label: string; display: string; date: ISODate | null }>
+  wellness: Array<{ metric: string; label: string; unit: string; this_week: number | null; previous_week: number | null; delta: number | null; better: boolean | null }>
+  habits: Array<{ habit: HabitKind; label: string; this_week: number; previous_week: number; delta: number; better: boolean | null }>
+  went_well: string[]
+  to_improve: string[]
+  goal: string
+  ai: { status: 'none' | 'ready'; markdown: string; generated_at: ISODateTime | null } | null
+}
+
+export type WeeklyReportListItem = { id: number; week_start: ISODate; week_end: ISODate; runs_done: number; km: number; generated_at: ISODateTime }
+
+export type CompareMetric = { key: string; label: string; unit: string; group: 'wellness' | 'habits' | 'runs'; noun: string }
+
+export type CompareResult = {
+  x: { key: string; label: string; unit: string }
+  y: { key: string; label: string; unit: string }
+  range: string
+  start: ISODate
+  end: ISODate
+  lag: number
+  points: Array<{ date: ISODate; x: number; y: number }>
+  n: number
+  rho: number | null
+  strength: 'none' | 'weak' | 'moderate' | 'strong' | null
+  direction: 'positive' | 'negative' | null
+  enough_data: boolean
+  trend: { slope: number; intercept: number } | null
+  sentence: string
+  caveat: string
+}
+
+export type Reminder = { key: string; label: string; description: string; enabled: boolean; time: string }
+export type RemindersResponse = { available: boolean; public_key: string | null; subscriptions: number; ios_note: string; reminders: Reminder[] }
+
+export type Badge = {
+  key: string
+  group: string
+  label: string
+  description: string
+  target: number
+  unit: string
+  earned: boolean
+  earned_on: ISODate | null
+  progress: { current: number; target: number } | null
+  new: boolean
+}
+
+export type Achievements = {
+  badges: Badge[]
+  recent: Array<{ key: string; kind: 'badge' | 'pr'; label: string; earned_on: ISODate }>
+  unseen: number
+}
+
+export type ReadinessForecast = {
+  date: ISODate
+  estimate: number | null
+  low: number | null
+  high: number | null
+  label: string
+  is_estimate: true
+  today: { score: number | null; source: 'garmin' | 'computed' | null } | null
+  factors: Array<{ key: string; label: string; effect: number; detail: string }>
+  levers: Array<{ key: string; label: string; gain: number }>
+  best_case: number | null
+  sentence: string
+  note: string
+}
+
+export type HealthBody = {
+  range: string
+  start: ISODate
+  end: ISODate
+  profile_weight_kg: number | null
+  latest: null | { date: ISODate; weight_kg: number | null; body_fat_pct: number | null; bmi: number | null; muscle_mass_kg: number | null; source: 'garmin' | 'manual' }
+  change: { weight_kg: number | null; body_fat_pct: number | null }
+  trend_kg_per_week: number | null
+  series: Array<{ date: ISODate; weight_kg: number | null; body_fat_pct: number | null; source: 'garmin' | 'manual' }>
+}

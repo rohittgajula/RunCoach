@@ -12,8 +12,8 @@ export default defineConfig({
         name: 'RunCoach',
         short_name: 'RunCoach',
         description: 'AI running coach — plan, chat, fuel',
-        theme_color: '#f7f7fb',
-        background_color: '#f7f7fb',
+        theme_color: '#f4f5f7',
+        background_color: '#f4f5f7',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
@@ -32,6 +32,8 @@ export default defineConfig({
         // The API is never precached. A cached training plan that silently disagrees
         // with the server is worse than an offline message.
         navigateFallbackDenylist: [/^\/api/, /^\/admin/],
+        // R10 reminders: push + notificationclick handlers live in public/push-handler.js.
+        importScripts: ['push-handler.js'],
       },
       // Off in development on purpose. A service worker caching assets while you
       // are editing them produces stale-bundle bugs that look like your change

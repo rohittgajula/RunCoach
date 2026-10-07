@@ -1,15 +1,16 @@
 import type { ReactNode } from 'react'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { Shell } from './components/Shell'
 import { Loading } from './components/States'
 import { useAuth } from './lib/AuthContext'
-import Calendar from './pages/Calendar'
+import Plan from './pages/Calendar'
 import Chat, { ChatIndex } from './pages/Chat'
 import Diet from './pages/Diet'
-import Insights from './pages/Insights'
+import Health from './pages/Insights'
 import { Login, Register } from './pages/Auth'
+import Me from './pages/Me'
 import Onboarding from './pages/Onboarding'
-import Profile from './pages/Profile'
+import Today from './pages/Today'
 
 /**
  * Three gates, in order: signed in, onboarded, then the five tabs. Onboarding is an
@@ -30,7 +31,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
 function GuestOnly({ children }: { children: ReactNode }) {
   const { athlete, loading } = useAuth()
   if (loading) return <div className="page centered"><Loading block /></div>
-  if (athlete) return <Navigate to="/calendar" replace />
+  if (athlete) return <Navigate to="/today" replace />
   return <>{children}</>
 }
 
@@ -46,13 +47,19 @@ export default function App() {
           <RequireAuth>
             <Shell>
               <Routes>
-                <Route path="/calendar" element={<Calendar />} />
+                <Route path="/today" element={<Today />} />
+                <Route path="/plan" element={<Plan />} />
                 <Route path="/chat" element={<ChatIndex />} />
                 <Route path="/chat/:threadId" element={<Chat />} />
                 <Route path="/diet" element={<Diet />} />
-                <Route path="/insights/*" element={<Insights />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="*" element={<Navigate to="/calendar" replace />} />
+                <Route path="/health/*" element={<Health />} />
+                <Route path="/me/*" element={<Me />} />
+                {/* Pre-R10 routes. */}
+                <Route path="/calendar" element={<Navigate to="/plan" replace />} />
+                <Route path="/insights" element={<OldInsights />} />
+                <Route path="/insights/:section" element={<OldInsights />} />
+                <Route path="/profile" element={<Navigate to="/me" replace />} />
+                <Route path="*" element={<Navigate to="/today" replace />} />
               </Routes>
             </Shell>
           </RequireAuth>
@@ -60,4 +67,11 @@ export default function App() {
       />
     </Routes>
   )
+}
+
+/** /insights/habits?x → /health/habits?x (guides keep their ?g=). */
+function OldInsights() {
+  const { section } = useParams()
+  const { search } = useLocation()
+  return <Navigate to={`/health${section ? `/${section}` : ''}${search}`} replace />
 }

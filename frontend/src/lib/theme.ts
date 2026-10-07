@@ -25,7 +25,7 @@ export function applyTheme(pref: ThemePref = getThemePref()) {
   if (pref === 'system') root.removeAttribute('data-theme')
   else root.setAttribute('data-theme', pref)
   // Keep the browser chrome (status bar on Android) in step with the ground colour.
-  const color = effective(pref) === 'dark' ? '#0b0b0f' : '#f7f7fb'
+  const color = effective(pref) === 'dark' ? '#0b0d10' : '#f4f5f7'
   document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => meta.setAttribute('content', color))
 }
 

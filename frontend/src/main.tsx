@@ -6,10 +6,16 @@ import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AuthProvider } from './lib/AuthContext'
 import { applyTheme, watchSystemTheme } from './lib/theme'
+import '@fontsource/plus-jakarta-sans/latin-400.css'
+import '@fontsource/plus-jakarta-sans/latin-500.css'
+import '@fontsource/plus-jakarta-sans/latin-600.css'
+import '@fontsource/plus-jakarta-sans/latin-700.css'
+import '@fontsource/plus-jakarta-sans/latin-800.css'
 import './styles/base.css'
 import './styles/components.css'
 import './styles/pages.css'
 import './styles/insights.css'
+import './styles/r10.css'
 
 // Before the first paint, so a dark-theme device never flashes white.
 applyTheme()

@@ -51,7 +51,7 @@ export function InsightChartSheet({
           {insights.isError && !data && <ErrorState message={errorText(insights.error)} onRetry={() => insights.refetch()} />}
           {data && (values.length >= 2 ? (
             <ChartFrame caption={trendCaption(trend, config.title, config.format, '', `${rangeLabel}`, config.delta)}>
-              <MetricChart data={points} format={config.format} reversed={config.reversed} height={280} band={band} />
+              <MetricChart data={points} format={config.format} reversed={config.reversed} height={280} band={band} color={`var(--${config.topic ?? 'run'})`} />
             </ChartFrame>
           ) : (
             <Empty title="Not enough data yet">Sync a few more days from Garmin to see a trend.</Empty>

@@ -12,7 +12,7 @@ export type Point = { date: string; value: number | null }
  */
 export function MetricChart({
   data, format = (v) => String(Math.round(v)), reversed = false, height = 240,
-  axis = 'right', step = false, domain, band, average = true,
+  axis = 'right', step = false, domain, band, average = true, color = 'var(--run)',
 }: {
   data: Point[]
   format?: (value: number) => string
@@ -25,20 +25,22 @@ export function MetricChart({
   band?: { low: number; high: number; label?: string } | null
   /** Dashed line at the average of the visible values. */
   average?: boolean
+  /** Topic colour (R10: colour by topic, never good/bad). */
+  color?: string
 }) {
   const gradient = useId().replace(/:/g, '')
   const ticks = monthTicks(data.map((d) => d.date))
   const values = data.map((d) => d.value).filter((v): v is number => v != null && Number.isFinite(v))
   const avg = average && values.length >= 3 ? values.reduce((a, b) => a + b, 0) / values.length : null
-  const Tip = chartTip((items, label) => ({ title: tickDate(label), lines: [{ text: format(num(items[0]?.value)), color: '#1f7ae0' }] }))
+  const Tip = chartTip((items, label) => ({ title: tickDate(label), lines: [{ text: format(num(items[0]?.value)), color }] }))
   return (
     <div className="chart" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 44, right: 0, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#1f7ae0" stopOpacity={0.28} />
-              <stop offset="100%" stopColor="#1f7ae0" stopOpacity={0.04} />
+              <stop offset="0%" stopColor={color} stopOpacity={0.16} />
+              <stop offset="100%" stopColor={color} stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <CartesianGrid vertical={false} strokeDasharray="3 4" />
@@ -46,11 +48,11 @@ export function MetricChart({
             <ReferenceArea
               y1={band.low}
               y2={band.high}
-              fill="#2e9d58"
-              fillOpacity={0.13}
+              fill={color}
+              fillOpacity={0.12}
               stroke="none"
               ifOverflow="extendDomain"
-              label={band.label ? { value: band.label, position: 'insideTopLeft', fill: '#2e9d58', fontSize: 12, fontWeight: 600 } : undefined}
+              label={band.label ? { value: band.label, position: 'insideTopLeft', fill: 'var(--muted)', fontSize: 11, fontWeight: 600 } : undefined}
             />
           )}
           <XAxis
@@ -87,12 +89,14 @@ export function MetricChart({
           <Area
             type={step ? 'stepAfter' : 'monotone'}
             dataKey="value"
-            stroke="#1f7ae0"
-            strokeWidth={2.5}
+            stroke={color}
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
             fill={`url(#${gradient})`}
             connectNulls
             dot={false}
-            activeDot={{ r: 5, stroke: 'var(--card)', strokeWidth: 2 }}
+            activeDot={{ r: 5, fill: 'var(--card)', stroke: color, strokeWidth: 3 }}
             baseValue={reversed ? 'dataMax' : 'dataMin'}
             isAnimationActive={false}
           />

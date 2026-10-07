@@ -1,0 +1,84 @@
+import { useEffect, useState } from 'react'
+import { PendingCheckins } from '../components/checkin/PendingCheckins'
+import { TodayCard } from '../components/checkin/TodayCard'
+import { QuickLogRow } from '../components/habits/QuickLogRow'
+import { ChipButton } from '../components/ChipButton'
+import { RefreshIcon } from '../components/Icons'
+import { AvatarButton } from '../components/Kit'
+import { ForecastCard } from '../components/today/ForecastCard'
+import { FuelToday } from '../components/today/FuelToday'
+import { ThisWeek } from '../components/today/ThisWeek'
+import { TodayWorkout } from '../components/today/TodayWorkout'
+import { WeatherCard } from '../components/today/WeatherCard'
+import { WeeklyReportCard } from '../components/today/WeeklyReportCard'
+import { useAuth } from '../lib/AuthContext'
+import { parseDate, todayISO } from '../lib/format'
+import { errorText, useHabitSummary, useSync, useWeek } from '../lib/queries'
+
+function greeting(): string {
+  const h = new Date().getHours()
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+}
+
+/** "3 days smoke-free" next to LOG NOW, only when it means something. */
+function SmokeFree() {
+  const { athlete } = useAuth()
+  const summary = useHabitSummary('4w')
+  const s = summary.data?.smoke
+  const days = s?.streak?.current_days ?? 0
+  if (!s || days <= 0) return null
+  if (athlete?.smoke_goal !== 'quit' && !(s.total > 0 || s.streak.best_days > 0)) return null
+  return <>{days} {days === 1 ? 'day' : 'days'} smoke-free</>
+}
+
+/** Today: greeting, readiness + check-in, today's run, weather, log, fuel, week, tomorrow. */
+export default function Today() {
+  const { athlete } = useAuth()
+  const today = todayISO()
+  const week = useWeek(today)
+  const sync = useSync()
+  const [toast, setToast] = useState('')
+  const day = week.data?.days.find((d) => d.date === today)
+  const name = (athlete?.display_name || '').split(' ')[0]
+  const dateLabel = parseDate(today).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(''), 3500)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  const runSync = () =>
+    sync.mutate(undefined, {
+      onSuccess: (r) => setToast(r.imported ? `Synced · ${r.imported} new` : 'Up to date'),
+      onError: (e) => setToast(errorText(e, 'Sync failed')),
+    })
+
+  return (
+    <div className="page today-page">
+      <header className="today-header">
+        <div className="grow">
+          <span className="lbl">{dateLabel}</span>
+          <h1 className="today-greeting">{greeting()}{name ? `, ${name}` : ''}</h1>
+        </div>
+        <ChipButton label="Sync Garmin" onClick={runSync} disabled={sync.isPending} className="chip-plain">
+          <RefreshIcon className={sync.isPending ? 'spin' : ''} />
+        </ChipButton>
+        <AvatarButton />
+      </header>
+      {toast && <div className="toast" role="status">{toast}</div>}
+
+      <PendingCheckins />
+      <WeeklyReportCard />
+      <TodayCard />
+      <TodayWorkout day={day} loading={week.isPending} />
+      <WeatherCard />
+      <section className="card">
+        <QuickLogRow label="Log now" aside={<SmokeFree />} />
+      </section>
+      <FuelToday />
+      <ThisWeek week={week.data} />
+      <ForecastCard />
+    </div>
+  )
+}

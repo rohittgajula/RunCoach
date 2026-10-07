@@ -10,11 +10,11 @@ const OPTIONS: Array<Option<Range>> = [
 
 /** Segmented range picker. Defaults to 3m · 6m · 1y; Insights passes its own options. */
 export function RangeSwitch<T extends string = Range>({
-  value, onChange, options,
-}: { value: T; onChange: (range: T) => void; options?: Array<Option<T>> }) {
+  value, onChange, options, compact = false, label = 'Range',
+}: { value: T; onChange: (range: T) => void; options?: Array<Option<T>>; compact?: boolean; label?: string }) {
   const list = options ?? (OPTIONS as unknown as Array<Option<T>>)
   return (
-    <div className="segmented" role="tablist" aria-label="Range">
+    <div className={`segmented ${compact ? 'segmented-compact' : ''}`} role="tablist" aria-label={label}>
       {list.map((option) => (
         <button
           key={option.value}

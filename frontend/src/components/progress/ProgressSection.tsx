@@ -12,6 +12,7 @@ import { BucketTable } from './BucketTable'
 import { ProgressChart } from './ProgressChart'
 import { ProgressFocus } from './ProgressFocus'
 import { ProgressReviewCard } from './ProgressReviewCard'
+import { FormTrendsCard, RecordsCard } from './RecordsAndForm'
 import { bestsList, daySpan, periodText, windowText } from './progressUtil'
 
 type Mode = '1' | '5' | '10' | '20' | 'dates'
@@ -133,6 +134,8 @@ export function ProgressSection() {
               <ProgressFocus focus={data.focus} />
             </section>
           )}
+          <RecordsCard />
+          <FormTrendsCard />
           <section className="card">
             <ProgressReviewCard key={progressParams(query)} review={data.review} query={query} />
           </section>

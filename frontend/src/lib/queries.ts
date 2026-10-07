@@ -11,6 +11,9 @@ import type {
   WorkoutActual, Compliance, TodayCheckin, PendingCheckin, CheckinBody, CheckinEntry,
   GarminSendResult, HabitKind, HabitLog, HabitLogBody, HabitSummary, HabitSummaryText,
   HabitToday, Progress, ProgressReview, ProgressQuery, WeatherToday, GuidesResponse,
+  HealthFitness, TrainingStatus, HealthSleep, HealthForm, HealthRecords, GearResponse, Shoe,
+  LungRecovery, WeeklyReport, WeeklyReportListItem, CompareMetric, CompareResult,
+  RemindersResponse, Reminder, Achievements, ReadinessForecast, HealthBody,
 } from './types'
 
 export const errorText = (error: unknown, fallback = 'Something went wrong.'): string =>
@@ -119,6 +122,21 @@ export function useCalendar() {
   })
 }
 
+/** Monday of the week containing `iso` (athlete-local). */
+export function weekStart(iso: string): string {
+  const day = (new Date(`${iso}T00:00:00`).getDay() + 6) % 7
+  return addDays(iso, -day)
+}
+
+/** R10 Today: this week's days (Mon–Sun) — today's workout, the week ring. */
+export const useWeek = (date: string = todayISO()) => {
+  const start = weekStart(date)
+  return useQuery({
+    queryKey: ['calendar', 'week', start],
+    queryFn: () => api<CalendarResponse>(`/calendar/?start=${start}&end=${addDays(start, 6)}`),
+  })
+}
+
 export const useWorkout = (id: number | null, initial?: Workout) =>
   useQuery({
     queryKey: ['workout', id],
@@ -157,6 +175,9 @@ export function useSync() {
       client.invalidateQueries({ queryKey: ['insights'] })
       client.invalidateQueries({ queryKey: ['today'] })
       client.invalidateQueries({ queryKey: ['checkins-pending'] })
+      for (const key of ['health-fitness', 'training-status', 'health-sleep', 'health-form', 'health-records', 'readiness-forecast', 'achievements', 'gear', 'lung-recovery', 'progress', 'habits-summary']) {
+        client.invalidateQueries({ queryKey: [key] })
+      }
     },
   })
 }
@@ -717,3 +738,159 @@ export const useGuides = () =>
     staleTime: 10 * 60_000,
     retry: false,
   })
+
+// --- R10 (docs/API_NOTES.md "R10") -------------------------------------------------------
+
+/**
+ * Optional R10 reads: not deployed yet / failing upstream → null, so the card hides
+ * itself instead of showing an error (the watch may simply not provide the metric).
+ */
+async function optional<T>(path: string): Promise<T | null> {
+  try {
+    return await api<T>(path)
+  } catch (error) {
+    if (error instanceof ApiError && [404, 501, 502, 503, 504].includes(error.status)) return null
+    throw error
+  }
+}
+
+const keep = <T,>(previous: T | undefined) => previous
+
+export const useHealthFitness = (range: string) =>
+  useQuery({ queryKey: ['health-fitness', range], queryFn: () => optional<HealthFitness>(`/health/fitness/?range=${range}`), placeholderData: keep, retry: false })
+
+export const useTrainingStatus = () =>
+  useQuery({ queryKey: ['training-status'], queryFn: () => optional<TrainingStatus>('/health/training-status/'), retry: false, staleTime: 5 * 60_000 })
+
+export const useHealthSleep = (range: string) =>
+  useQuery({ queryKey: ['health-sleep', range], queryFn: () => optional<HealthSleep>(`/health/sleep/?range=${range}`), placeholderData: keep, retry: false })
+
+export const useHealthForm = (range: string) =>
+  useQuery({ queryKey: ['health-form', range], queryFn: () => optional<HealthForm>(`/health/form/?range=${range}`), placeholderData: keep, retry: false })
+
+export const useRecords = () =>
+  useQuery({ queryKey: ['health-records'], queryFn: () => optional<HealthRecords>('/health/records/'), retry: false })
+
+export const useLungRecovery = (enabled = true) =>
+  useQuery({ queryKey: ['lung-recovery'], queryFn: () => optional<LungRecovery>('/habits/lung-recovery/'), retry: false, enabled })
+
+export const useReadinessForecast = () =>
+  useQuery({ queryKey: ['readiness-forecast'], queryFn: () => optional<ReadinessForecast>('/health/readiness-forecast/'), retry: false, staleTime: 10 * 60_000 })
+
+// Weekly report
+
+/** `week` = any date in the wanted week; omitted = last complete week. 400 (current week) → null. */
+export const useWeeklyReport = (week?: string | null, enabled = true) =>
+  useQuery({
+    queryKey: ['weekly-report', week ?? 'last'],
+    queryFn: async () => {
+      try {
+        return await optional<WeeklyReport>(`/reports/weekly/${week ? `?week=${week}` : ''}`)
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 400) return null
+        throw error
+      }
+    },
+    retry: false,
+    enabled,
+    staleTime: 10 * 60_000,
+  })
+
+export const useWeeklyReports = () =>
+  useQuery({ queryKey: ['weekly-reports'], queryFn: () => optional<WeeklyReportListItem[]>('/reports/weekly/list/'), retry: false })
+
+export function useWeeklyReportAi(week: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (refresh: boolean) =>
+      api<NonNullable<WeeklyReport['ai']>>(`/reports/weekly/ai/?week=${week}${refresh ? '&refresh=1' : ''}`, { method: 'POST' }),
+    onSuccess: (ai) => {
+      client.setQueriesData<WeeklyReport | null>({ queryKey: ['weekly-report'] }, (old) => (old && old.week_start === week ? { ...old, ai } : old))
+    },
+  })
+}
+
+// Compare any two
+
+export const useCompareMetrics = () =>
+  useQuery({ queryKey: ['compare-metrics'], queryFn: () => optional<{ metrics: CompareMetric[] }>('/health/compare/metrics/'), retry: false, staleTime: 60 * 60_000 })
+
+export const useCompare = (x: string, y: string, range: string, lag: 0 | 1) =>
+  useQuery({
+    queryKey: ['compare', x, y, range, lag],
+    queryFn: () => api<CompareResult>(`/health/compare/?x=${encodeURIComponent(x)}&y=${encodeURIComponent(y)}&range=${range}&lag=${lag}`),
+    enabled: !!x && !!y && x !== y,
+    placeholderData: keep,
+    retry: false,
+  })
+
+// Gear
+
+export const useGear = () => useQuery({ queryKey: ['gear'], queryFn: () => optional<GearResponse>('/gear/'), retry: false })
+
+export type ShoeDraft = { name?: string; brand?: string; retire_km?: number; start_km?: number; is_default?: boolean; in_use_since?: string | null; retired?: boolean }
+
+export function useSaveShoe() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: ShoeDraft & { id?: number }) =>
+      id != null
+        ? api<Shoe>(`/gear/${id}/`, { method: 'PATCH', ...json(body) })
+        : api<Shoe>('/gear/', { method: 'POST', ...json(body) }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['gear'] }),
+  })
+}
+
+export function useDeleteShoe() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api(`/gear/${id}/`, { method: 'DELETE' }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['gear'] }),
+  })
+}
+
+// Reminders (web push)
+
+export const useReminders = () =>
+  useQuery({ queryKey: ['reminders'], queryFn: () => optional<RemindersResponse>('/reminders/'), retry: false })
+
+export function usePatchReminders() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: Record<string, Partial<Pick<Reminder, 'enabled' | 'time'>>>) =>
+      api<RemindersResponse>('/reminders/', { method: 'PATCH', ...json(patch) }),
+    onMutate: (patch) => {
+      client.setQueryData<RemindersResponse | null>(['reminders'], (old) =>
+        old ? { ...old, reminders: old.reminders.map((r) => (patch[r.key] ? { ...r, ...patch[r.key] } : r)) } : old)
+    },
+    onSuccess: (data) => client.setQueryData(['reminders'], data),
+    onError: () => client.invalidateQueries({ queryKey: ['reminders'] }),
+  })
+}
+
+export const subscribePush = (sub: PushSubscriptionJSON) =>
+  api<{ id: number; created: boolean }>('/reminders/subscribe/', { method: 'POST', ...json({ endpoint: sub.endpoint, keys: sub.keys }) })
+
+export const unsubscribePush = (endpoint: string) =>
+  api<{ deleted: number }>('/reminders/unsubscribe/', { method: 'POST', ...json({ endpoint }) })
+
+export const testPush = () => api<{ sent: number; failed: number }>('/reminders/test/', { method: 'POST' })
+
+// Achievements
+
+export const useAchievements = () =>
+  useQuery({ queryKey: ['achievements'], queryFn: () => optional<Achievements>('/achievements/'), retry: false, staleTime: 60_000 })
+
+export function useMarkBadgesSeen() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api<{ updated: number }>('/achievements/seen/', { method: 'POST' }),
+    onSuccess: () => {
+      client.setQueryData<Achievements | null>(['achievements'], (old) =>
+        old ? { ...old, unseen: 0, badges: old.badges.map((b) => ({ ...b, new: false })) } : old)
+    },
+  })
+}
+
+export const useBody = (range = '6m') =>
+  useQuery({ queryKey: ['health-body', range], queryFn: () => optional<HealthBody>(`/health/body/?range=${range}`), retry: false })

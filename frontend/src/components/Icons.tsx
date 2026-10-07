@@ -211,3 +211,119 @@ export const InsightsIcon = (p: IconProps) => (
     <path d="M15.5 6h4v4" />
   </Svg>
 )
+
+// --- R10 ------------------------------------------------------------------------------
+
+export const TodayIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </Svg>
+)
+
+export const PlanIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="5" width="18" height="16" rx="3" />
+    <path d="M3 10h18M8 3v4M16 3v4" />
+  </Svg>
+)
+
+export const CoachIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 5h16v11H9l-5 4z" />
+  </Svg>
+)
+
+export const HealthIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 12h4l3-7 4 14 3-7h4" />
+  </Svg>
+)
+
+export const ForkIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 6s1 4 3 4v8" />
+  </Svg>
+)
+
+export const SmokeIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 15h13v3H3zM19 15v3M22 15v3M16 8c0-2 2-2 2-4M19 8c0-2 2-2 2-4" />
+  </Svg>
+)
+
+export const DrinkIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 8h10v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1zM15 11h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2M5 8a3 3 0 0 1 5-2 3 3 0 0 1 5 2" />
+  </Svg>
+)
+
+export const SugarIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="6" y="3" width="12" height="18" rx="2" />
+    <path d="M6 9h12M6 15h12M12 3v18" />
+  </Svg>
+)
+
+export const MoonIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+  </Svg>
+)
+
+export const SunIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+  </Svg>
+)
+
+export const ShoeIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 17.5V9.5l3-3 2.5 3.5c1.2 1.4 3 2 5 2.2l4.5.6A3 3 0 0 1 21 15.8v1.7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />
+    <path d="M3 14.5h18M9.5 11l-1.5 2M12.5 12l-1 1.8" />
+  </Svg>
+)
+
+export const BellIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
+    <path d="M10 20.5a2 2 0 0 0 4 0" />
+  </Svg>
+)
+
+export const MedalIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M8 3h8l-2.5 6h-3z" />
+    <circle cx="12" cy="15" r="6" />
+    <path d="M12 12.2l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2-1.4-1.4 2-.3z" strokeWidth={1.4} />
+  </Svg>
+)
+
+export const LockIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="5" y="10.5" width="14" height="10" rx="2.5" />
+    <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+  </Svg>
+)
+
+export const ScatterIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3.5 3.5v17h17" />
+    <path d="M7.5 15.5h.01M11 12.5h.01M9 9.5h.01M14.5 10h.01M17 6.5h.01M13 15h.01" strokeWidth={3} />
+  </Svg>
+)
+
+export const ReportIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="4.5" y="3" width="15" height="18" rx="2.5" />
+    <path d="M8.5 8h7M8.5 12h7M8.5 16h4" />
+  </Svg>
+)
+
+export const LungsIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 3v9M12 12l-3-2M12 12l3-2" />
+    <path d="M8.5 7.5C6 8 3.5 12 3.5 17c0 2 1 3 2.5 3 2.5 0 3.5-1.5 3.5-4V9.5c0-1-.4-2-1-2zM15.5 7.5c2.5.5 5 4.5 5 9.5 0 2-1 3-2.5 3-2.5 0-3.5-1.5-3.5-4V9.5c0-1 .4-2 1-2z" />
+  </Svg>
+)

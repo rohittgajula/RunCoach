@@ -2,52 +2,59 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../lib/auth'
 import { dur } from '../../lib/format'
-import { errorText, useApplyToday, useToday } from '../../lib/queries'
+import { errorText, useApplyToday, useInsights, useToday } from '../../lib/queries'
 import type { TodayCheckin } from '../../lib/types'
-import { QuickLogRow } from '../habits/QuickLogRow'
 import { CheckIcon } from '../Icons'
+import { TopicRing } from '../Kit'
 import { Skeleton } from '../States'
-import { WeatherChip } from '../weather/WeatherChip'
 import { WorkoutBar } from '../WorkoutBar'
 import { keptPlan, markKept, missingLine, unmarkKept } from './checkinUtil'
 import { SignalChips, VerdictPill } from './SignalChips'
 import { TodayExplanation } from './TodayExplanation'
 
-/** Morning check-in ("Rest or train?") — pinned above today on the Calendar list. */
+/** Readiness 0–100: Garmin's / the computed one from Insights, else the check-in's signal. */
+function useReadinessScore(data: TodayCheckin | undefined): number | null {
+  const insights = useInsights('4w')
+  const fromInsights = insights.data?.readiness?.score
+  if (fromInsights != null) return fromInsights
+  const signal = data?.reasons.find((r) => r.signal === 'readiness')
+  return typeof signal?.value === 'number' ? signal.value : null
+}
+
+/** Today: readiness ring + the morning check-in ("Rest or train?"). */
 export function TodayCard({ compact = false }: { compact?: boolean }) {
   const today = useToday()
   if (today.isPending) return compact ? null : <section className="card today-card"><Skeleton lines={3} /></section>
-  // Endpoint not there yet / no athlete data: the calendar works without this card.
+  // Endpoint not there yet / no athlete data: Today works without this card.
   if (today.isError) {
-    if (compact) return null
-    // Weather + habit logging still belong on today, check-in or not.
-    return (
-      <>
-        {!(today.error instanceof ApiError && today.error.status === 404) && (
-          <p className="muted small centered-text">{errorText(today.error, 'Morning check-in unavailable.')}</p>
-        )}
-        <section className="card today-card today-tools-only"><TodayTools /></section>
-      </>
-    )
+    if (compact || (today.error instanceof ApiError && today.error.status === 404)) return null
+    return <p className="muted small centered-text">{errorText(today.error, 'Morning check-in unavailable.')}</p>
   }
   return compact ? <CompactToday data={today.data} /> : <FullToday data={today.data} />
 }
 
 function FullToday({ data }: { data: TodayCheckin }) {
   const apply = useApplyToday()
+  const score = useReadinessScore(data)
   const [kept, setKept] = useState(() => keptPlan(data.date))
   const changes = !!data.adjusted && data.verdict !== 'go' && data.verdict !== 'no_plan'
   const decided = data.applied || kept
 
   return (
-    <section className={`card today-card ${decided ? 'is-decided' : ''}`} aria-label="Morning check-in">
-      <div className="today-head">
-        <VerdictPill verdict={data.verdict} />
-        <span className="today-eyebrow">Morning check-in</span>
+    <section className={`card today-card ${decided ? 'is-decided' : ''}`} aria-label="Readiness and morning check-in">
+      <div className="readiness-row">
+        <TopicRing value={score} topic="recovery" size={96} label="Readiness" />
+        <div className="grow">
+          <div className="today-head">
+            <span className="lbl">Readiness</span>
+            <VerdictPill verdict={data.verdict} />
+          </div>
+          <h2 className="today-headline">{data.headline}</h2>
+          <SignalChips reasons={data.reasons} max={3} />
+        </div>
       </div>
-      <h2 className="today-headline">{data.headline}</h2>
       <TodayExplanation today={data} />
-      <SignalChips reasons={data.reasons} />
+      {data.reasons.length > 3 && <SignalChips reasons={data.reasons} skip={3} />}
       {data.signals_missing.length > 0 && <p className="today-missing">{missingLine(data.signals_missing)}</p>}
       {data.verdict === 'no_plan' && (
         <p className="today-note">{data.note || 'Nothing planned — an easy 20-min walk keeps you moving.'}</p>
@@ -82,7 +89,6 @@ function FullToday({ data }: { data: TodayCheckin }) {
         </div>
       )}
       {apply.isError && <p className="bad small">{errorText(apply.error, 'Could not adjust today’s workout.')}</p>}
-      <TodayTools />
     </section>
   )
 }
@@ -90,7 +96,7 @@ function FullToday({ data }: { data: TodayCheckin }) {
 /** Insights: pill, headline, the why and up to three chips; tap → Calendar. */
 function CompactToday({ data }: { data: TodayCheckin }) {
   const navigate = useNavigate()
-  const open = () => navigate('/calendar')
+  const open = () => navigate('/today')
   return (
     <section className="card today-card today-compact is-tappable" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => e.key === 'Enter' && open()}>
       <div className="today-head">
@@ -101,15 +107,5 @@ function CompactToday({ data }: { data: TodayCheckin }) {
       <TodayExplanation today={data} />
       <SignalChips reasons={data.reasons} max={3} />
     </section>
-  )
-}
-
-/** R8: weather chip and the 🚬 🍺 🍫 quick-log row at the foot of today's card. */
-function TodayTools() {
-  return (
-    <div className="today-tools">
-      <WeatherChip />
-      <QuickLogRow />
-    </div>
   )
 }

@@ -1,21 +1,22 @@
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { CalendarIcon, ChatIcon, DietIcon, InsightsIcon, ProfileIcon } from './Icons'
+import { CoachIcon, ForkIcon, HealthIcon, PlanIcon, TodayIcon } from './Icons'
+import { BadgeToast } from './me/Badges'
 import { SettingsSheet } from './SettingsSheet'
 
 const TABS = [
-  { to: '/calendar', label: 'Calendar', Icon: CalendarIcon },
-  { to: '/chat', label: 'Chat', Icon: ChatIcon },
-  { to: '/diet', label: 'Diet', Icon: DietIcon },
-  { to: '/insights', label: 'Insights', Icon: InsightsIcon },
-  { to: '/profile', label: 'Profile', Icon: ProfileIcon },
+  { to: '/today', label: 'Today', Icon: TodayIcon },
+  { to: '/plan', label: 'Plan', Icon: PlanIcon },
+  { to: '/chat', label: 'Coach', Icon: CoachIcon },
+  { to: '/health', label: 'Health', Icon: HealthIcon },
+  { to: '/diet', label: 'Diet', Icon: ForkIcon },
 ]
 
 type ShellValue = { openSettings: () => void }
 const ShellContext = createContext<ShellValue>({ openSettings: () => {} })
 export const useShell = () => useContext(ShellContext)
 
-/** Five tabs, nothing else. Pages own their header and scroll container. */
+/** Five tabs — Today · Plan · Coach · Health · Diet. Me sits behind the avatar. */
 export function Shell({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const openSettings = useCallback(() => setSettingsOpen(true), [])
@@ -44,6 +45,7 @@ export function Shell({ children }: { children: ReactNode }) {
           ))}
         </nav>
       </div>
+      <BadgeToast />
       <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </ShellContext.Provider>
   )

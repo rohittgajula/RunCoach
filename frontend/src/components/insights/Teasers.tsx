@@ -44,7 +44,7 @@ export function ProgressTeaser() {
       : runs
         ? 'Last 5 runs: about the same as the 5 before'
         : 'Compare your recent runs with the ones before'
-  return <Teaser to="/insights/progress" title="Progress" text={text} />
+  return <Teaser to="/health/progress" title="Progress" text={text} />
 }
 
 /** Smoke-free streak or today's counts (never 🌙). */
@@ -61,5 +61,5 @@ export function HabitsTeaser() {
   }
   if (logged.length) parts.push(`Today ${logged.map((h) => `${h.emoji} ${counts?.[h.kind]}`).join(' · ')}`)
   const text = parts.length ? parts.join(' · ') : 'Health report, trends and how habits affect your runs'
-  return <Teaser to="/insights/habits" title="Habits" text={text} />
+  return <Teaser to="/health/habits" title="Habits" text={text} />
 }

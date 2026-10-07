@@ -7,13 +7,13 @@ import { tickDate, trendOf } from '../chartUtil'
 
 /** Distance colour buckets — the same split as the bucket toggle. */
 export const DIST_BUCKETS = [
-  { key: 'lt2', max: 2, label: '<2 km', color: '#9ccbff' },
-  { key: '2to5', max: 5, label: '2–5 km', color: '#5aa6ff' },
-  { key: '5to8', max: 8, label: '5–8 km', color: '#1f7ae0' },
-  { key: '8plus', max: Infinity, label: '8+ km', color: '#8d6be8' },
+  { key: 'lt2', max: 2, label: '<2 km', color: 'var(--run-soft)' },
+  { key: '2to5', max: 5, label: '2–5 km', color: 'var(--easy-2)' },
+  { key: '5to8', max: 8, label: '5–8 km', color: 'var(--run)' },
+  { key: '8plus', max: Infinity, label: '8+ km', color: 'var(--run-ink)' },
 ]
 const colorFor = (p: ProgressPoint) =>
-  (p.bucket ? DIST_BUCKETS.find((b) => b.key === p.bucket) : DIST_BUCKETS.find((b) => (p.total_km ?? p.run_km ?? 0) < b.max))?.color ?? '#1f7ae0'
+  (p.bucket ? DIST_BUCKETS.find((b) => b.key === p.bucket) : DIST_BUCKETS.find((b) => (p.total_km ?? p.run_km ?? 0) < b.max))?.color ?? 'var(--run)'
 
 type DotProps = { cx?: number; cy?: number; payload?: ProgressPoint }
 function PaceDot({ cx, cy, payload }: DotProps) {

@@ -14,7 +14,7 @@ export const guideMeta = (key: string | null | undefined) => GUIDES.find((g) => 
 
 export const isGuideKey = (key: string | null | undefined): key is GuideKey => !!guideMeta(key)
 
-export const guideHref = (key: GuideKey) => `/insights/guides?g=${key}`
+export const guideHref = (key: GuideKey) => `/health/guides?g=${key}`
 
 /**
  * Which guide a focus item (Insights or Progress) points at, if any. Keys first, then

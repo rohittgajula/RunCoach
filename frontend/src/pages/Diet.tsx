@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ChipButton } from '../components/ChipButton'
 import { useAuth } from '../lib/AuthContext'
 import { TIP, chartTip, num } from '../components/ChartTip'
 import { monthTicks, tickDate, trendCaption, trendOf } from '../components/chartUtil'
 import { DeltaChip } from '../components/ChartFrame'
 import { FuelRows } from '../components/DetailSheets'
-import { ChevronLeft, ChevronRight, DietIcon, GearIcon, MoreVIcon, PlusIcon, RunIcon } from '../components/Icons'
+import { ChevronLeft, ChevronRight, DietIcon, MoreVIcon, PlusIcon, RunIcon } from '../components/Icons'
 import { KcalRing } from '../components/KcalRing'
 import { LogMealSheet, MEAL_TYPES } from '../components/LogMealSheet'
 import { MacroBar } from '../components/MacroBar'
 import { MealSummary } from '../components/MealCard'
+import { BodyCard } from '../components/BodyCard'
 import { PageHeader } from '../components/PageHeader'
 import { RangeSwitch } from '../components/RangeSwitch'
 import { useShell } from '../components/Shell'
@@ -46,13 +46,7 @@ export default function Diet() {
 
   return (
     <div className="page">
-      <PageHeader
-        right={
-          <ChipButton label="Settings" onClick={openSettings}>
-            <GearIcon />
-          </ChipButton>
-        }
-      />
+      <PageHeader title="Diet" />
 
       <div className="date-switch">
         <button type="button" className="icon-btn" aria-label="Previous day" onClick={() => setDate(addDays(date, -1))}>
@@ -95,6 +89,7 @@ export default function Diet() {
             </button>
           )}
           <TargetsCard day={data} />
+          {date === todayISO() && <BodyCard />}
           {data.fueling.length > 0 && <FuelCard day={data} />}
           <MealsCard
             meals={data.meals}
@@ -299,13 +294,13 @@ function BalanceCard() {
                   <ReferenceLine yAxisId="kcal" y={0} stroke="var(--muted)" strokeDasharray="4 4" strokeOpacity={0.7} label={{ value: 'target', position: 'insideTopLeft', fill: 'var(--muted)', fontSize: 11 }} />
                   <Bar yAxisId="kcal" dataKey="balance" isAnimationActive={false} radius={[4, 4, 4, 4]} activeBar={{ stroke: 'var(--fg)', strokeWidth: 1.5 }}>
                     {series.map((p) => (
-                      <Cell key={p.date} fill={(p.balance ?? 0) < 0 ? '#5aa2f0' : '#f0a35a'} />
+                      <Cell key={p.date} fill={(p.balance ?? 0) < 0 ? 'var(--faint)' : 'var(--fuel)'} />
                     ))}
                   </Bar>
                   <Line
                     yAxisId="kg"
                     dataKey="weight"
-                    stroke="#1f7ae0"
+                    stroke="var(--fg)"
                     strokeWidth={2.5}
                     dot={false}
                     connectNulls
@@ -336,7 +331,7 @@ const DietTip = chartTip((items, label) => ({
     const v = num(i.value)
     if (!Number.isFinite(v)) return []
     return i.dataKey === 'weight'
-      ? [{ text: `${v.toFixed(1)} kg`, color: '#1f7ae0' }]
-      : [{ text: `${signed(v)} kcal vs target`, color: v < 0 ? '#5aa2f0' : '#f0a35a' }]
+      ? [{ text: `${v.toFixed(1)} kg`, color: 'var(--fg)' }]
+      : [{ text: `${signed(v)} kcal vs target`, color: v < 0 ? 'var(--faint)' : 'var(--fuel)' }]
   }),
 }))
