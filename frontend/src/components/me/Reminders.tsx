@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { currentSubscription, isIOS, isStandalone, pushSupported, subscribe } from '../../lib/push'
 import { errorText, subscribePush, testPush, unsubscribePush, usePatchReminders, useReminders } from '../../lib/queries'
-import type { Reminder } from '../../lib/types'
+import type { Nudge, Reminder, RemindersResponse } from '../../lib/types'
 import { BellIcon, ChevronRight } from '../Icons'
 import { CardHead, Pill } from '../Kit'
 import { Empty, ErrorState, Skeleton } from '../States'
@@ -142,7 +142,120 @@ export function RemindersSection() {
         ))}
         {patch.isError && <p className="bad small">{errorText(patch.error, 'Could not save that.')}</p>}
       </section>
+
+      {data.nudges && data.nudges.length > 0 && (
+        <NudgesCard data={data} onPatch={(p) => patch.mutate(p)} />
+      )}
     </div>
+  )
+}
+
+const asOfText = (iso: string | null | undefined) => {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const sameDay = d.toDateString() === new Date().toDateString()
+  return sameDay
+    ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : d.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+}
+
+const NUDGE_NOTE: Record<string, string> = {
+  move: 'When you’ve been still for a while. Never during or just after a run.',
+  breathing: 'When stress stays high for 30+ minutes. Opens the breathing guide.',
+  water: 'A gentle reminder, skipped when you’ve just logged water or hit your target.',
+}
+
+/** R11 §C: move / breathing / water nudges — off by default, within your hours. */
+function NudgesCard({ data, onPatch }: { data: RemindersResponse; onPatch: (p: Record<string, object>) => void }) {
+  const asOf = asOfText(data.data_as_of)
+  const q = data.quiet_hours
+  return (
+    <section className="card">
+      <CardHead
+        title="Through the day"
+        sub={`Based on your watch’s last sync${asOf ? ` (${asOf})` : ''} — Garmin data can lag, so a nudge may come a little late. Never during quiet hours.`}
+      />
+      {data.nudges!.map((n) => <NudgeRow key={n.key} n={n} onPatch={(p) => onPatch({ [n.key]: p })} />)}
+      {q && (
+        <>
+          <div className="reminder-row">
+            <span className="grow">
+              <strong>Quiet hours</strong>
+              <span className="muted small block">No nudges between these times.</span>
+            </span>
+          </div>
+          <div className="reminder-extra">
+            <label>From <TimeInput label="Quiet hours start" value={q.start} onSave={(start) => onPatch({ quiet_hours: { start } })} /></label>
+            <label>to <TimeInput label="Quiet hours end" value={q.end} onSave={(end) => onPatch({ quiet_hours: { end } })} /></label>
+          </div>
+        </>
+      )}
+    </section>
+  )
+}
+
+function TimeInput({ label, value, onSave, disabled }: { label: string; value: string; onSave: (v: string) => void; disabled?: boolean }) {
+  const [v, setV] = useState(value)
+  useEffect(() => setV(value), [value])
+  return (
+    <input
+      type="time"
+      aria-label={label}
+      value={v}
+      disabled={disabled}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => v && v !== value && onSave(v)}
+    />
+  )
+}
+
+function NumberSelect({ label, value, options, format, onSave }: { label: string; value: number; options: number[]; format: (v: number) => string; onSave: (v: number) => void }) {
+  const list = options.includes(value) ? options : [...options, value].sort((a, b) => a - b)
+  return (
+    <label>
+      {label}
+      <select value={value} onChange={(e) => onSave(Number(e.target.value))}>
+        {list.map((o) => <option key={o} value={o}>{format(o)}</option>)}
+      </select>
+    </label>
+  )
+}
+
+function NudgeRow({ n, onPatch }: { n: Nudge; onPatch: (p: Partial<Nudge>) => void }) {
+  return (
+    <>
+      <div className="reminder-row">
+        <span className="grow">
+          <strong>{n.label}</strong>
+          <span className="muted small block">{n.description || NUDGE_NOTE[n.key]}</span>
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={n.enabled}
+          aria-label={n.label}
+          className={`switch ${n.enabled ? 'is-on' : ''}`}
+          onClick={() => onPatch({ enabled: !n.enabled })}
+        />
+      </div>
+      {n.enabled && (
+        <div className="reminder-extra">
+          <label>From <TimeInput label={`${n.label} from`} value={n.start} onSave={(start) => onPatch({ start })} /></label>
+          <label>to <TimeInput label={`${n.label} until`} value={n.end} onSave={(end) => onPatch({ end })} /></label>
+          {n.key === 'move' && n.after_min != null && (
+            <NumberSelect label="After" value={n.after_min} options={[60, 75, 90]} format={(v) => `${v} min still`} onSave={(after_min) => onPatch({ after_min })} />
+          )}
+          {n.key === 'breathing' && n.threshold != null && (
+            <NumberSelect label="Stress" value={n.threshold} options={[51, 60, 70, 76, 90]} format={(v) => `${v}+`} onSave={(threshold) => onPatch({ threshold })} />
+          )}
+          {n.key === 'water' && n.every_h != null && (
+            <NumberSelect label="Every" value={n.every_h} options={[1, 2, 3, 4]} format={(v) => `${v} h`} onSave={(every_h) => onPatch({ every_h })} />
+          )}
+          <NumberSelect label="Max" value={n.max_per_day} options={[1, 2, 3, 4, 5, 6, 7, 8]} format={(v) => `${v} a day`} onSave={(max_per_day) => onPatch({ max_per_day })} />
+        </div>
+      )}
+    </>
   )
 }
 
@@ -150,13 +263,13 @@ export function RemindersTeaser() {
   const reminders = useReminders()
   const d = reminders.data
   if (!d || !d.available) return null
-  const on = d.reminders.filter((r) => r.enabled)
+  const on = [...d.reminders, ...(d.nudges ?? [])].filter((r) => r.enabled)
   return (
     <Link to="/me/reminders" className="card link-row">
       <span className="link-row-icon"><BellIcon /></span>
       <span className="grow">
         <span className="link-row-title">Reminders</span>
-        <span className="link-row-text">{on.length ? on.map((r) => r.label).join(' · ') : 'Morning check-in, habit log, best time to run, weekly report'}</span>
+        <span className="link-row-text">{on.length ? on.map((r) => r.label).join(' · ') : 'Morning check-in, habit log, move, breathing, water, weekly report'}</span>
       </span>
       <ChevronRight size={18} className="muted" />
     </Link>
