@@ -29,6 +29,7 @@ spec:
       labels:
         app.kubernetes.io/name: backend
     spec:
+      terminationGracePeriodSeconds: 40
       securityContext:
         runAsUser: 10001
         runAsGroup: 10001
@@ -62,6 +63,11 @@ spec:
             - configMapRef: {name: runcoach-config}
             - secretRef: {name: runcoach-secrets}
           # Probes send the public Host header so DJANGO_ALLOWED_HOSTS stays strict.
+          # Keep serving while Traefik drops this pod from its endpoints, so a
+          # rollout never answers 502 from a pod that is already shutting down.
+          lifecycle:
+            preStop:
+              sleep: {seconds: 10}
           readinessProbe:
             httpGet:
               path: /api/health/

@@ -28,6 +28,7 @@ spec:
       labels:
         app.kubernetes.io/name: frontend
     spec:
+      terminationGracePeriodSeconds: 40
       securityContext:
         # uid 101 is "nginx" in nginx-unprivileged.
         runAsUser: 101
@@ -41,6 +42,11 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          # Keep serving while Traefik drops this pod from its endpoints, so a
+          # rollout never answers 502 from a pod that is already shutting down.
+          lifecycle:
+            preStop:
+              sleep: {seconds: 10}
           readinessProbe:
             httpGet: {path: /healthz, port: http}
             periodSeconds: 10
