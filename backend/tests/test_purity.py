@@ -34,6 +34,7 @@ PURE_MODULES = [
     "planning.adaptation",
     "planning.checkin",
     "planning.garmin_workout",
+    "planning.reflow",
     "nutrition",
     "nutrition.targets",
     "nutrition.fueling",

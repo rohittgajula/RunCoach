@@ -363,6 +363,15 @@ def _offset_for(week_start: dt.date, weekday: int) -> int:
     return (weekday - week_start.weekday()) % 7
 
 
+def run_day_limit(run_km_per_week: float, config: PlanConfig) -> int:
+    """Most running days a week: fewer while the baseline is beginner-sized."""
+    return (
+        config.beginner_max_run_days
+        if run_km_per_week < config.beginner_run_km_per_week
+        else config.max_run_days
+    )
+
+
 def run_days(available: list[int], long_day: int, limit: int) -> list[int]:
     """Pick at most `limit` days from `available`, always including `long_day`,
     spread as evenly as possible around the week (largest smallest gap wins, then
@@ -412,11 +421,7 @@ def _lay_out_week(
         ]
 
     long_day = baseline.long_run_day if baseline.long_run_day in available else available[-1]
-    limit = (
-        config.beginner_max_run_days
-        if baseline.run_km_per_week < config.beginner_run_km_per_week
-        else config.max_run_days
-    )
+    limit = run_day_limit(baseline.run_km_per_week, config)
     chosen = run_days(available, long_day, limit)
     others = [d for d in chosen if d != long_day]
 

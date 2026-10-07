@@ -324,6 +324,45 @@ targetValueOne/Two and no zoneNumber) is Garmin's documented-by-usage format; it
 not been exercised against the live API — the first real upload (Rohit, from the UI) is
 the test.
 
+## Plan re-flow (2026-10-07)
+
+- `PATCH /api/athlete/` that changes `available_days` or `long_run_day` moves the ACTIVE
+  plan's future workouts onto the new days in the same transaction — no regeneration;
+  title, steps, volume, load, adaptations and check-in changes are kept, only `date`
+  (and `phase`, re-derived from the phase ranges) change. Every PATCH/PUT response has
+  **`plan_reflow`**: `{moved, dropped, watch_updated, watch_removed}`, or `null` when
+  nothing changed (no active plan, days unchanged, or the plan already fits).
+- Rules (`planning/reflow.py`, pure): per ISO week; only `planned`, non-RACE workouts
+  after today and before the race move. A week whose runs already sit on available
+  days, within the run-day limit, with the long run on the long-run day, is left as is
+  (so adding a day moves nothing and re-flowing is idempotent). Otherwise runs go on
+  `run_days(available, long_day, n)` (the generator's spread), LONG on the long-run day
+  (else the last free day), INTERVALS/TEMPO away from each other and the long run where
+  possible, the rest in original order. The limit is the generator's
+  (`run_day_limit`: 4 while the plan's stored `summary.baseline.run_km_per_week` < 15,
+  else 5; 5 if no baseline is stored) minus fixed runs already in that week (today's,
+  completed ones). Too many runs: the shortest EASY/RUN_WALK are **deleted** (never
+  LONG, hard or RACE; nothing is lengthened); undroppable runs that still do not fit
+  stay on a free day of their week. WALKs fill free days or are deleted.
+- `moved_from` keeps the ORIGINAL date (as for manual moves) and is cleared when a
+  workout lands back on it. A record `{moved, dropped, watch_updated, watch_removed,
+  reason: "training days changed", at, available_days, long_run_day}` is appended to
+  `plan.summary.reflows` (last 20); `summary.available_days/long_run_day` follow the
+  profile. `PlanAdjustment` is not used — its (plan, week_start) row is the weekly
+  adaptation's idempotency key.
+- `POST /plans/active/rebuild/` still exists; the Settings UI no longer offers it.
+
+**Watch follows every change** (`apps/planning/garmin_sync.py`). For workouts already
+on Garmin (`garmin_workout_id` set) — never others — after commit: re-flow move,
+`PATCH /workouts/{id}/` date change, chat `move_workout`, `POST /today/apply/` → the
+`planning.garmin_push` "send" job (unschedule + delete the old copy, upload + schedule
+on the current date; the payload hash already included the date). Re-flow drop →
+`planning.garmin_forget`. `PATCH` status `skipped`, chat `skip_workout` / `clear_day` →
+"delete" job. Queued only when `garmin_status` is `changed`. The breaker is honoured
+(no calls; the workout stays `changed` → "Update on watch"); `garmin_forget` re-queues
+itself every 30 min (max 6 tries) while the breaker is open. A broker failure is logged
+and never fails the save.
+
 ## Auth additions (docs/DEPLOY.md §2, 2026-10-04)
 
 - `GET /api/auth/registration/` → `{mode}`: `open` · `invite` · `closed`. Public.

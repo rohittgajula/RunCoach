@@ -147,7 +147,11 @@ export type Athlete = {
   diet_goal?: 'maintain' | 'lose' | 'gain'
   diet_rate_kg_per_week?: number
   threshold_pace_s?: number | null
+  // Only on a PATCH response: what changing the training days did to the active plan.
+  plan_reflow?: PlanReflow | null
 }
+
+export type PlanReflow = { moved: number; dropped: number; watch_updated: number; watch_removed: number }
 
 export type Session = { user: User; athlete: Athlete; access?: string }
 

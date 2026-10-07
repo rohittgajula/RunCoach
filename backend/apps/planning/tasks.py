@@ -41,12 +41,26 @@ def garmin_push_task(athlete_id: int, workout_ids: list[int], action: str = "sen
     return run_job(athlete_id, workout_ids, action)
 
 
+# The local rows are gone by the time a forget runs, so its refs live only in the task.
+# While the breaker is open it re-queues itself instead of dropping them.
+FORGET_RETRY_S = 30 * 60
+FORGET_MAX_ATTEMPTS = 6
+
+
 @shared_task(name="planning.garmin_forget")
-def garmin_forget_task(athlete_id: int, refs: list[list]) -> dict:
+def garmin_forget_task(athlete_id: int, refs: list[list], attempt: int = 0) -> dict:
     """Delete Garmin copies of workouts removed by a plan change (garmin queue)."""
+    from django.conf import settings
+
     from .garmin_push import forget_remote
 
-    return forget_remote(athlete_id, refs)
+    result = forget_remote(athlete_id, refs)
+    if (result.get("detail") == "rate_limited" and attempt + 1 < FORGET_MAX_ATTEMPTS
+            and not getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False)):
+        left = [ref for ref in refs if ref[0] in set(result["failed"])]
+        garmin_forget_task.apply_async((athlete_id, left, attempt + 1), countdown=FORGET_RETRY_S)
+        result["requeued"] = len(left)
+    return result
 
 
 # How long a request waits for the garmin queue. A long sync can hold the queue (it

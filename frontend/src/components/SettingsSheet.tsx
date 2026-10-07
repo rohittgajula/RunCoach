@@ -2,8 +2,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
-import { ApiError, api, type Athlete } from '../lib/auth'
-import { errorText, invalidatePlanData, useActivePlan } from '../lib/queries'
+import { ApiError, type Athlete, type PlanReflow } from '../lib/auth'
+import { errorText, invalidatePlanData } from '../lib/queries'
 import { installState, promptInstall, type InstallState } from '../lib/install'
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme'
 import { BottomSheet } from './BottomSheet'
@@ -23,6 +23,18 @@ type Draft = {
   resting_hr: string
   diet_goal: 'maintain' | 'lose' | 'gain'
   diet_rate_kg_per_week: number
+}
+
+// "Upcoming workouts moved to your new days (2 updated on your watch)."
+function reflowText(reflow: PlanReflow | null | undefined): string {
+  if (!reflow) return ''
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+  const extras: string[] = []
+  if (reflow.dropped) extras.push(`${plural(reflow.dropped, 'easy session')} dropped to fit`)
+  if (reflow.watch_updated) extras.push(`${reflow.watch_updated} updated on your watch`)
+  if (reflow.watch_removed) extras.push(`${reflow.watch_removed} removed from your watch`)
+  const head = reflow.moved ? 'Upcoming workouts moved to your new days' : 'Your plan now fits your new days'
+  return `${head}${extras.length ? ` (${extras.join(', ')})` : ''}.`
 }
 
 const toDraft = (a: Athlete): Draft => ({
@@ -119,23 +131,20 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
   const [theme, setTheme] = useState<ThemePref>(getThemePref())
-  // Plans are stored, so new training days change nothing until the plan is rebuilt.
-  // Saving them used to look like a broken Save; now we offer the rebuild explicitly.
-  const activePlan = useActivePlan()
-  const [offerRebuild, setOfferRebuild] = useState(false)
-  const [rebuild, setRebuild] = useState<{ busy: boolean; done: boolean; error: string }>({ busy: false, done: false, error: '' })
+  // Changing training days re-flows the active plan on the server (future workouts move
+  // to the new days, watch copies are replaced); this is the note about what moved.
+  const [reflowNote, setReflowNote] = useState('')
   const [install, setInstall] = useState<InstallState>({ kind: 'unsupported' })
 
   // Reset the form when the sheet OPENS — not whenever `athlete` changes. Saving
-  // updates `athlete`, and re-running this then wiped the just-shown rebuild offer.
+  // updates `athlete`, and re-running this then wiped the just-shown re-flow note.
   const wasOpen = useRef(false)
   useEffect(() => {
     if (open && !wasOpen.current && athlete) {
       setDraft(toDraft(athlete))
       setErrors({})
       setSaved(false)
-      setOfferRebuild(false)
-      setRebuild({ busy: false, done: false, error: '' })
+      setReflowNote('')
       setInstall(installState())
     }
     wasOpen.current = open
@@ -155,7 +164,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
     setBusy(true)
     setErrors({})
     try {
-      await updateAthlete({
+      const updated = await updateAthlete({
         display_name: draft.display_name,
         sex: draft.sex || null,
         date_of_birth: draft.date_of_birth || null,
@@ -168,30 +177,18 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
         diet_goal: draft.diet_goal,
         diet_rate_kg_per_week: draft.diet_rate_kg_per_week,
       })
-      const daysChanged =
-        !!athlete &&
-        (JSON.stringify(athlete.available_days ?? {}) !== JSON.stringify(draft.available_days) ||
-          athlete.long_run_day !== draft.long_run_day)
       setSaved(true)
-      if (daysChanged && activePlan.data) setOfferRebuild(true)
+      setReflowNote(reflowText(updated.plan_reflow))
+      if (updated.plan_reflow) {
+        invalidatePlanData(client)
+        client.invalidateQueries({ queryKey: ['today'] })
+      }
       // Targets, plan and profile all read these fields.
       for (const key of ['diet-day', 'profile-summary', 'calendar']) client.invalidateQueries({ queryKey: [key] })
     } catch (caught) {
       setErrors(caught instanceof ApiError ? caught.fieldErrors() : { detail: 'Could not save.' })
     } finally {
       setBusy(false)
-    }
-  }
-
-  async function rebuildPlan() {
-    setRebuild({ busy: true, done: false, error: '' })
-    try {
-      await api('/plans/active/rebuild/', { method: 'POST' })
-      invalidatePlanData(client)
-      setRebuild({ busy: false, done: true, error: '' })
-      setOfferRebuild(false)
-    } catch (caught) {
-      setRebuild({ busy: false, done: false, error: errorText(caught, 'Could not rebuild the plan.') })
     }
   }
 
@@ -207,26 +204,10 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
       title="Settings"
       full
       footer={
-        dirty || offerRebuild || rebuild.done ? (
+        dirty || reflowNote ? (
           <div className="settings-footer">
-            {offerRebuild ? (
-              <>
-                <p className="small">
-                  Saved. Your plan still uses your old days — rebuild it for the new ones? Completed
-                  runs are kept.
-                </p>
-                {rebuild.error && <p className="bad small">{rebuild.error}</p>}
-                <div className="row-end">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOfferRebuild(false)}>
-                    Not now
-                  </button>
-                  <button type="button" className="btn btn-primary btn-sm" onClick={rebuildPlan} disabled={rebuild.busy}>
-                    {rebuild.busy ? 'Rebuilding…' : 'Rebuild plan'}
-                  </button>
-                </div>
-              </>
-            ) : rebuild.done && !dirty ? (
-              <p className="small">Plan rebuilt for your new days — check the Calendar.</p>
+            {reflowNote && !dirty ? (
+              <p className="small">{reflowNote}</p>
             ) : (
               <div className="settings-dirty">
                 <span className="small">Unsaved changes</span>

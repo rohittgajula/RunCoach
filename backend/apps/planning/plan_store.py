@@ -457,15 +457,9 @@ def plan_weeks(plan: TrainingPlan) -> list[dict]:
 def _forget_on_garmin(athlete: Athlete, workouts) -> None:
     """Queue removal of the Garmin copies of workouts about to be deleted — after the
     transaction commits, so a rolled-back accept never deletes anything remote."""
-    refs = [
-        [w.garmin_workout_id, w.garmin_schedule_id]
-        for w in workouts.exclude(garmin_workout_id__isnull=True)
-    ]
-    if not refs:
-        return
-    from .tasks import garmin_forget_task
+    from .garmin_sync import forget_on_garmin
 
-    transaction.on_commit(lambda: garmin_forget_task.delay(athlete.pk, refs))
+    forget_on_garmin(athlete, workouts.exclude(garmin_workout_id__isnull=True))
 
 
 @transaction.atomic
@@ -473,8 +467,8 @@ def rebuild_active_plan(athlete: Athlete) -> TrainingPlan:
     """Regenerate the active plan for the same race from the athlete's CURRENT profile
     (training days, long-run day) and history, and make it active.
 
-    Plans are stored, so editing training days in Settings changes nothing on its own —
-    which looked like a broken Save. This is the explicit "use my new days" action.
+    New training days no longer need this — saving them re-flows the plan
+    (apps.planning.reflow) — and the UI no longer offers it; kept for the API.
     Completed workouts stay attached to the archived plan; future ones are replaced.
     """
     active = (

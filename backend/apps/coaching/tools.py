@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import datetime as dt
 
+from django.db import transaction
+
 from apps.activities.models import Activity
 from apps.athletes.models import Athlete
 from apps.journal.models import JournalEntry
+from apps.planning.garmin_sync import remove_from_garmin, resync_on_garmin
 from apps.planning.models import PlannedWorkout, TrainingPlan
 from apps.planning.plan_store import PlanError, propose_plan
 from apps.planning.presenters import workout_json
@@ -207,14 +210,18 @@ class ToolRunner:
             return {"error": "Cannot move a workout into the past."}
         workout.moved_from = workout.moved_from or workout.date
         workout.date = day
-        workout.save(update_fields=["date", "moved_from"])
+        with transaction.atomic():
+            workout.save(update_fields=["date", "moved_from"])
+            resync_on_garmin(self.athlete, [workout.pk])
         self._attach("workout", workout.pk)
         return workout_json(workout)
 
     def t_skip_workout(self, id, reason=""):
         workout = self._workout(id)
         workout.status = PlannedWorkout.Status.SKIPPED
-        workout.save(update_fields=["status"])
+        with transaction.atomic():
+            workout.save(update_fields=["status"])
+            remove_from_garmin(self.athlete, [workout.pk])
         self._attach("workout", workout.pk)
         return {"skipped": workout.pk, "reason": reason}
 
@@ -223,7 +230,10 @@ class ToolRunner:
         skipped = list(PlannedWorkout.objects.filter(
             athlete=self.athlete, date=day, status=PlannedWorkout.Status.PLANNED,
         ).values_list("pk", flat=True))
-        PlannedWorkout.objects.filter(pk__in=skipped).update(status=PlannedWorkout.Status.SKIPPED)
+        with transaction.atomic():
+            PlannedWorkout.objects.filter(pk__in=skipped).update(
+                status=PlannedWorkout.Status.SKIPPED)
+            remove_from_garmin(self.athlete, skipped)
         JournalEntry.objects.create(
             athlete=self.athlete, text=reason or "Day cleared from chat.",
             written_on=self.athlete.local_today, applies_to_date=day,

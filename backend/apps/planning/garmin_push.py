@@ -205,10 +205,24 @@ def forget_remote(athlete_id: int, refs: list[list]) -> dict:
     """
     from types import SimpleNamespace
 
-    athlete = Athlete.objects.get(pk=athlete_id)
-    client = _client(athlete)
+    from apps.ingest.garmin import GarminAuthError, GarminRateLimited
+    from apps.ingest.tasks import garmin_blocked, trip_breaker
+
+    athlete = Athlete.objects.filter(pk=athlete_id).first()
+    if athlete is None:
+        return {"removed": [], "failed": [r[0] for r in refs], "detail": "gone"}
+    if garmin_blocked():
+        logger.warning("breaker open: %d garmin workouts left on the watch", len(refs))
+        return {"removed": [], "failed": [r[0] for r in refs], "detail": "rate_limited"}
+    try:
+        client = _client(athlete)
+    except GarminRateLimited as exc:
+        trip_breaker(str(exc))
+        return {"removed": [], "failed": [r[0] for r in refs], "detail": "rate_limited"}
+    except GarminAuthError as exc:
+        return {"removed": [], "failed": [r[0] for r in refs], "detail": str(exc)}
     removed, failed = [], []
-    for garmin_id, schedule_id in refs:
+    for index, (garmin_id, schedule_id) in enumerate(refs):
         try:
             _delete_remote(client, SimpleNamespace(garmin_workout_id=garmin_id,
                                                    garmin_schedule_id=schedule_id))
@@ -216,4 +230,8 @@ def forget_remote(athlete_id: int, refs: list[list]) -> dict:
         except Exception as exc:  # noqa: BLE001 — log and keep going; one failure is not all
             logger.warning("could not remove garmin workout %s: %s", garmin_id, exc)
             failed.append(garmin_id)
+            if _rate_limited(exc):
+                trip_breaker(f"workout forget: {exc}")
+                failed += [ref[0] for ref in refs[index + 1:]]
+                break
     return {"removed": removed, "failed": failed}

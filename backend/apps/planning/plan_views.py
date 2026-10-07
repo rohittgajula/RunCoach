@@ -258,7 +258,17 @@ def workout_view(request, pk: int):
             fields.append("completed_activity")
         fields.append("status")
     if fields:
-        workout.save(update_fields=fields)
+        from django.db import transaction
+
+        from .garmin_sync import remove_from_garmin, resync_on_garmin
+
+        with transaction.atomic():
+            workout.save(update_fields=fields)
+            # The watch copy follows: skipped -> off the watch; moved -> re-sent.
+            if workout.status == PlannedWorkout.Status.SKIPPED:
+                remove_from_garmin(workout.athlete, [workout.pk])
+            elif "date" in fields:
+                resync_on_garmin(workout.athlete, [workout.pk])
     return Response(workout_json(workout))
 
 

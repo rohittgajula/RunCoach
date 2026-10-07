@@ -214,3 +214,25 @@ class AthleteDetailView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return Athlete.objects.get(user=self.request.user)
+
+    def update(self, request, *args, **kwargs):
+        """Save the profile; when the training days change, move the active plan's
+        future workouts onto them (apps.planning.reflow) in the same transaction.
+
+        The response carries `plan_reflow`: {moved, dropped, watch_updated,
+        watch_removed}, or null when nothing in the plan had to change.
+        """
+        from django.db import transaction
+
+        from apps.planning.reflow import reflow_active_plan
+
+        athlete = self.get_object()
+        before = (athlete.available_days, athlete.long_run_day)
+        with transaction.atomic():
+            response = super().update(request, *args, **kwargs)
+            athlete.refresh_from_db()
+            reflowed = None
+            if (athlete.available_days, athlete.long_run_day) != before:
+                reflowed = reflow_active_plan(athlete)
+        response.data["plan_reflow"] = reflowed
+        return response

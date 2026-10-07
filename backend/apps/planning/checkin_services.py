@@ -129,6 +129,11 @@ def apply_today(athlete: Athlete) -> None:
         workout.description = adjusted["description"]
         workout.adjusted_by = CHECKIN
         workout.save()
+        # Already on the watch? Replace it with the eased version (or remove it for a
+        # rest day — the push job removes a workout with no steps).
+        from .garmin_sync import resync_on_garmin
+
+        resync_on_garmin(athlete, [workout.pk])
 
 
 def explain_today(athlete: Athlete) -> dict:
