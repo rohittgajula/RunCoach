@@ -120,3 +120,34 @@ def no_real_garmin_queue(monkeypatch):
     for name in ("sync_slow_one", "sync_intraday_one", "backfill_intraday", "backfill_r10"):
         monkeypatch.setattr(getattr(tasks, name), "apply_async", recorder(name))
     return queued
+
+
+@pytest.fixture(autouse=True)
+def no_real_r13_queue(monkeypatch):
+    """R13: the follow-up tasks queued after a run, a check-in, a pain report, a strength
+    push or an export request never reach the real broker from a test (the dev stack's
+    workers would run them against the dev database). Queued calls are recorded; tests
+    call the services directly or run `.apply()` themselves."""
+    from apps.athletes import tasks as athlete_tasks
+    from apps.planning import tasks as planning_tasks
+
+    queued: list = []
+
+    def recorder(name):
+        def delay(*args, **kwargs):
+            queued.append((name, args, kwargs))
+
+        def apply_async(args=(), kwargs=None, **kw):
+            queued.append((name, tuple(args), dict(kwargs or {})))
+        return delay, apply_async
+
+    for module, name in ((planning_tasks, "after_run_task"),
+                         (planning_tasks, "after_checkin_task"),
+                         (planning_tasks, "after_pain_task"),
+                         (planning_tasks, "garmin_strength_push_task"),
+                         (athlete_tasks, "build_export")):
+        delay, apply_async = recorder(name)
+        task = getattr(module, name)
+        monkeypatch.setattr(task, "delay", delay)
+        monkeypatch.setattr(task, "apply_async", apply_async)
+    return queued

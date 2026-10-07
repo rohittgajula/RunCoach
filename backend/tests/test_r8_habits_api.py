@@ -27,7 +27,9 @@ def test_create_list_patch_delete(api, athlete):
                  format="json")
     assert r.status_code == 201, r.json()
     body = r.json()
-    assert set(body) == {"id", "kind", "quantity", "at", "local_date", "note", "created_at"}
+    assert set(body) == {"id", "kind", "quantity", "at", "local_date", "note", "created_at",
+                         "subtype"}   # R13 §9 (null except for caffeine)
+    assert body["subtype"] is None
     assert body["local_date"] == athlete.local_today.isoformat()
     assert api.post("/api/habits/logs/", {"kind": "smoke"}, format="json").json()["quantity"] == 1
     listed = api.get("/api/habits/logs/", {"kind": "alcohol"}).json()

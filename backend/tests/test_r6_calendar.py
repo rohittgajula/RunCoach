@@ -154,7 +154,7 @@ def test_month_shape_and_statuses(api, athlete, active):
                                    "runs_missed"}
     by_date = {d["date"]: d for d in body["days"]}
     for day in body["days"]:
-        assert set(day) == {"date", "planned", "status", "activities"}
+        assert set(day) == {"date", "planned", "status", "activities", "strength"}   # R13
         assert day["status"] in (None, "done", "missed", "partial", "planned", "rest",
                                  "extra", "today")
         if day["planned"]:

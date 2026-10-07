@@ -47,6 +47,17 @@ PURE_MODULES = [
     # R12
     "analysis.buckets",
     "analysis.wake",
+    # R13
+    "analysis.injury",
+    "analysis.run_review",
+    "analysis.cravings",
+    "analysis.caffeine",
+    "analysis.monthly_report",
+    "analysis.briefing",
+    "planning.adapt",
+    "planning.strength",
+    "planning.garmin_strength",
+    "planning.race_day",
     "planning",
     "planning.calendar",
     "planning.prediction",
