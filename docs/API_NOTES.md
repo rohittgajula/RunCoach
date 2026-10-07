@@ -1148,3 +1148,50 @@ Athlete JSON gains writable `map_hide_endpoints: bool` (default true).
 ```
 { routes: [{activity_id, date, distance_m: float, points: [[lat, lon]]}] }   # ≤ 150 points each, trimmed like above
 ```
+
+### R11 backend choices (and where the spec was silent)
+- **Garmin methods** (garminconnect 0.3.10, read from the installed package; shapes
+  confirmed by one 5-call read-only probe on the dev account): `get_heart_rates(date)`
+  (`heartRateValues` [[epoch_ms, bpm|null]], 2-min), `get_stress_data(date)` (same URL as
+  `get_all_day_stress`; `stressValuesArray` 3-min with −1/−2 codes **and**
+  `bodyBatteryValuesArray` [[epoch_ms, MEASURED|MODELED, level, version]] — so Body
+  Battery costs no extra call), `get_steps_data(date)` (96 × 15-min buckets with
+  `primaryActivityLevel` sleeping|sedentary|active|highlyActive|generic|none). Not used:
+  `get_body_battery` (sparse points + charged/drained — the daily summary already has
+  those), `get_body_battery_events` (empty on the dev account), `get_user_summary` /
+  `get_stats` (already stored daily in `DailyMetrics.raw["stats"]`: `dailyStepGoal`,
+  `sedentarySeconds`, `activeSeconds`, `highlyActiveSeconds`, `bodyBatteryChargedValue` …).
+  Local minute-of-day uses Garmin's own offset (`startTimestampLocal − startTimestampGMT`),
+  else the athlete's timezone. About 16 KB per stored day.
+- **When**: `ingest.sync_intraday_one` is queued 90 s after every successful sync (today +
+  yesterday, 6 requests, `GARMIN_SLOW_PAUSE_S` apart, breaker checked before each, first
+  429 stops and trips the breaker). Yesterday is marked `complete` when fetched after it
+  ended. Nothing is queued after a rate-limited sync.
+- **Nudge refresh** (new beat, every 15 min): only for athletes with the move or
+  breathing nudge on, a push subscription and Garmin connected, inside those nudge hours
+  and outside quiet hours, when today's row is older than `INTRADAY_REFRESH_MIN` (default
+  60; 0 = off): today's steps + stress only (2 requests), staggered 60 s apart. Garmin
+  data still lags the watch's own phone sync — hence `data_as_of` in the UI.
+- **Backfill**: `python manage.py garmin_backfill_intraday --athlete ID | --all [--days 30]
+  [--now] [--force]` — days 1..N before today, skipping days already complete, queued in
+  7-day chunks 5 minutes apart (athletes one after another); refuses while the breaker is
+  open; `--days` capped at 90.
+- **Stress stretches** count spells ≥ 51 ("stressful" = Garmin medium + high) because 76+
+  spells of 30 min are rare; the High-stress Compare metric is the 76–100 band.
+  The weekday peak is the most stressful daytime hour (07–23) averaged over ≥ 2 days,
+  widened to a neighbouring hour within 5 points.
+- **Body Battery events** are a zig-zag of the series (reversals < 3 points ignored); the
+  cause must cover ≥ a third of the leg (min 15 min).
+- **Steps total** = the larger of Garmin's daily total and the bucket sum (a nudge
+  refresh can be newer than the stored daily summary).
+- **Water** lives under `/diet/water/`; `DELETE` returns the updated day (200), not 204.
+- **Run maps**: the route is computed from stored per-second records (no Garmin call),
+  cached 24 h per activity/segmentation version/setting; `pace_s_per_km` null outside
+  2:30–20:00 /km. `GET /activities/routes/` is the optional "Your routes" overlay.
+- **Account deletion**: IntradayDay and WaterLog cascade from the Athlete; cached route
+  keys are deleted explicitly.
+- **Deploy**: migrations `athletes.0009_r11_map_hide_endpoints`, `diet.0002_r11_waterlog`,
+  `ingest.0005_r11_intraday`, `reminders.0002_r11_nudges`; restart worker, garmin worker
+  and beat (new tasks + beat entry); optional env `INTRADAY_REFRESH_MIN`; then (optional)
+  `python manage.py garmin_backfill_intraday --all` once the breaker is clear. No new
+  dependency.
