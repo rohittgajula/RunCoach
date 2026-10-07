@@ -27,6 +27,8 @@ keep_daily="${KEEP_DAILY:-14}"
 keep_weekly="${KEEP_WEEKLY:-8}"
 remote="r2:${R2_BUCKET}"
 
+# Dump names are fixed-format timestamps, so ls|sort is safe here.
+# shellcheck disable=SC2012
 latest="${BACKUP_FILE:-$(ls -1 "$dir"/runcoach-*.sql.gz 2>/dev/null | sort | tail -n 1)}"
 [ -n "$latest" ] && [ -f "$latest" ] || { echo "no dump found in $dir" >&2; exit 1; }
 name="$(basename "$latest")"

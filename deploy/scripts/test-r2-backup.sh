@@ -38,6 +38,7 @@ run_rclone() {
 }
 
 # 70 nights, 2026-08-01 .. 2026-10-09, one script run each (in one container for speed).
+# shellcheck disable=SC2016  # the script body expands inside the container
 run_rclone '
   set -eu
   i=0
@@ -60,6 +61,7 @@ echo "daily window: $oldest_daily .. $newest"
 [ "$daily" -eq 14 ] && [ "$weekly" -eq 8 ] || { cat "$WORK/listing.txt"; exit 1; }
 
 # Every weekly object is a Sunday (UTC) dump.
+# shellcheck disable=SC2013  # object names contain no spaces
 for name in $(sed -n '/^weekly:/,$p' "$WORK/listing.txt" | grep '^runcoach-'); do
   d=${name:9:8}
   [ "$(date -u -j -f %Y%m%d "$d" +%u 2>/dev/null || date -u -d "$d" +%u)" = 7 ] \
