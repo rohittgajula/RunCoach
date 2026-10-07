@@ -91,6 +91,31 @@ def no_real_weather(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_real_model_list(monkeypatch):
+    """R15: the providers' models.list() is never called from tests (it fails like an
+    outage unless a test patches `_fetch_ids`), the list cache is per test, the backoff
+    never really sleeps, and "Check models" runs inline instead of on the broker."""
+    from django.core.cache.backends.locmem import LocMemCache
+
+    from apps.coaching import client as ai_client
+    from apps.coaching import model_list, tasks as coaching_tasks
+
+    def offline(provider):
+        raise RuntimeError("network disabled in tests")
+
+    cache = LocMemCache("model-list-tests", {})
+    cache.clear()
+    monkeypatch.setattr(model_list, "_fetch_ids", offline)
+    monkeypatch.setattr(model_list, "cache", cache)
+    slept: list = []
+    monkeypatch.setattr(ai_client, "_sleep", slept.append)
+    monkeypatch.setattr(coaching_tasks.check_models, "delay",
+                        lambda provider, models: coaching_tasks.check_models.run(provider,
+                                                                                 models))
+    return slept
+
+
+@pytest.fixture(autouse=True)
 def fake_ai_models(settings):
     """Tests never depend on the machine's AI configuration.
 

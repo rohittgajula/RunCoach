@@ -17,6 +17,17 @@ class AIRequestLog(models.Model):
         INVALID = "invalid", "Failed validation"
         REFUSED = "refused", "Refused by safety gate"
         ERROR = "error", "Error"
+        # R15: the primary route failed and the call went on to the tier's fallback.
+        FALLBACK = "fallback", "Fell back"
+
+    class ErrorKind(models.TextChoices):
+        BUSY = "busy", "Busy / overloaded"
+        NO_QUOTA = "no_quota", "No quota"
+        UNAVAILABLE = "unavailable", "Model unavailable"
+        AUTH = "auth", "Key rejected"
+        BAD_REQUEST = "bad_request", "Bad request"
+        TIMEOUT = "timeout", "Timed out"
+        OTHER = "other", "Other"
 
     # Null only for an admin's "test a prompt" call (R14 §14), which belongs to nobody.
     athlete = models.ForeignKey(
@@ -39,6 +50,9 @@ class AIRequestLog(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices)
     retry_count = models.IntegerField(default=0)
     error = models.TextField(blank=True)
+    # R15: plain categorisation of `error` (blank for successful rows).
+    error_kind = models.CharField(max_length=12, choices=ErrorKind.choices, blank=True,
+                                  default="")
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
@@ -52,7 +66,7 @@ class AIRequestLog(models.Model):
         if not self.tier:
             from django.conf import settings
 
-            self.tier = ("admin" if self.operation == "admin_test"
+            self.tier = ("admin" if self.operation.startswith("admin_")
                          else settings.AI_MODEL_TIERS.get(self.operation, "fast"))
         super().save(*args, **kwargs)
 
@@ -71,10 +85,60 @@ class AIConfig(models.Model):
     tier = models.CharField(max_length=10, choices=Tier.choices, unique=True)
     provider = models.CharField(max_length=20)
     model = models.CharField(max_length=80)
+    # R15: where a call goes when the primary route keeps failing. Null = the env route
+    # for this tier (AI_PROVIDER + AI_<TIER>_MODEL).
+    fallback_provider = models.CharField(max_length=20, null=True, blank=True)
+    fallback_model = models.CharField(max_length=80, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.tier}: {self.provider}/{self.model}"
+
+
+class ModelStatus(models.Model):
+    """R15: the last "Check models" probe of one provider model."""
+
+    class Status(models.TextChoices):
+        OK = "ok", "OK"
+        BUSY = "busy", "Busy"
+        NO_QUOTA = "no_quota", "No quota"
+        UNAVAILABLE = "unavailable", "Unavailable"
+        ERROR = "error", "Error"
+
+    provider = models.CharField(max_length=20)
+    model = models.CharField(max_length=80)
+    status = models.CharField(max_length=12, choices=Status.choices)
+    error_kind = models.CharField(max_length=12, blank=True, default="")
+    detail = models.CharField(max_length=300, blank=True, default="")
+    checked_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["provider", "model"],
+                                               name="uniq_model_status")]
+
+    def __str__(self):
+        return f"{self.provider}/{self.model}: {self.status}"
+
+
+class CompareRun(models.Model):
+    """R15 §B: one admin "compare providers" run — the prompt and every target's answer.
+    Operator data: holds aggregates only (never a name, a note or the private habit)."""
+
+    created_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True,
+                                   related_name="ai_compare_runs")
+    prompt = models.TextField()
+    operation = models.CharField(max_length=40, blank=True, default="")
+    context_note = models.CharField(max_length=200, blank=True, default="")
+    # [{index, provider, model, ok, status, error_kind, error, hint, text, latency_ms,
+    #   input_tokens, output_tokens, cost_usd, rating}]
+    results = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"compare {self.pk} ({len(self.results)} targets)"
 
 
 class ModelPrice(models.Model):

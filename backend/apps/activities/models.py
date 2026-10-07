@@ -244,6 +244,9 @@ class RunReview(models.Model):
     ai_markdown = models.TextField(blank=True, default="")
     ai_generated_at = models.DateTimeField(null=True, blank=True)
     pushed_at = models.DateTimeField(null=True, blank=True)
+    # R15 §C: the run-summary push is held here while the athlete's quiet hours last
+    # (sent by the reminders beat); cleared once it has been attempted.
+    summary_due_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

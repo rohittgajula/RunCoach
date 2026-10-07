@@ -197,3 +197,11 @@ def extract_checkin_note(self, entry_id: int) -> dict:
     entry.save(update_fields=["extracted", "pain_reported", "illness_reported",
                               "extraction_failed"])
     return {"entry": entry_id, "pain": entry.pain_reported, "illness": entry.illness_reported}
+
+
+@shared_task(name="coaching.check_models")
+def check_models(provider: str, models: list[str]) -> dict:
+    """R15 §A: the admin's "Check models" — ≤ 12 tiny probes, 1.5 s apart."""
+    from .model_list import run_check
+
+    return run_check(provider, list(models or []))

@@ -77,22 +77,56 @@ def _refuse_over_budget(athlete: Athlete, operation: str, model: str) -> None:
         )
 
 
+def log_attempts(athlete: Athlete | None, operation: str, attempts: list[dict],
+                 prompt_version: str = PROMPT_VERSION, last_is_error: bool = False) -> None:
+    """R15: one row per failed route. A failed primary that was followed by a fallback
+    is `fallback`; when nothing answered, the last one is `error`."""
+    for i, a in enumerate(attempts):
+        status = (AIRequestLog.Status.ERROR if last_is_error and i == len(attempts) - 1
+                  else AIRequestLog.Status.FALLBACK)
+        AIRequestLog.objects.create(
+            athlete=athlete, operation=operation, provider=a.get("provider") or "",
+            model=a.get("model") or "", prompt_version=prompt_version, status=status,
+            error=(a.get("error") or "")[:500], error_kind=a.get("error_kind") or "other",
+            latency_ms=a.get("latency_ms") or 0, retry_count=a.get("retry_count") or 0)
+
+
+def log_failure(athlete: Athlete | None, operation: str, model: str, error: Exception,
+                prompt_version: str = PROMPT_VERSION, retry_count: int = 0,
+                provider: str | None = None, status: str | None = None,
+                latency_ms: int = 0) -> None:
+    from .client import classify
+
+    attempts = getattr(error, "attempts", None)
+    if attempts:
+        log_attempts(athlete, operation, attempts, prompt_version, last_is_error=True)
+        return
+    AIRequestLog.objects.create(
+        athlete=athlete, operation=operation, provider=provider or provider_for(operation),
+        model=model, prompt_version=prompt_version,
+        status=status or AIRequestLog.Status.ERROR, error=str(error)[:500],
+        error_kind=classify(error), retry_count=retry_count, latency_ms=latency_ms)
+
+
 def log_call(
     athlete: Athlete, operation: str, stats: dict | None, error: Exception | None,
     prompt_version: str = PROMPT_VERSION,
 ) -> None:
-    """One AIRequestLog row per model call, failures included — they are billed too."""
+    """One AIRequestLog row per model call, failures included — they are billed too.
+    R15: a failed primary route is its own `fallback` row."""
     stats = dict(stats or {})
     model = stats.pop("model", "") or ""
     provider = stats.pop("provider", "") or provider_for(operation)
+    failed = stats.pop("failed_attempts", None)
     if error is not None:
-        AIRequestLog.objects.create(
-            athlete=athlete, operation=operation, provider=provider,
-            model=model, prompt_version=prompt_version,
-            status=AIRequestLog.Status.ERROR, error=str(error)[:500],
-            retry_count=stats.get("retry_count", 0),
-        )
+        status = stats.get("status")
+        log_failure(athlete, operation, model, error, prompt_version,
+                    retry_count=stats.get("retry_count", 0), provider=provider,
+                    status=AIRequestLog.Status.FALLBACK if status == "fallback" else None,
+                    latency_ms=stats.get("latency_ms", 0))
         return
+    if failed:
+        log_attempts(athlete, operation, failed, prompt_version)
     AIRequestLog.objects.create(
         athlete=athlete, operation=operation, provider=provider,
         model=model, prompt_version=prompt_version, status=AIRequestLog.Status.OK,
@@ -131,11 +165,7 @@ def _run(
             operation=operation, system=SYSTEM, user=user_prompt, schema=schema
         )
     except Exception as exc:
-        AIRequestLog.objects.create(
-            athlete=athlete, operation=operation, provider=provider_for(operation),
-            model=model, prompt_version=PROMPT_VERSION,
-            status=AIRequestLog.Status.ERROR, error=str(exc)[:500],
-        )
+        log_failure(athlete, operation, model, exc)
         raise
 
     # Validate before storing. Structured Outputs guarantees the shape; nothing
@@ -156,6 +186,9 @@ def _run(
 
     stats = dict(stats)
     provider = stats.pop("provider", "") or provider_for(operation)
+    failed = stats.pop("failed_attempts", None)
+    if failed:
+        log_attempts(athlete, operation, failed)
     AIRequestLog.objects.create(
         athlete=athlete, operation=operation, provider=provider,
         prompt_version=PROMPT_VERSION,

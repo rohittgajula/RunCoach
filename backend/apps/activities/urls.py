@@ -2,6 +2,7 @@ from django.urls import path
 
 from .progress_views import progress, progress_review
 from .review_views import review_ai, reviews_recent
+from .share_views import share_data
 from .views import (
     ActivityDetail, ActivityList, activity_facets, activity_route, activity_routes,
     activity_series,
@@ -13,6 +14,7 @@ urlpatterns = [
     path("activities/<int:pk>/", ActivityDetail.as_view(), name="activity-detail"),
     path("activities/<int:pk>/series/", activity_series, name="activity-series"),
     path("activities/<int:pk>/route/", activity_route, name="activity-route"),
+    path("activities/<int:pk>/share-data/", share_data, name="activity-share-data"),
     path("activities/routes/", activity_routes, name="activity-routes"),
     path("progress/", progress, name="progress"),
     path("progress/review/", progress_review, name="progress-review"),

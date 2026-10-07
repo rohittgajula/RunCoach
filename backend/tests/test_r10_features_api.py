@@ -242,9 +242,11 @@ def test_reminders_hidden_without_vapid(api, settings):
     assert body["available"] is False and body["public_key"] is None
     assert [r["key"] for r in body["reminders"]] == ["morning_checkin", "habit_log",
                                                      "best_run_time", "weekly_report",
-                                                     # R13
-                                                     "morning_briefing", "run_reviewed"]
-    assert all(r["enabled"] is False for r in body["reminders"]) and "Home Screen" in body["ios_note"]
+                                                     # R13, R15 (run_summary replaced run_reviewed)
+                                                     "morning_briefing", "run_summary"]
+    # R15: run_summary is the one reminder on by default.
+    assert all(r["enabled"] is (r["key"] == "run_summary") for r in body["reminders"])
+    assert "Home Screen" in body["ios_note"]
     assert api.post("/api/reminders/subscribe/", SUB, format="json").status_code == 503
     assert api.post("/api/reminders/test/").status_code == 503
     from apps.reminders.tasks import send_due

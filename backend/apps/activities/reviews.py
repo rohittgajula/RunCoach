@@ -93,21 +93,10 @@ def build_review(activity: Activity, push: bool = False) -> RunReview | None:
 
 
 def _push(review: RunReview) -> None:
-    """R13 "Run reviewed" push (off by default). No numbers in the payload."""
-    try:
-        from apps.reminders.push import available, send_to_athlete
-        from apps.reminders.service import settings_for
+    """R15 §C: the watch-sized run summary replaces R13's "Run reviewed" push."""
+    from .run_summary import on_review_built
 
-        if not available() or not settings_for(review.athlete).run_reviewed:
-            return
-        ok, _ = send_to_athlete(review.athlete, {
-            "title": "Run reviewed", "body": "Your coach review of today's run is ready.",
-            "url": f"/activities/{review.activity_id}", "tag": "run_review"})
-        if ok:
-            review.pushed_at = timezone.now()
-            review.save(update_fields=["pushed_at"])
-    except Exception:  # noqa: BLE001 — a push failure must not fail the review
-        logger.exception("run review push failed for %s", review.pk)
+    on_review_built(review)
 
 
 def ai_state(review: RunReview | None) -> dict:

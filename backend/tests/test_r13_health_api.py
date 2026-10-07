@@ -161,7 +161,7 @@ def test_briefing_beat_and_push(athlete, monkeypatch, settings):
     body = message(athlete, "morning_briefing")
     assert body == {"title": "Good morning", "body": "Your morning briefing is ready.",
                     "url": "/", "tag": "briefing"}
-    assert due(row, "run_reviewed", athlete.local_now) is False
+    assert due(row, "run_summary", athlete.local_now) is False
 
 
 # --- §7 -----------------------------------------------------------------------------
@@ -204,6 +204,7 @@ def test_review_not_a_run_and_ai(api, athlete, fake_ai):
 
 
 def test_review_push_only_when_enabled(athlete, monkeypatch, settings):
+    """R15: the R13 "Run reviewed" push is now the run summary (on by default)."""
     from apps.activities import reviews
     from apps.reminders.service import settings_for
 
@@ -211,15 +212,22 @@ def test_review_push_only_when_enabled(athlete, monkeypatch, settings):
     monkeypatch.setattr("apps.reminders.push.available", lambda: True)
     monkeypatch.setattr("apps.reminders.push.send_to_athlete",
                         lambda a, body: (sent.append(body) or 1, 0))
+    monkeypatch.setattr("apps.activities.run_summary.quiet_until", lambda row, now: None)
+    row = settings_for(athlete)
+    row.run_summary = False
+    row.save()
     reviews.build_review(run(athlete, day(athlete, 0)), push=True)
     assert sent == []
-    row = settings_for(athlete)
-    row.run_reviewed = True
+    row.run_summary = True
     row.save()
+    from django.utils import timezone
+
     activity = run(athlete, day(athlete, 0))
+    activity.started_at = timezone.now() - dt.timedelta(hours=1)
+    activity.save(update_fields=["started_at"])
     reviews.build_review(activity, push=True)
-    assert sent == [{"title": "Run reviewed", "body": "Your coach review of today's run is ready.",
-                     "url": f"/activities/{activity.pk}", "tag": "run_review"}]
+    assert len(sent) == 1 and sent[0]["tag"] == f"run_summary-{activity.pk}"
+    assert sent[0]["url"] == f"/activities/{activity.pk}"
 
 
 # --- §10 ----------------------------------------------------------------------------
@@ -328,11 +336,13 @@ def test_new_reminders_keys(api):
     body = api.get("/api/reminders/").json()
     by_key = {r["key"]: r for r in body["reminders"]}
     assert by_key["morning_briefing"]["time"] == "06:30"
-    assert by_key["run_reviewed"]["time"] is None
-    assert api.patch("/api/reminders/", {"run_reviewed": {"time": "07:00"}},
+    assert by_key["run_summary"]["time"] is None and "run_reviewed" not in by_key
+    assert api.patch("/api/reminders/", {"run_summary": {"time": "07:00"}},
                      format="json").status_code == 400
-    r = api.patch("/api/reminders/", {"run_reviewed": {"enabled": True},
+    # R15: run_reviewed is still accepted as an alias of run_summary.
+    r = api.patch("/api/reminders/", {"run_reviewed": {"enabled": False},
                                       "morning_briefing": {"time": "05:45"}}, format="json")
     assert r.status_code == 200
     by_key = {r["key"]: r for r in r.json()["reminders"]}
-    assert by_key["run_reviewed"]["enabled"] and by_key["morning_briefing"]["time"] == "05:45"
+    assert by_key["run_summary"]["enabled"] is False
+    assert by_key["morning_briefing"]["time"] == "05:45"

@@ -2319,3 +2319,20 @@ CompareRun = { id, created_at, created_by: {id, username},
 Endpoint trimming follows the athlete's `map_hide_endpoints` (first/last 200 m never leave
 the server), exactly as `/activities/{id}/route/`.
 
+### R15 backend choices
+- **SDK retries off**: the `openai` client is built with `max_retries=0`, so the R15 policy is
+  the only retry layer (the SDK's own silent retries would blow the 12-s budget).
+- **429 split**: "limit: 0", `insufficient_quota`, per-day quotas and generic quota/billing
+  messages → `no_quota` (not retried); per-minute / "rate limit" 429s → `busy` (retried).
+- **Validation retries** (`AI_MAX_RETRIES`, schema-invalid JSON) still apply per route; a
+  route that keeps failing validation falls back like any other failure.
+- **Tool-loop fallback** switches route for the rest of that conversation turn and strips
+  Gemini thought signatures (`extra_content`) from earlier assistant tool calls first.
+- **Admin one-shot calls** (`admin_test`, `admin_compare`, `admin_check`) never retry or
+  fall back; all three are tier `admin`, no athlete, no budget.
+- **Run summary** dedupe = one `RunReview` per activity + `pushed_at`; the quiet-hours hold is
+  `RunReview.summary_due_at`, drained by the existing 5-min `reminders.send_due` beat. Runs that
+  started more than 24 h ago (backfills) never push.
+- **Deploy**: migrations `activities.0007_r15`, `coaching.0010_r15`, `reminders.0005_r15`
+  (drops `run_reviewed`, adds `run_summary` default true). New Celery task
+  `coaching.check_models` (ai queue) — restart the workers. No new env or dependencies.

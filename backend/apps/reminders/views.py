@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from .models import PushSubscription
 from .push import available, send_to_athlete
 from .nudges import NUDGES, nudges_json, quiet_json, validate_patch, validate_quiet
-from .service import EVENT_REMINDERS, IOS_NOTE, REMINDERS, reminders_json, settings_for
+from .service import ALIASES, EVENT_REMINDERS, IOS_NOTE, REMINDERS, reminders_json, settings_for
 
 UNAVAILABLE = "Reminders aren't set up on this server yet."
 
@@ -52,6 +52,7 @@ def reminders(request):
             return _bad("Send an object keyed by reminder.")
         updates: dict = {}
         for key, change in request.data.items():
+            key = ALIASES.get(key, key)
             if key in NUDGES or key == "quiet_hours":
                 try:
                     updates.update(validate_quiet(change) if key == "quiet_hours"
@@ -68,7 +69,7 @@ def reminders(request):
                     return _bad(f"{key}.enabled must be true or false.")
                 updates[key] = change["enabled"]
             if "time" in change and key in EVENT_REMINDERS:
-                return _bad(f"{key} has no time — it is sent when a run is reviewed.")
+                return _bad(f"{key} has no time — it is sent after each run.")
             if "time" in change:
                 try:
                     updates[f"{key}_time"] = dt.datetime.strptime(str(change["time"]),

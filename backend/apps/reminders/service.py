@@ -19,10 +19,14 @@ REMINDERS = {
     # R13
     "morning_briefing": ("Good morning", "Your morning briefing, at your wake time (from "
                          "the wake planner), else at this time."),
-    "run_reviewed": ("Run reviewed", "When the coach review of a run is ready."),
+    # R15 §C: replaces R13's "run_reviewed" (still accepted in PATCH as an alias).
+    "run_summary": ("Run summary", "After each run: distance, time, pace and heart rate. "
+                    "Shows on your Garmin watch when Garmin Connect mirrors this app's "
+                    "notifications."),
 }
 # Sent when something happens, not at a time of day: `time` is null and not settable.
-EVENT_REMINDERS = {"run_reviewed"}
+EVENT_REMINDERS = {"run_summary"}
+ALIASES = {"run_reviewed": "run_summary"}
 
 
 def settings_for(athlete) -> ReminderSettings:

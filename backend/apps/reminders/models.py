@@ -31,11 +31,13 @@ class ReminderSettings(OwnedByAthlete):
     best_run_time_time = models.TimeField(default=dt.time(6, 0))
     weekly_report = models.BooleanField(default=False)
     weekly_report_time = models.TimeField(default=dt.time(7, 0))
-    # R13: the "Good morning" briefing (at the wake time, else this time) and "Run
-    # reviewed" (event: when a post-run review is built; no time).
+    # R13: the "Good morning" briefing (at the wake time, else this time).
     morning_briefing = models.BooleanField(default=False)
     morning_briefing_time = models.TimeField(default=dt.time(6, 30))
-    run_reviewed = models.BooleanField(default=False)
+    # R15 §C: the watch-sized run summary (event: when a post-run review is built; no
+    # time). Replaces R13's "Run reviewed". On by default — it only reaches athletes who
+    # subscribed a device to push.
+    run_summary = models.BooleanField(default=True)
     # R11 §C: nudges driven by the intraday data (and water by the clock). All off.
     move = models.BooleanField(default=False)
     move_start = models.TimeField(default=dt.time(9, 0))

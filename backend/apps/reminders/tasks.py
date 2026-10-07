@@ -49,6 +49,13 @@ def send_due() -> dict:
                             lambda body, a=athlete: send_to_athlete(a, body)[0] > 0)
         except Exception:  # noqa: BLE001 — one athlete's nudges must not stop the rest
             logger.exception("nudges failed for %s", athlete.pk)
+    # R15 §C: run summaries held through quiet hours.
+    try:
+        from apps.activities.run_summary import send_queued
+
+        sent += send_queued()
+    except Exception:  # noqa: BLE001
+        logger.exception("queued run summaries failed")
     # R12 §B3: alarm push and bedtime reminder.
     try:
         from .alarms import run_alarms

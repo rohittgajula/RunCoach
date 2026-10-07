@@ -16,6 +16,7 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
 from apps.coaching import client as ai
+from apps.coaching import model_list as catalog_list
 from apps.coaching.models import AIConfig, AIRequestLog, ModelPrice
 
 RANGES = {"7d": 7, "4w": 28, "3m": 91, "6m": 182, "1y": 365}
@@ -37,19 +38,76 @@ def ensure_prices() -> None:
         ignore_conflicts=True)
 
 
-def _models(provider: str) -> list[str]:
-    return list(ModelPrice.objects.filter(provider=provider).values_list("model", flat=True))
+def _refresh(request) -> bool:
+    return request.query_params.get("refresh") == "1"
 
 
 @api_view(["GET"])
 @permission_classes([IsAdminUser])
 def providers(request):
     ensure_prices()
-    return Response([{"key": key, "label": info["label"],
-                      "configured": ai.provider_configured(key),
-                      "base_url": info["base_url"], "features": info["features"],
-                      "models": _models(key)}
-                     for key, info in ai.PROVIDERS.items()])
+    out = []
+    for key, info in ai.PROVIDERS.items():
+        ids, source, fetched = catalog_list.model_list(key, _refresh(request))
+        rows = catalog_list.statuses(key)
+        priced = set(catalog_list.priced(key))
+        out.append({"key": key, "label": info["label"],
+                    "configured": ai.provider_configured(key),
+                    "base_url": info["base_url"], "features": info["features"],
+                    "models": ids, "models_source": source, "models_fetched_at": fetched,
+                    "model_info": [catalog_list.info(key, m, rows, priced) for m in ids]})
+    return Response(out)
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def models(request):
+    """R15: model cards for one provider."""
+    ensure_prices()
+    provider = request.query_params.get("provider")
+    if provider not in ai.PROVIDERS:
+        return Response({"detail": f"provider must be one of {', '.join(ai.PROVIDERS)}."},
+                        status=400)
+    return Response(catalog_list.cards(provider, _refresh(request)))
+
+
+def _queue_check(provider: str, queued: list[str]) -> None:
+    from apps.coaching.tasks import check_models
+
+    try:
+        check_models.delay(provider, queued)
+    except Exception:  # noqa: BLE001 — no broker: run it here (bounded: ≤ 12 probes)
+        catalog_list.run_check(provider, queued)
+
+
+@api_view(["POST"])
+@permission_classes([IsAdminUser])
+def models_check(request):
+    """R15: probe up to 12 models in the background; results land in ModelStatus."""
+    data = request.data if isinstance(request.data, dict) else {}
+    provider = data.get("provider")
+    if provider not in ai.PROVIDERS:
+        return Response({"detail": f"provider must be one of {', '.join(ai.PROVIDERS)}."},
+                        status=400)
+    if not ai.provider_configured(provider):
+        return Response({"detail": f"{ai.PROVIDERS[provider]['label']} has no API key "
+                                   "configured."}, status=400)
+    wanted = data.get("models")
+    if wanted is not None and (not isinstance(wanted, list) or not 1 <= len(wanted) <= 12
+                               or not all(isinstance(m, str) and 0 < len(m) <= 80
+                                          for m in wanted)):
+        return Response({"detail": "models must be a list of 1–12 model ids."}, status=400)
+    queued, skipped = catalog_list.plan_check(provider, wanted, bool(data.get("force")))
+    if queued:
+        _queue_check(provider, queued)
+    return Response({"provider": provider, "queued": queued, "skipped": skipped}, status=202)
+
+
+def _status_warning(provider: str, model: str, status: str) -> str | None:
+    if status in ("ok", "unknown"):
+        return None
+    sentence = ai.hint_for(status if status != "error" else "other", provider, model)
+    return f"Last check of {model}: {status.replace('_', ' ')}. {sentence}"
 
 
 def _config_body() -> dict:
@@ -59,12 +117,35 @@ def _config_body() -> dict:
         env_provider, env_model = ai.env_route(tier)
         row = rows.get(tier)
         provider, model = (row.provider, row.model) if row else (env_provider, env_model)
+        fallback = ai.fallback_route(tier)
+        effective = None
+        if fallback and fallback[0] != (provider, model) \
+                and ai.provider_configured(fallback[0][0]):
+            effective = {"provider": fallback[0][0], "model": fallback[0][1],
+                         "source": fallback[1]}
+        status = catalog_list.model_status(provider, model) if model else "unknown"
         tiers.append({"tier": tier, "provider": provider, "model": model,
                       "source": "db" if row else "env",
                       "env_provider": env_provider, "env_model": env_model,
                       "available": bool(model) and ai.provider_configured(provider),
-                      "updated_at": row.updated_at if row else None})
+                      "updated_at": row.updated_at if row else None,
+                      "fallback_provider": row.fallback_provider if row else None,
+                      "fallback_model": row.fallback_model if row else None,
+                      "fallback": effective, "model_status": status,
+                      "warning": _status_warning(provider, model, status)})
     return {"tiers": tiers, "operations": dict(sorted(settings.AI_MODEL_TIERS.items()))}
+
+
+def _route_problem(provider, model) -> str | None:
+    if provider not in ai.PROVIDERS:
+        return f"Unknown provider '{provider}'."
+    if not ai.provider_configured(provider):
+        return f"{ai.PROVIDERS[provider]['label']} has no API key configured."
+    if not isinstance(model, str) or not model.strip() or len(model) > 80 \
+            or not catalog_list.acceptable(provider, model):
+        return (f"'{model}' is not in the {provider} price table or its live model list — "
+                "add it there first.")
+    return None
 
 
 @api_view(["GET", "PUT", "PATCH"])
@@ -84,23 +165,55 @@ def config(request):
             changes.append((item["tier"], None, None))
             continue
         provider, model = item.get("provider"), item.get("model")
-        if provider not in ai.PROVIDERS:
-            return Response({"detail": f"Unknown provider '{provider}'."}, status=400)
-        if not ai.provider_configured(provider):
-            return Response({"detail": f"{ai.PROVIDERS[provider]['label']} has no API key "
-                                       "configured."}, status=400)
-        if not isinstance(model, str) or not ModelPrice.objects.filter(
-                provider=provider, model=model).exists():
-            return Response({"detail": f"'{model}' is not in the {provider} price table — add "
-                                       "it there first."}, status=400)
-        changes.append((item["tier"], provider, model))
-    for tier, provider, model in changes:
+        problem = _route_problem(provider, model)
+        if problem:
+            return Response({"detail": problem}, status=400)
+        fallback = None                      # untouched
+        if "fallback_provider" in item or "fallback_model" in item:
+            fb_provider, fb_model = item.get("fallback_provider"), item.get("fallback_model")
+            if fb_provider is None and fb_model is None:
+                fallback = (None, None)
+            else:
+                problem = _route_problem(fb_provider, fb_model)
+                if problem:
+                    return Response({"detail": f"Fallback: {problem}"}, status=400)
+                fallback = (fb_provider, fb_model)
+        changes.append((item["tier"], provider, model, fallback))
+    for tier, provider, model, fallback in changes:
         if provider is None:
             AIConfig.objects.filter(tier=tier).delete()
-        else:
-            AIConfig.objects.update_or_create(tier=tier, defaults={"provider": provider,
-                                                                   "model": model})
+            continue
+        defaults = {"provider": provider, "model": model}
+        if fallback is not None:
+            defaults.update(fallback_provider=fallback[0], fallback_model=fallback[1])
+        AIConfig.objects.update_or_create(tier=tier, defaults=defaults)
     return Response(_config_body())
+
+
+@api_view(["POST"])
+@permission_classes([IsAdminUser])
+def config_switch(request):
+    """R15: "Use <provider> for all tiers" — each tier to that provider's recommended
+    model; stored fallbacks are kept."""
+    ensure_prices()
+    provider = request.data.get("provider") if isinstance(request.data, dict) else None
+    if provider not in ai.PROVIDERS:
+        return Response({"detail": f"provider must be one of {', '.join(ai.PROVIDERS)}."},
+                        status=400)
+    if not ai.provider_configured(provider):
+        return Response({"detail": f"{ai.PROVIDERS[provider]['label']} has no API key "
+                                   "configured."}, status=400)
+    changed, unchanged = [], []
+    for tier in ai.TIERS:
+        model = catalog_list.recommended(provider, tier)
+        if not model:
+            unchanged.append({"tier": tier, "reason": "No usable model for this tier (all "
+                                                      "candidates failed their last check)."})
+            continue
+        AIConfig.objects.update_or_create(tier=tier, defaults={"provider": provider,
+                                                               "model": model})
+        changed.append({"tier": tier, "model": model})
+    return Response({**_config_body(), "changed": changed, "unchanged": unchanged})
 
 
 @api_view(["POST"])
@@ -121,7 +234,7 @@ def test_prompt(request):
         return Response({"detail": f"{ai.PROVIDERS[provider]['label']} has no API key "
                                    "configured."}, status=400)
     body = {"ok": False, "text": "", "json": None, "latency_ms": 0, "input_tokens": 0,
-            "output_tokens": 0, "cost_usd": 0.0, "error": None}
+            "output_tokens": 0, "cost_usd": 0.0, "error": None, "error_kind": None}
     started = time.monotonic()
     try:
         client = ai.get_client(provider)
@@ -147,13 +260,14 @@ def test_prompt(request):
     except Exception as exc:  # noqa: BLE001 — shown to the admin, never raised
         body["latency_ms"] = int((time.monotonic() - started) * 1000)
         body["error"] = _safe_error(exc)
+        body["error_kind"] = ai.classify(exc)
     AIRequestLog.objects.create(
         athlete=None, operation="admin_test", tier="admin", provider=provider, model=model,
         prompt_version="admin", input_tokens=body["input_tokens"],
         output_tokens=body["output_tokens"], latency_ms=body["latency_ms"],
         estimated_cost_usd=body["cost_usd"],
         status=AIRequestLog.Status.OK if body["ok"] else AIRequestLog.Status.ERROR,
-        error=(body["error"] or "")[:500])
+        error=(body["error"] or "")[:500], error_kind=body.get("error_kind") or "")
     return Response(body)
 
 
@@ -282,6 +396,7 @@ def stats(request):
         all=Count("id"), ok=Count("id", filter=Q(status__in=OK)),
         errors=Count("id", filter=Q(status="error")),
         refused=Count("id", filter=Q(status="refused")),
+        fallbacks=Count("id", filter=Q(status="fallback")),
         input_tokens=Sum("input_tokens"), output_tokens=Sum("output_tokens"),
         cost_usd=Sum("estimated_cost_usd"),
         avg_latency_ms=Avg("latency_ms", filter=Q(status__in=OK)))
@@ -289,6 +404,7 @@ def stats(request):
     body_totals = _clean({
         "calls": totals["ok"], "ok": totals["ok"], "errors": totals["errors"],
         "refused": int(totals["refused"] or 0), "cached": 0,
+        "fallbacks": int(totals["fallbacks"] or 0),
         "error_rate": round((totals["errors"] or 0) / attempted, 3) if attempted else 0.0,
         "input_tokens": totals["input_tokens"], "output_tokens": totals["output_tokens"],
         "cost_usd": totals["cost_usd"], "avg_latency_ms": totals["avg_latency_ms"]})
@@ -332,7 +448,10 @@ def stats(request):
     for r in rows:
         by_user.append({**r, "name": names.get(r["athlete_id"], "Admin tests")
                         if r["athlete_id"] else "Admin tests"})
-    errors = base.filter(status__in=["error", "invalid"]).order_by("-created_at")[:20]
+    failed = base.filter(status__in=["error", "invalid", "fallback"])
+    errors = failed.order_by("-created_at")[:20]
+    by_kind = [{"error_kind": r["error_kind"] or "other", "count": r["n"]}
+               for r in failed.values("error_kind").annotate(n=Count("id")).order_by("-n")]
     return Response({
         "range": key, "start": start, "end": today, "totals": body_totals,
         "month": _clean({"start": month0, **month}),
@@ -342,7 +461,11 @@ def stats(request):
             "latency_ms", filter=Q(status__in=OK))}),
         "recent_errors": [{"at": e.created_at, "operation": e.operation,
                            "provider": e.provider, "model": e.model, "status": e.status,
-                           "error": _safe_text(e.error)[:200]} for e in errors],
+                           "error": _safe_text(e.error)[:200],
+                           "error_kind": e.error_kind or None,
+                           "hint": ai.hint_for(e.error_kind or "other", e.provider, e.model)}
+                          for e in errors],
+        "by_error_kind": by_kind,
     })
 
 
