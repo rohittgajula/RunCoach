@@ -1,67 +1,62 @@
-import { useState } from 'react'
+import { useLayoutEffect } from 'react'
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { ChipButton } from '../components/ChipButton'
-import { TodayCard } from '../components/checkin/TodayCard'
+import { GuidesSection } from '../components/guides/GuidesSection'
+import { HabitsPage } from '../components/habits/HabitsSection'
 import { GearIcon } from '../components/Icons'
-import { FitnessSheet } from '../components/profile/FitnessSheet'
+import { OverviewSection } from '../components/insights/OverviewSection'
 import { PageHeader } from '../components/PageHeader'
-import { RangeSwitch } from '../components/RangeSwitch'
+import { ProgressSection } from '../components/progress/ProgressSection'
 import { useShell } from '../components/Shell'
-import { ErrorState, Skeleton } from '../components/States'
-import { FocusCard, LoadCard, SummaryCard } from '../components/insights/AdviceCards'
-import { INSIGHT_RANGES, InsightChartSheet } from '../components/insights/InsightChartSheet'
-import { BreathingCard, FitnessCard, RecoveryCard } from '../components/insights/RecoveryCards'
-import { ReadinessCard, RunningCard } from '../components/insights/RunningCards'
-import { HabitsSection } from '../components/habits/HabitsSection'
-import { ProgressCard } from '../components/progress/ProgressCard'
-import type { ChartKey } from '../components/insights/charts'
-import { errorText, useInsights } from '../lib/queries'
-import type { InsightRange } from '../lib/types'
 
+const SECTIONS = [
+  { to: '/insights', label: 'Overview', end: true },
+  { to: '/insights/progress', label: 'Progress', end: false },
+  { to: '/insights/habits', label: 'Habits', end: false },
+  { to: '/insights/guides', label: 'Guides', end: false },
+]
+
+/** Insights: header + sticky Overview · Progress · Habits · Guides, each its own route. */
 export default function Insights() {
   const { openSettings } = useShell()
-  const [range, setRange] = useState<InsightRange>('4w')
-  const [chart, setChart] = useState<ChartKey | null>(null)
-  const [fitnessOpen, setFitnessOpen] = useState(false)
-  const insights = useInsights(range)
-  const data = insights.data
+  const { pathname } = useLocation()
+
+  // Each section starts at its top (the Shell only does this per tab).
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
 
   return (
     <div className="page insights-page">
-      <PageHeader
-        title="Insights"
-        right={
-          <ChipButton label="Settings" onClick={openSettings}>
-            <GearIcon />
-          </ChipButton>
-        }
-      />
-      <TodayCard compact />
-      <RangeSwitch value={range} onChange={setRange} options={INSIGHT_RANGES} />
-
-      {insights.isPending && [0, 1, 2].map((i) => (
-        <section key={i} className="card"><Skeleton lines={4} /></section>
-      ))}
-      {insights.isError && !data && (
-        <ErrorState message={errorText(insights.error, 'Insights did not load.')} onRetry={() => insights.refetch()} />
-      )}
-
-      {data && (
-        <div className={`stack ${insights.isPlaceholderData ? 'is-stale' : ''}`}>
-          <ReadinessCard data={data} />
-          <RunningCard data={data} onChart={setChart} />
-          <ProgressCard />
-          <RecoveryCard data={data} onChart={setChart} />
-          <BreathingCard data={data} onChart={setChart} />
-          <FitnessCard data={data} onChart={setChart} />
-          <LoadCard load={data.load} onOpen={() => setFitnessOpen(true)} />
-          <FocusCard focus={data.focus ?? []} hasRuns={(data.running?.runs ?? 0) > 0} />
-          <HabitsSection range={range} />
-          <SummaryCard summary={data.summary} range={range} />
-        </div>
-      )}
-
-      <InsightChartSheet chart={chart} initialRange={range} onClose={() => setChart(null)} />
-      <FitnessSheet view={fitnessOpen ? 'status' : null} onClose={() => setFitnessOpen(false)} />
+      <div className="insights-top">
+        <PageHeader
+          title="Insights"
+          right={
+            <ChipButton label="Settings" onClick={openSettings}>
+              <GearIcon />
+            </ChipButton>
+          }
+        />
+        <nav className="segmented segmented-full subnav" aria-label="Insights sections">
+          {SECTIONS.map((s) => (
+            <NavLink
+              key={s.to}
+              to={s.to}
+              end={s.end}
+              className={({ isActive }) => `segmented-option ${isActive ? 'is-active' : ''}`}
+            >
+              {s.label}
+            </NavLink>
+          ))}
+        </nav>
+      </div>
+      <Routes>
+        <Route index element={<OverviewSection />} />
+        <Route path="progress" element={<ProgressSection />} />
+        <Route path="habits" element={<HabitsPage />} />
+        <Route path="guides" element={<GuidesSection />} />
+        <Route path="*" element={<Navigate to="/insights" replace />} />
+      </Routes>
     </div>
   )
 }

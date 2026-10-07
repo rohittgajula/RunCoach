@@ -2,6 +2,7 @@ import { dateTime } from '../../lib/format'
 import { errorText, useInsightsSummary } from '../../lib/queries'
 import type { InsightRange, Insights } from '../../lib/types'
 import { SparkIcon } from '../Icons'
+import { GuideLink } from '../guides/GuideLink'
 import { Markdown } from '../Markdown'
 import { InsightCard } from './Tile'
 
@@ -17,6 +18,7 @@ export function FocusCard({ focus, hasRuns }: { focus: Insights['focus']; hasRun
                 <p className="focus-title">{item.title}</p>
                 <p className="muted small">{item.why}</p>
                 <p className="focus-how">{item.how}</p>
+                <GuideLink item={item} />
               </div>
             </li>
           ))}

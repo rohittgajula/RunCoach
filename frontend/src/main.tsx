@@ -9,6 +9,7 @@ import { applyTheme, watchSystemTheme } from './lib/theme'
 import './styles/base.css'
 import './styles/components.css'
 import './styles/pages.css'
+import './styles/insights.css'
 
 // Before the first paint, so a dark-theme device never flashes white.
 applyTheme()

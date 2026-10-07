@@ -6,6 +6,8 @@ import { BottomSheet } from '../BottomSheet'
 import { ChipButton, ChipGroup } from '../ChipButton'
 import { Field } from '../Field'
 import { HelpIcon, PlusIcon, TrashIcon } from '../Icons'
+import { ChartFrame, DeltaChip } from '../ChartFrame'
+import { trendCaption, trendOf, type Better } from '../chartUtil'
 import { MetricChart } from '../MetricChart'
 import { RangeSwitch } from '../RangeSwitch'
 import { Empty, ErrorState, Skeleton } from '../States'
@@ -18,6 +20,9 @@ type Config = {
   placeholder: string
   reversed?: boolean
   help: string
+  /** Which direction is good for the delta chip (null: neither). */
+  better: Better
+  delta: (v: number) => string
 }
 
 export const METRICS: Record<MetricKind, Config> = {
@@ -27,6 +32,7 @@ export const METRICS: Record<MetricKind, Config> = {
     format: (v) => v.toFixed(1),
     parse: (t) => (Number.isFinite(Number(t)) && Number(t) > 20 ? Number(t) : null),
     placeholder: '72.5',
+    better: null, delta: (v) => `${v.toFixed(1)} kg`,
     help: 'Used for calorie and carb targets (g/kg) and to compare your predicted vs actual weight trend. Weigh in at the same time of day for a clean trend.',
   },
   threshold_pace: {
@@ -35,6 +41,7 @@ export const METRICS: Record<MetricKind, Config> = {
     format: (v) => pace(v),
     parse: parsePace,
     placeholder: '5:30',
+    better: 'lower', delta: (v) => `${Math.round(v)} s/km`,
     reversed: true,
     help: 'The fastest pace you could hold for about an hour. Every pace target in your plan is derived from it. Estimated from your runs, or set it yourself after a test.',
   },
@@ -44,6 +51,7 @@ export const METRICS: Record<MetricKind, Config> = {
     format: (v) => String(Math.round(v)),
     parse: (t) => (Number(t) >= 25 && Number(t) <= 120 ? Number(t) : null),
     placeholder: '52',
+    better: 'lower', delta: (v) => `${Math.round(v)} bpm`,
     help: 'Your heart rate fully at rest, ideally first thing in the morning. Together with max HR it sets your heart-rate zones.',
   },
   max_hr: {
@@ -52,6 +60,7 @@ export const METRICS: Record<MetricKind, Config> = {
     format: (v) => String(Math.round(v)),
     parse: (t) => (Number(t) >= 120 && Number(t) <= 230 ? Number(t) : null),
     placeholder: '188',
+    better: null, delta: (v) => `${Math.round(v)} bpm`,
     help: 'The highest heart rate you can reach. A measured value from a hard effort beats any age formula.',
   },
 }
@@ -152,7 +161,13 @@ function MetricBody({ kind }: { kind: MetricKind }) {
       {entries.data && (
         <>
           {chart.length > 0 ? (
-            <MetricChart data={chart} format={config.format} reversed={config.reversed} axis="left" step />
+            <ChartFrame
+              title={config.title}
+              chip={<DeltaChip trend={trendOf(chart.map((p) => p.value), config.better)} format={config.delta} label="vs the earlier half of this range" />}
+              caption={trendCaption(trendOf(chart.map((p) => p.value), config.better), config.title, config.format, config.unit === 'min/km' ? '/km' : config.unit, 'range', config.delta)}
+            >
+              <MetricChart data={chart} format={config.format} reversed={config.reversed} axis="left" step />
+            </ChartFrame>
           ) : (
             <Empty title="No entries in this range">Tap + to add one.</Empty>
           )}

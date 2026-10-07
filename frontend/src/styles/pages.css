@@ -350,21 +350,21 @@ button.metric-cell { cursor: pointer; }
 .advisory.is-bad { border-left-color: var(--bad); }
 .weather-block { display: flex; flex-direction: column; gap: 10px; }
 
-.quicklog { display: flex; align-items: center; gap: 10px; }
-.quicklog-label { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; flex: 1; min-width: 0; white-space: nowrap; }
-.quicklog-buttons { display: flex; align-items: center; gap: 6px; }
+.quicklog { display: flex; flex-direction: column; gap: 8px; }
+.quicklog-label { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.quicklog-buttons { display: grid; align-items: center; gap: 8px; }
 .quicklog-btn {
-  display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 10px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; height: 44px; padding: 0 8px;
   border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--fg);
   cursor: pointer; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums;
   user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
 }
 .quicklog-btn:active { transform: scale(0.94); }
 .quicklog-btn.has-count { background: var(--card-2); border-color: transparent; }
-.quicklog-emoji { font-size: 18px; line-height: 1; }
-.quicklog-count { min-width: 1ch; color: var(--muted); }
+.quicklog-emoji { font-size: 18px; line-height: 1; flex: none; }
+.quicklog-count { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 3ch; text-align: left; }
 .quicklog-btn.has-count .quicklog-count { color: var(--fg); }
-.quicklog-more { width: 36px; height: 36px; }
+.quicklog-more { width: 40px; height: 40px; justify-self: end; }
 .toast-action { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
 .toast-btn { background: none; border: none; color: inherit; font-weight: 700; font-size: 14px; cursor: pointer; padding: 0; text-decoration: underline; }
 .habit-qty { display: flex; align-items: center; justify-content: center; gap: 24px; }
@@ -372,7 +372,6 @@ button.metric-cell { cursor: pointer; }
 .habit-qty-value { display: flex; flex-direction: column; align-items: center; min-width: 90px; }
 
 /* ---------- R8: habits (Insights) ---------- */
-.habits .quicklog { margin-bottom: 12px; }
 .habit-sub { font-size: 17px; font-weight: 700; }
 .streak { display: flex; align-items: center; gap: 14px; }
 .streak-num { font-size: 52px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; color: var(--ok); font-variant-numeric: tabular-nums; }

@@ -1,4 +1,5 @@
 import { CartesianGrid, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { TIP, chartTip, num } from './ChartTip'
 import { monthTicks, tickDate } from './chartUtil'
 
 /**
@@ -9,7 +10,7 @@ import { monthTicks, tickDate } from './chartUtil'
 export const BANDS = [
   { key: 'detraining', label: 'Detraining', from: 20, to: Infinity, fill: 'rgba(245, 166, 35, 0.16)', text: '#d98a0b' },
   { key: 'fresh', label: 'Fresh', from: 5, to: 20, fill: 'rgba(31, 122, 224, 0.13)', text: '#1f7ae0' },
-  { key: 'maintaining', label: 'Maintaining', from: -10, to: 5, fill: 'rgba(140, 140, 160, 0.10)', text: 'var(--text)' },
+  { key: 'maintaining', label: 'Maintaining', from: -10, to: 5, fill: 'rgba(140, 140, 160, 0.10)', text: 'var(--muted)' },
   { key: 'gaining', label: 'Gaining Fitness', from: -30, to: -10, fill: 'rgba(52, 168, 83, 0.15)', text: '#2f9e55' },
   { key: 'overtraining', label: 'Overtraining Risk', from: -Infinity, to: -30, fill: 'rgba(229, 72, 77, 0.14)', text: '#e5484d' },
 ] as const
@@ -19,6 +20,12 @@ export function StatusBandChart({ data, height = 380 }: { data: Array<{ date: st
   const top = Math.max(35, Math.ceil(Math.max(...values, 0) + 5))
   const bottom = Math.min(-45, Math.floor(Math.min(...values, 0) - 5))
   const ticks = monthTicks(data.map((d) => d.date))
+  const Tip = chartTip((items, label) => {
+    const v = num(items[0]?.value)
+    if (!Number.isFinite(v)) return null
+    const band = BANDS.find((b) => v >= b.from && v < b.to)
+    return { title: tickDate(label), lines: [{ text: `Form ${v > 0 ? '+' : ''}${v.toFixed(1)}${band ? ` · ${band.label}` : ''}`, color: '#2f9e55' }] }
+  })
   return (
     <div className="chart chart-bands" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
@@ -32,7 +39,7 @@ export function StatusBandChart({ data, height = 380 }: { data: Array<{ date: st
               fillOpacity={1}
               stroke="none"
               ifOverflow="hidden"
-              label={{ value: band.label, position: 'insideLeft', fill: band.text, fontSize: 13, fontWeight: 600 }}
+              label={{ value: band.label, position: 'insideLeft', fill: band.text, fontSize: 12, fontWeight: 600 }}
             />
           ))}
           <CartesianGrid vertical={false} horizontal={false} />
@@ -45,17 +52,16 @@ export function StatusBandChart({ data, height = 380 }: { data: Array<{ date: st
             axisLine={false}
             tickLine={false}
             width={36}
+            mirror
           />
-          <Tooltip
-            formatter={(value) => [typeof value === 'number' ? value.toFixed(1) : String(value), 'Form']}
-            labelFormatter={(label) => tickDate(String(label))}
-          />
+          <Tooltip content={Tip} cursor={{ stroke: 'var(--faint)', strokeDasharray: '3 3' }} {...TIP} position={{ y: 4 }} />
           <Line
             dataKey="form"
             type="monotone"
             stroke="#2f9e55"
             strokeWidth={2.5}
             dot={false}
+            activeDot={{ r: 5, stroke: 'var(--card)', strokeWidth: 2 }}
             connectNulls
             isAnimationActive={false}
           />

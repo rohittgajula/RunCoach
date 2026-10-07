@@ -50,7 +50,7 @@ export default function App() {
                 <Route path="/chat" element={<ChatIndex />} />
                 <Route path="/chat/:threadId" element={<Chat />} />
                 <Route path="/diet" element={<Diet />} />
-                <Route path="/insights" element={<Insights />} />
+                <Route path="/insights/*" element={<Insights />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="*" element={<Navigate to="/calendar" replace />} />
               </Routes>

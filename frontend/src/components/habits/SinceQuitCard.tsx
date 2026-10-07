@@ -12,12 +12,12 @@ const whenText = (at: string | null) => {
 }
 
 /** Days, cigarettes avoided, money saved, and the public-health timeline ("typically"). */
-export function SinceQuit({ smoke }: { smoke: HabitSummary['smoke'] }) {
+export function SinceQuit({ smoke, title = true }: { smoke: HabitSummary['smoke']; title?: boolean }) {
   const since = smoke.since_quit
   if (!since) return null
   return (
     <div className="since-quit">
-      <h3 className="habit-sub">Since you quit</h3>
+      {title && <h3 className="habit-sub">Since you quit</h3>}
       <dl className="kv kv-row kv-row-3">
         <div><dt>Days</dt><dd>{since.days}</dd></div>
         <div><dt>Not smoked</dt><dd>{since.cigarettes_avoided != null ? Math.round(since.cigarettes_avoided) : '--'}</dd></div>

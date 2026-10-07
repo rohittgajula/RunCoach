@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
+import { DeltaChip } from '../ChartFrame'
+import { trendOf, type Better } from '../chartUtil'
 import type { Point } from '../MetricChart'
 import { Sparkline } from '../Sparkline'
 
 /** One tappable metric inside an Insights card: label, big value, small line, spark. */
 export function Tile({
-  label, value, unit, sub, points, onClick, children, color, reversed = false,
+  label, value, unit, sub, points, onClick, children, color, reversed = false, better, delta,
 }: {
   label: string
   value: string
@@ -16,11 +18,18 @@ export function Tile({
   color?: string
   /** Paces: lower is better, so draw it upside down like the full chart. */
   reversed?: boolean
+  /** With `points`: a small ▲/▼ chip, coloured by which direction is good. */
+  better?: Better
+  delta?: (v: number) => string
 }) {
+  const trend = points && better !== undefined ? trendOf(points.map((p) => p.value), better) : null
   const values = (points ?? []).map((p) => p.value).filter((v): v is number => v != null).map((v) => (reversed ? -v : v))
   return (
     <button type="button" className="tile" onClick={onClick} disabled={!onClick}>
-      <span className="tile-label">{label}</span>
+      <span className="tile-head">
+        <span className="tile-label">{label}</span>
+        {trend && delta && <DeltaChip trend={trend} format={delta} />}
+      </span>
       <span className="tile-value">
         {value}
         {unit && <small> {unit}</small>}

@@ -1,17 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
+import { useAuth } from '../../lib/AuthContext'
 import { ApiError } from '../../lib/auth'
 import { errorText, useDeleteHabitLog, useHabitsToday, useLogHabit } from '../../lib/queries'
 import type { HabitKind, HabitLog } from '../../lib/types'
 import { MoreHIcon } from '../Icons'
 import { HabitLogSheet } from './HabitLogSheet'
-import { HABITS, habitMeta, loggedText } from './habitUtil'
+import { habitMeta, loggableHabits, loggedText } from './habitUtil'
 
 const LONG_PRESS_MS = 500
 
 type Toast = { text: string; log: HabitLog | null }
 
-/** 🚬 🍺 🍫 — tap logs one now (with Undo); long-press or ⋯ opens the full form. */
+/**
+ * 🚬 🍺 🍫 — tap logs one now (with Undo); long-press or ⋯ opens the full form.
+ * 🌙 only when the private habit is enabled AND set to show on today's card.
+ */
 export function QuickLogRow({ label = 'Log' }: { label?: string }) {
+  const { athlete } = useAuth()
+  const habits = loggableHabits(athlete, 'today')
   const today = useHabitsToday()
   const log = useLogHabit()
   const remove = useDeleteHabitLog()
@@ -22,7 +28,7 @@ export function QuickLogRow({ label = 'Log' }: { label?: string }) {
 
   useEffect(() => {
     if (!toast) return
-    const t = setTimeout(() => setToast(null), 5000)
+    const t = setTimeout(() => setToast(null), 8000)
     return () => clearTimeout(t)
   }, [toast])
 
@@ -71,15 +77,15 @@ export function QuickLogRow({ label = 'Log' }: { label?: string }) {
   return (
     <div className="quicklog" aria-label="Quick log">
       <span className="quicklog-label">{label}</span>
-      <div className="quicklog-buttons">
-        {HABITS.map((h) => {
+      <div className="quicklog-buttons" style={{ gridTemplateColumns: `repeat(${habits.length}, minmax(0, 1fr)) 40px` }}>
+        {habits.map((h) => {
           const n = counts?.[h.kind] ?? 0
           return (
             <button
               key={h.kind}
               type="button"
               className={`quicklog-btn ${n > 0 ? 'has-count' : ''}`}
-              aria-label={`Log one ${h.unit} now (${n} today). Long-press for more options.`}
+              aria-label={h.kind === 'private' ? `Log 🌙 Private now (${n} today). Long-press for more options.` : `Log one ${h.unit} now (${n} today). Long-press for more options.`}
               onClick={() => tap(h.kind)}
               onPointerDown={() => pressStart(h.kind)}
               onPointerUp={pressEnd}
@@ -92,12 +98,13 @@ export function QuickLogRow({ label = 'Log' }: { label?: string }) {
             </button>
           )
         })}
-        <button type="button" className="icon-btn quicklog-more" aria-label="Log with quantity, time or note" onClick={() => setSheet('smoke')}>
+        <button type="button" className="icon-btn quicklog-more" aria-label="Log with quantity, time or note, or fix today’s entries" onClick={() => setSheet('smoke')}>
           <MoreHIcon size={20} />
         </button>
       </div>
       <HabitLogSheet
         kind={sheet}
+        kinds={habits}
         onClose={() => setSheet(null)}
         onLogged={(saved) => setToast({ text: loggedText(saved.kind, saved.quantity), log: saved })}
       />

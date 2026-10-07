@@ -56,9 +56,9 @@ export function RunningCard({ data, onChart }: Props) {
   return (
     <InsightCard title="How you’re running" aside={<span className="muted small">{run.runs} runs · {run.run_km.toFixed(1)} km</span>}>
       <div className="tiles">
-        <Tile label="Running share" value={fraction != null ? `${Math.round(fraction)}` : '--'} unit="%" points={pts('run_fraction')} onClick={() => onChart('run_fraction')} />
-        <Tile label="Longest run" value={longest != null ? CHARTS.longest_run.format(longest) : '--'} sub="continuous" points={pts('longest_run')} onClick={() => onChart('longest_run')} />
-        <Tile label="Easy pace" value={easy != null ? pace(easy) : '--'} unit="/km" sub="at zone 2 HR" points={pts('easy_pace')} reversed onClick={() => onChart('easy_pace')} />
+        <Tile label="Running share" value={fraction != null ? `${Math.round(fraction)}` : '--'} unit="%" points={pts('run_fraction')} better={CHARTS.run_fraction.better} delta={CHARTS.run_fraction.delta ?? CHARTS.run_fraction.format} onClick={() => onChart('run_fraction')} />
+        <Tile label="Longest run" value={longest != null ? CHARTS.longest_run.format(longest) : '--'} sub="continuous" points={pts('longest_run')} better={CHARTS.longest_run.better} delta={CHARTS.longest_run.delta ?? CHARTS.longest_run.format} onClick={() => onChart('longest_run')} />
+        <Tile label="Easy pace" value={easy != null ? pace(easy) : '--'} unit="/km" sub="at zone 2 HR" points={pts('easy_pace')} reversed better={CHARTS.easy_pace.better} delta={CHARTS.easy_pace.delta ?? CHARTS.easy_pace.format} onClick={() => onChart('easy_pace')} />
         <Tile
           label="Cadence"
           value={run.cadence.avg != null ? String(Math.round(run.cadence.avg)) : '--'}
@@ -67,7 +67,7 @@ export function RunningCard({ data, onChart }: Props) {
             target ? `target ${target.low}–${target.high}` : '',
             run.cadence.trend != null ? `${run.cadence.trend > 0 ? '+' : ''}${run.cadence.trend.toFixed(1)}/wk` : '',
           ].filter(Boolean).join(' · ') || undefined}
-          onClick={() => onChart('cadence')}
+          better={CHARTS.cadence.better} delta={CHARTS.cadence.delta ?? CHARTS.cadence.format} onClick={() => onChart('cadence')}
         >
           <CadenceBand avg={run.cadence.avg} target={target} />
         </Tile>

@@ -1,5 +1,5 @@
-import { dur, duration, pace } from '../../lib/format'
-import type { Progress, ProgressBest, ProgressMetric, ProgressWindow } from '../../lib/types'
+import { dur, duration, pace, parseDate } from '../../lib/format'
+import type { Progress, ProgressBest, ProgressMetric, ProgressPeriod, ProgressWindow } from '../../lib/types'
 
 export const WINDOWS: Array<{ value: `${ProgressWindow}`; label: string }> = [
   { value: '1', label: 'Last 1' },
@@ -54,6 +54,21 @@ export function fmtDelta(m: ProgressMetric, compact = false): string {
 
 export const windowText = (w: ProgressWindow) =>
   w === 1 ? 'Your last run vs the average of the 5 before it' : `Your last ${w} runs vs the ${w} before them`
+
+const short = (iso: string) => parseDate(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+const span = (a: string | null | undefined, b: string | null | undefined) => (a && b ? `${short(a)} – ${short(b)}` : '')
+
+/** "1 Sep – 30 Sep vs 2 Aug – 31 Aug · 8 vs 6 runs" for the date mode. */
+export function periodText(p: ProgressPeriod | null | undefined, fallback: { start: string; end: string }): string {
+  const now = span(p?.start ?? fallback.start, p?.end ?? fallback.end)
+  const before = span(p?.compare_start, p?.compare_end)
+  const runs = p ? ` · ${p.runs_current} vs ${p.runs_previous} ${p.runs_previous === 1 ? 'run' : 'runs'}` : ''
+  return `${now}${before ? ` vs ${before}` : ' vs the same length before'}${runs}`
+}
+
+/** Inclusive day count of [start, end]. */
+export const daySpan = (start: string, end: string) =>
+  Math.round((parseDate(end).getTime() - parseDate(start).getTime()) / 86_400_000) + 1
 
 const BESTS: Record<string, { label: string; unit: string }> = {
   fastest_1k_s: { label: 'Fastest 1 km', unit: 'time' },

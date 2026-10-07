@@ -1,4 +1,5 @@
 import type { ProgressFocus as Focus } from '../../lib/types'
+import { GuideLink } from '../guides/GuideLink'
 
 export function ProgressFocus({ focus }: { focus: Focus[] }) {
   if (!focus?.length) return null
@@ -11,6 +12,7 @@ export function ProgressFocus({ focus }: { focus: Focus[] }) {
             <p className="focus-title">{item.title}</p>
             {item.why && <p className="muted small">{item.why}</p>}
             {item.how && <p className="focus-how">{item.how}</p>}
+            <GuideLink item={item} />
           </div>
         </li>
       ))}

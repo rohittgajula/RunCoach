@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Bar, CartesianGrid, Cell, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChipButton } from '../components/ChipButton'
-import { monthTicks, tickDate } from '../components/chartUtil'
+import { useAuth } from '../lib/AuthContext'
+import { TIP, chartTip, num } from '../components/ChartTip'
+import { monthTicks, tickDate, trendCaption, trendOf } from '../components/chartUtil'
+import { DeltaChip } from '../components/ChartFrame'
 import { FuelRows } from '../components/DetailSheets'
 import { ChevronLeft, ChevronRight, DietIcon, GearIcon, MoreVIcon, PlusIcon, RunIcon } from '../components/Icons'
 import { KcalRing } from '../components/KcalRing'
@@ -225,6 +228,7 @@ function MealsCard({ meals, onAdd, onEdit }: { meals: Meal[]; onAdd: () => void;
 }
 
 function BalanceCard() {
+  const { athlete } = useAuth()
   const [range, setRange] = useState<Range>('3m')
   const trend = useDietTrend(range)
 
@@ -240,10 +244,16 @@ function BalanceCard() {
   const s = trend.data?.summary
   const hasIntake = series.some((p) => p.balance != null)
   const hasWeight = series.some((p) => p.weight != null)
+  const goal = athlete?.diet_goal
+  const weightTrend = trendOf(series.map((p) => p.weight), goal === 'lose' ? 'lower' : goal === 'gain' ? 'higher' : null, 0.1)
+  const kg = (v: number) => v.toFixed(1)
 
   return (
     <section className="card">
-      <h2 className="card-title">Balance vs weight</h2>
+      <div className="card-head chart-card-head">
+        <h2 className="card-title">Balance vs weight</h2>
+        <DeltaChip trend={weightTrend} format={kg} unit="kg" label="weight vs the earlier half of this range" />
+      </div>
       <RangeSwitch value={range} onChange={setRange} />
       {trend.isPending && <Skeleton height={200} />}
       {trend.isError && !trend.data && <ErrorState message={errorText(trend.error)} onRetry={() => trend.refetch()} />}
@@ -263,7 +273,7 @@ function BalanceCard() {
           {hasIntake || hasWeight ? (
             <div className="chart" style={{ height: 220 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={series} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+                <ComposedChart data={series} margin={{ top: 44, right: 0, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} />
                   <XAxis
                     dataKey="date"
@@ -273,7 +283,7 @@ function BalanceCard() {
                     tickLine={false}
                     minTickGap={24}
                   />
-                  <YAxis yAxisId="kcal" axisLine={false} tickLine={false} width={40} tickCount={4} />
+                  <YAxis yAxisId="kcal" axisLine={false} tickLine={false} width={40} tickCount={4} mirror />
                   <YAxis
                     yAxisId="kg"
                     orientation="right"
@@ -283,16 +293,11 @@ function BalanceCard() {
                     domain={['dataMin - 1', 'dataMax + 1']}
                     tickFormatter={(v: number) => v.toFixed(0)}
                     hide={!hasWeight}
+                    mirror
                   />
-                  <Tooltip
-                    labelFormatter={(label) => tickDate(String(label))}
-                    formatter={(value, name) =>
-                      name === 'weight'
-                        ? [`${Number(value).toFixed(1)} kg`, 'Weight']
-                        : [`${signed(Number(value))} kcal`, 'Balance']
-                    }
-                  />
-                  <Bar yAxisId="kcal" dataKey="balance" isAnimationActive={false} radius={[3, 3, 3, 3]}>
+                  <Tooltip content={DietTip} cursor={false} {...TIP} />
+                  <ReferenceLine yAxisId="kcal" y={0} stroke="var(--muted)" strokeDasharray="4 4" strokeOpacity={0.7} label={{ value: 'target', position: 'insideTopLeft', fill: 'var(--muted)', fontSize: 11 }} />
+                  <Bar yAxisId="kcal" dataKey="balance" isAnimationActive={false} radius={[4, 4, 4, 4]} activeBar={{ stroke: 'var(--fg)', strokeWidth: 1.5 }}>
                     {series.map((p) => (
                       <Cell key={p.date} fill={(p.balance ?? 0) < 0 ? '#5aa2f0' : '#f0a35a'} />
                     ))}
@@ -317,8 +322,21 @@ function BalanceCard() {
             <span className="legend-swatch legend-over" /> over target
             <span className="legend-line" /> weight
           </p>
+          {weightTrend && <p className="chart-caption">{trendCaption(weightTrend, 'Weight', kg, 'kg', 'range')}</p>}
         </>
       )}
     </section>
   )
 }
+
+/** Balance (bar) and weight (line) for one day, in the app's tooltip card. */
+const DietTip = chartTip((items, label) => ({
+  title: tickDate(label),
+  lines: items.flatMap((i) => {
+    const v = num(i.value)
+    if (!Number.isFinite(v)) return []
+    return i.dataKey === 'weight'
+      ? [{ text: `${v.toFixed(1)} kg`, color: '#1f7ae0' }]
+      : [{ text: `${signed(v)} kcal vs target`, color: v < 0 ? '#5aa2f0' : '#f0a35a' }]
+  }),
+}))

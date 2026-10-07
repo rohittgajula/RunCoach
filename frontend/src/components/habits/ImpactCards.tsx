@@ -15,7 +15,7 @@ const METRICS: Record<string, { name: string; unit: string }> = {
 const unitOf = (i: HabitImpact) => i.unit ?? METRICS[i.metric]?.unit ?? ''
 const nameOf = (i: HabitImpact) => METRICS[i.metric]?.name ?? i.metric.replace(/_/g, ' ')
 
-const AFTER: Record<HabitKind, string> = { smoke: 'smoking', alcohol: 'drinking', sugar: 'sugary food' }
+const AFTER: Record<HabitKind, string> = { smoke: 'smoking', alcohol: 'drinking', sugar: 'sugary food', private: 'it' }
 
 const num = (v: number | null, unit: string) => {
   if (v == null) return '--'
@@ -45,7 +45,8 @@ function ImpactCard({ impact }: { impact: HabitImpact }) {
 }
 
 /** Only rows with ≥ 5 nights in both groups; the rest become a "keep logging" line. */
-export function ImpactCards({ impact }: { impact: HabitImpact[] }) {
+export function ImpactCards({ impact: all, hidePrivate = false, title = true }: { impact: HabitImpact[]; hidePrivate?: boolean; title?: boolean }) {
+  const impact = hidePrivate ? all.filter((i) => i.habit !== 'private') : all
   const ready = impact.filter((i) => i.enough_data)
   const waiting = impact.filter((i) => !i.enough_data)
   // One "keep logging" hint per habit: how many nights each side has so far.
@@ -58,7 +59,7 @@ export function ImpactCards({ impact }: { impact: HabitImpact[] }) {
 
   return (
     <div className="impact-wrap">
-      <h3 className="habit-sub">Impact</h3>
+      {title && <h3 className="habit-sub">Impact</h3>}
       {ready.length > 0 && <ul className="impacts">{ready.map((i) => <ImpactCard key={`${i.habit}-${i.metric}-${i.dose ?? ''}`} impact={i} />)}</ul>}
       {[...hints].map(([habit, n]) => (
         <p key={habit} className="muted small">

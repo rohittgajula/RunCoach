@@ -269,7 +269,7 @@
 
 /* ---------- R7: morning check-in ---------- */
 .today-pin { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 72px; }
-.today-card { display: flex; flex-direction: column; gap: 10px; padding: 18px; }
+.today-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
 .today-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .today-eyebrow { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
 .today-headline { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }

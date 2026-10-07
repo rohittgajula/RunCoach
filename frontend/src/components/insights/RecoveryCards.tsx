@@ -32,7 +32,7 @@ export function RecoveryCard({ data, onChart }: Props) {
               : hrv?.weekly_avg_ms != null ? `7-day avg ${n(hrv.weekly_avg_ms)}` : undefined
           }
           points={pts('hrv')}
-          onClick={() => onChart('hrv')}
+          better={CHARTS.hrv.better} delta={CHARTS.hrv.delta ?? CHARTS.hrv.format} onClick={() => onChart('hrv')}
         />
         <Tile
           label="Resting HR"
@@ -40,17 +40,17 @@ export function RecoveryCard({ data, onChart }: Props) {
           unit="bpm"
           sub={trend != null ? `${trend > 0 ? '+' : ''}${trend.toFixed(1)} bpm/week` : undefined}
           points={pts('rhr')}
-          onClick={() => onChart('rhr')}
+          better={CHARTS.rhr.better} delta={CHARTS.rhr.delta ?? CHARTS.rhr.format} onClick={() => onChart('rhr')}
         />
         <Tile
           label="Sleep"
           value={sleep?.avg_s ? dur(sleep.avg_s) : '--'}
           sub={sleep?.avg_score != null ? `score ${Math.round(sleep.avg_score)}` : 'average'}
           points={pts('sleep')}
-          onClick={() => onChart('sleep')}
+          better={CHARTS.sleep.better} delta={CHARTS.sleep.delta ?? CHARTS.sleep.format} onClick={() => onChart('sleep')}
         />
-        <Tile label="Body Battery" value={n(bb?.avg)} sub="average" points={pts('body_battery')} onClick={() => onChart('body_battery')} />
-        <Tile label="Stress" value={n(stress?.avg)} sub="average" points={pts('stress')} onClick={() => onChart('stress')} color="#d9861a" />
+        <Tile label="Body Battery" value={n(bb?.avg)} sub="average" points={pts('body_battery')} better={CHARTS.body_battery.better} delta={CHARTS.body_battery.delta ?? CHARTS.body_battery.format} onClick={() => onChart('body_battery')} />
+        <Tile label="Stress" value={n(stress?.avg)} sub="average" points={pts('stress')} better={CHARTS.stress.better} delta={CHARTS.stress.delta ?? CHARTS.stress.format} onClick={() => onChart('stress')} color="#d9861a" />
       </div>
     </InsightCard>
   )
@@ -62,8 +62,8 @@ export function BreathingCard({ data, onChart }: Props) {
   return (
     <InsightCard title="Breathing">
       <div className="tiles">
-        <Tile label="Asleep" value={n(r.sleep_avg_rpm, 1)} unit="brpm" points={CHARTS.respiration.points(data)} onClick={() => onChart('respiration')} />
-        <Tile label="All day" value={n(r.avg_rpm, 1)} unit="brpm" onClick={() => onChart('respiration')} />
+        <Tile label="Asleep" value={n(r.sleep_avg_rpm, 1)} unit="brpm" points={CHARTS.respiration.points(data)} better={CHARTS.respiration.better} delta={CHARTS.respiration.delta ?? CHARTS.respiration.format} onClick={() => onChart('respiration')} />
+        <Tile label="All day" value={n(r.avg_rpm, 1)} unit="brpm" better={CHARTS.respiration.better} delta={CHARTS.respiration.delta ?? CHARTS.respiration.format} onClick={() => onChart('respiration')} />
       </div>
     </InsightCard>
   )
@@ -79,7 +79,7 @@ export function FitnessCard({ data, onChart }: Props) {
     <InsightCard title="VO2max & race times">
       <div className="tiles">
         {vo2max && (
-          <Tile label="VO2max" value={n(vo2max.value)} sub="ml/kg/min" points={CHARTS.vo2max.points(data)} onClick={() => onChart('vo2max')} />
+          <Tile label="VO2max" value={n(vo2max.value)} sub="ml/kg/min" points={CHARTS.vo2max.points(data)} better={CHARTS.vo2max.better} delta={CHARTS.vo2max.delta ?? CHARTS.vo2max.format} onClick={() => onChart('vo2max')} />
         )}
         {race && (
           <div className="tile tile-static">

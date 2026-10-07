@@ -21,6 +21,10 @@ export type Draft = {
   cigarette_price: string
   alcohol_goal: 'reduce' | 'none'
   sugar_goal: 'reduce' | 'none'
+  // R9 §B
+  private_habit_enabled: boolean
+  private_on_today: boolean
+  private_goal: 'reduce' | 'none'
   location_source: 'runs' | 'city'
   location_city: string
 }
@@ -48,6 +52,9 @@ export const toDraft = (a: Athlete): Draft => ({
   cigarette_price: str(a.cigarette_price),
   alcohol_goal: a.alcohol_goal ?? 'none',
   sugar_goal: a.sugar_goal ?? 'none',
+  private_habit_enabled: !!a.private_habit_enabled,
+  private_on_today: !!a.private_on_today,
+  private_goal: a.private_goal ?? 'none',
   location_source: a.location_source === 'city' || a.location_city ? 'city' : 'runs',
   location_city: a.location_city || (a.location_source === 'city' ? a.location_name ?? '' : ''),
 })
@@ -77,6 +84,10 @@ export function toPatch(draft: Draft, athlete: Athlete): Partial<Athlete> & { lo
     alcohol_goal: draft.alcohol_goal,
     sugar_goal: draft.sugar_goal,
   }
+  // Only sent once touched, so a backend without the fields never sees them.
+  if (draft.private_habit_enabled !== before.private_habit_enabled) patch.private_habit_enabled = draft.private_habit_enabled
+  if (draft.private_on_today !== before.private_on_today) patch.private_on_today = draft.private_on_today
+  if (draft.private_goal !== before.private_goal) patch.private_goal = draft.private_goal
   if (draft.location_source !== before.location_source || draft.location_city.trim() !== before.location_city.trim()) {
     patch.location_source = draft.location_source
     // An empty city hands the location back to your runs.

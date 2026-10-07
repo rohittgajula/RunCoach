@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { errorText, useInsights } from '../../lib/queries'
 import type { InsightRange } from '../../lib/types'
 import { BottomSheet } from '../BottomSheet'
+import { ChartFrame, DeltaChip } from '../ChartFrame'
+import { trendCaption, trendOf } from '../chartUtil'
 import { MetricChart } from '../MetricChart'
 import { RangeSwitch } from '../RangeSwitch'
 import { Empty, ErrorState, Skeleton } from '../States'
@@ -30,19 +32,27 @@ export function InsightChartSheet({
   const values = points.map((p) => p.value).filter((v): v is number => v != null)
   const latest = values.length ? values[values.length - 1] : null
   const band = config?.band && data ? config.band(data) : null
+  const trend = config ? trendOf(values, config.better) : null
+  const rangeLabel = INSIGHT_RANGES.find((r) => r.value === range)?.label ?? 'range'
+  const deltaFmt = config?.delta ?? config?.format ?? String
 
   return (
     <BottomSheet open={!!chart} onClose={onClose} full label={config?.title ?? 'Chart'} title={config?.title}>
       {config && (
         <>
           <RangeSwitch value={range} onChange={setRange} options={INSIGHT_RANGES} />
-          <h2 className="sheet-heading">
-            {latest != null ? config.format(latest) : '--'} <span className="muted small">{config.unit}</span>
-          </h2>
+          <div className="sheet-heading-row">
+            <h2 className="sheet-heading">
+              {latest != null ? config.format(latest) : '--'} <span className="muted small">{config.unit}</span>
+            </h2>
+            <DeltaChip trend={trend} format={deltaFmt} />
+          </div>
           {insights.isPending && <Skeleton height={280} />}
           {insights.isError && !data && <ErrorState message={errorText(insights.error)} onRetry={() => insights.refetch()} />}
           {data && (values.length >= 2 ? (
-            <MetricChart data={points} format={config.format} reversed={config.reversed} height={280} band={band} />
+            <ChartFrame caption={trendCaption(trend, config.title, config.format, '', `${rangeLabel}`, config.delta)}>
+              <MetricChart data={points} format={config.format} reversed={config.reversed} height={280} band={band} />
+            </ChartFrame>
           ) : (
             <Empty title="Not enough data yet">Sync a few more days from Garmin to see a trend.</Empty>
           ))}

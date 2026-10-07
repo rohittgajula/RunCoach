@@ -1,25 +1,26 @@
 import { useState } from 'react'
-import { localInputValue } from '../../lib/format'
-import { errorText, useLogHabit } from '../../lib/queries'
+import { localInputValue, timeOfDay, todayISO } from '../../lib/format'
+import { errorText, useDeleteHabitLog, useHabitLogs, useLogHabit } from '../../lib/queries'
 import type { HabitKind, HabitLog } from '../../lib/types'
 import { BottomSheet } from '../BottomSheet'
 import { Field } from '../Field'
-import { HABITS, habitMeta } from './habitUtil'
+import { TrashIcon } from '../Icons'
+import { HABITS, countText, habitMeta, lessQty, minQty, moreQty, type HabitMeta } from './habitUtil'
 
 /** Long-press / ⋯ on the quick-log row: quantity, time and a note. */
 export function HabitLogSheet({
-  kind, onClose, onLogged,
-}: { kind: HabitKind | null; onClose: () => void; onLogged: (log: HabitLog) => void }) {
+  kind, kinds = HABITS, onClose, onLogged,
+}: { kind: HabitKind | null; kinds?: HabitMeta[]; onClose: () => void; onLogged: (log: HabitLog) => void }) {
   return (
     <BottomSheet open={kind != null} onClose={onClose} title="Log">
-      {kind && <HabitLogForm key={kind} initialKind={kind} onClose={onClose} onLogged={onLogged} />}
+      {kind && <HabitLogForm key={kind} initialKind={kind} kinds={kinds} onClose={onClose} onLogged={onLogged} />}
     </BottomSheet>
   )
 }
 
 function HabitLogForm({
-  initialKind, onClose, onLogged,
-}: { initialKind: HabitKind; onClose: () => void; onLogged: (log: HabitLog) => void }) {
+  initialKind, kinds, onClose, onLogged,
+}: { initialKind: HabitKind; kinds: HabitMeta[]; onClose: () => void; onLogged: (log: HabitLog) => void }) {
   const log = useLogHabit()
   const [kind, setKind] = useState<HabitKind>(initialKind)
   const [quantity, setQuantity] = useState(1)
@@ -35,28 +36,29 @@ function HabitLogForm({
 
   return (
     <div className="stack">
-      <div className="segmented segmented-full habit-sheet-kinds" role="radiogroup" aria-label="What">
-        {HABITS.map((h) => (
+      <div className={`segmented segmented-full habit-sheet-kinds ${kinds.length > 3 ? 'is-4' : ''}`} role="radiogroup" aria-label="What">
+        {kinds.map((h) => (
           <button
             key={h.kind}
             type="button"
             role="radio"
             aria-checked={kind === h.kind}
             className={`segmented-option ${kind === h.kind ? 'is-active' : ''}`}
-            onClick={() => setKind(h.kind)}
+            onClick={() => { setKind(h.kind); setQuantity((q) => Math.max(minQty(h.kind), q)) }}
           >
             {h.emoji} {h.label}
           </button>
         ))}
       </div>
       <div className="habit-qty">
-        <button type="button" className="chip" aria-label="Less" disabled={quantity <= 0.5} onClick={() => setQuantity((q) => Math.max(0.5, q - (q > 1 ? 1 : 0.5)))}>−</button>
+        <button type="button" className="chip" aria-label="Less" disabled={quantity <= minQty(kind)} onClick={() => setQuantity((q) => lessQty(kind, q))}>−</button>
         <div className="habit-qty-value">
           <span className="display">{quantity}</span>
           <span className="muted small">{quantity === 1 ? meta.unit : meta.units}</span>
         </div>
-        <button type="button" className="chip" aria-label="More" onClick={() => setQuantity((q) => q + (q < 1 ? 0.5 : 1))}>+</button>
+        <button type="button" className="chip" aria-label="More" onClick={() => setQuantity((q) => moreQty(kind, q))}>+</button>
       </div>
+      <p className="muted small centered-text">To remove an entry, delete it below.</p>
       {kind === 'alcohol' && <p className="muted small centered-text">1 standard drink ≈ a small beer, a glass of wine or a single shot.</p>}
       {kind === 'sugar' && <p className="muted small centered-text">1 serving ≈ a chocolate bar, a dessert or a sugary drink.</p>}
       <Field label="When">
@@ -67,8 +69,61 @@ function HabitLogForm({
       </Field>
       {log.isError && <p className="bad small">{errorText(log.error, 'Could not save. Try again.')}</p>}
       <button type="button" className="btn btn-primary btn-block" disabled={log.isPending || !at} onClick={save}>
-        {log.isPending ? 'Saving…' : `Log ${quantity} ${quantity === 1 ? meta.unit : meta.units}`}
+        {log.isPending ? 'Saving…' : kind === 'private' ? `Log 🌙 ×${quantity}` : `Log ${quantity} ${quantity === 1 ? meta.unit : meta.units}`}
       </button>
+      <TodayEntries kind={kind} />
+    </div>
+  )
+}
+
+/** Today's entries for this habit — fix a mistaken tap: −1 (latest) or delete any one. */
+function TodayEntries({ kind }: { kind: HabitKind }) {
+  const today = todayISO()
+  const logs = useHabitLogs(kind, today, today)
+  const remove = useDeleteHabitLog()
+  const meta = habitMeta(kind)
+  // Placeholder data may belong to the previously selected habit.
+  const rows = (logs.data ?? []).filter((l) => l.kind === kind && l.local_date === today)
+  const total = rows.reduce((s, l) => s + l.quantity, 0)
+  const latest = rows[0]
+  return (
+    <div className="today-entries">
+      <div className="today-entries-head">
+        <span className="habit-sub">Today {meta.emoji} {kind === 'private' ? `×${total}` : countText(kind, total)}</span>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={!latest || remove.isPending}
+          aria-label="Remove the most recent entry"
+          onClick={() => latest && remove.mutate(latest)}
+        >
+          −1
+        </button>
+      </div>
+      {logs.isPending && <p className="muted small">Loading today’s entries…</p>}
+      {logs.data && !rows.length && <p className="muted small">Nothing logged today.</p>}
+      {rows.length > 0 && (
+        <ul className="entry-list">
+          {rows.map((l) => (
+            <li key={l.id} className="entry-line">
+              <span className="grow">
+                {kind === 'private' ? `🌙 ×${l.quantity}` : countText(kind, l.quantity)}
+                <span className="muted small"> · {timeOfDay(l.at)}{l.note ? ` · ${l.note}` : ''}</span>
+              </span>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={`Delete the ${timeOfDay(l.at)} entry`}
+                disabled={remove.isPending}
+                onClick={() => remove.mutate(l)}
+              >
+                <TrashIcon size={18} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {remove.isError && <p className="bad small">{errorText(remove.error, 'Could not delete. Try again.')}</p>}
     </div>
   )
 }

@@ -10,7 +10,7 @@ import type {
   Workout, AttachmentRef, SyncResult, CoachReview, InsightRange, Insights, MonthResponse,
   WorkoutActual, Compliance, TodayCheckin, PendingCheckin, CheckinBody, CheckinEntry,
   GarminSendResult, HabitKind, HabitLog, HabitLogBody, HabitSummary, HabitSummaryText,
-  HabitToday, Progress, ProgressReview, ProgressWindow, WeatherToday,
+  HabitToday, Progress, ProgressReview, ProgressQuery, WeatherToday, GuidesResponse,
 } from './types'
 
 export const errorText = (error: unknown, fallback = 'Something went wrong.'): string =>
@@ -573,6 +573,7 @@ export const useHabitSummary = (range: InsightRange) =>
 
 function invalidateHabits(client: QueryClient) {
   client.invalidateQueries({ queryKey: ['habits-today'] })
+  client.invalidateQueries({ queryKey: ['habit-logs'] })
   client.invalidateQueries({ queryKey: ['habits-summary'] })
   client.invalidateQueries({ queryKey: ['today'] })
 }
@@ -607,12 +608,32 @@ export function useDeleteHabitLog() {
   })
 }
 
-export const useHabitLogs = (kind: HabitKind | null, start: string, end: string) =>
+export const useHabitLogs = (kind: HabitKind | null, start: string, end: string, enabled = true) =>
   useQuery({
     queryKey: ['habit-logs', kind, start, end],
     queryFn: () => api<HabitLog[]>(`/habits/logs/?${kind ? `kind=${kind}&` : ''}start=${start}&end=${end}`),
-    enabled: kind != null,
+    enabled,
+    placeholderData: (previous) => previous,
   })
+
+/** Edit a log (quantity, time, note). */
+export function useUpdateHabitLog() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; quantity?: number; at?: string; note?: string }) =>
+      api<HabitLog>(`/habits/logs/${id}/`, { method: 'PATCH', ...json(body) }),
+    onSettled: () => invalidateHabits(client),
+  })
+}
+
+/** R9 §B — Settings: delete every 🌙 Private log. */
+export function useDeletePrivateLogs() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api<{ deleted?: number } | undefined>('/habits/logs/?kind=private', { method: 'DELETE' }),
+    onSettled: () => invalidateHabits(client),
+  })
+}
 
 /** AI explanation of the habit numbers; cached per day server-side. */
 export function useHabitSummaryText(range: InsightRange) {
@@ -630,23 +651,33 @@ export function useHabitSummaryText(range: InsightRange) {
   })
 }
 
-// --- R8 §C: progress -------------------------------------------------------------------
+// --- R8 §C / R9 §D: progress --------------------------------------------------------
 
-export const useProgress = (window: ProgressWindow) =>
+/** `window=5` or `start=…&end=…[&compare_start=…&compare_end=…]` — mutually exclusive. */
+export function progressParams(q: ProgressQuery): string {
+  if ('window' in q) return `window=${q.window}`
+  const parts = [`start=${q.start}`, `end=${q.end}`]
+  if (q.compare_start && q.compare_end) parts.push(`compare_start=${q.compare_start}`, `compare_end=${q.compare_end}`)
+  return parts.join('&')
+}
+
+export const useProgress = (q: ProgressQuery, enabled = true) =>
   useQuery({
-    queryKey: ['progress', window],
-    queryFn: () => api<Progress>(`/progress/?window=${window}&sport=running`),
+    queryKey: ['progress', progressParams(q)],
+    queryFn: () => api<Progress>(`/progress/?${progressParams(q)}&sport=running`),
     placeholderData: (previous) => previous,
     retry: false,
+    enabled,
   })
 
-export function useProgressReview(window: ProgressWindow) {
+export function useProgressReview(q: ProgressQuery) {
   const client = useQueryClient()
+  const params = progressParams(q)
   return useMutation({
-    mutationFn: () => api<ProgressReview | Progress>(`/progress/review/?window=${window}`, { method: 'POST' }),
+    mutationFn: () => api<ProgressReview | Progress>(`/progress/review/?${params}`, { method: 'POST' }),
     onSuccess: (data) => {
       const review = 'metrics' in data ? data.review : data
-      if (review) client.setQueryData<Progress>(['progress', window], (old) => (old ? { ...old, review } : old))
+      if (review) client.setQueryData<Progress>(['progress', params], (old) => (old ? { ...old, review } : old))
     },
   })
 }
@@ -666,5 +697,23 @@ export const useWeatherToday = () =>
       }
     },
     staleTime: 15 * 60_000,
+    retry: false,
+  })
+
+// --- R9 §E: guides ---------------------------------------------------------------------
+
+/** Not deployed yet / failing → null; the guides grid works without "For you". */
+export const useGuides = () =>
+  useQuery({
+    queryKey: ['guides'],
+    queryFn: async () => {
+      try {
+        return await api<GuidesResponse>('/guides/')
+      } catch (error) {
+        if (error instanceof ApiError && [404, 500, 502, 503, 504].includes(error.status)) return null
+        throw error
+      }
+    },
+    staleTime: 10 * 60_000,
     retry: false,
   })

@@ -3,6 +3,8 @@ import { errorText, useFitness } from '../../lib/queries'
 import type { FitnessStatus, Range } from '../../lib/types'
 import { BottomSheet } from '../BottomSheet'
 import { Markdown } from '../Markdown'
+import { ChartFrame, DeltaChip } from '../ChartFrame'
+import { trendOf } from '../chartUtil'
 import { MetricChart } from '../MetricChart'
 import { RangeSwitch } from '../RangeSwitch'
 import { ErrorState, Skeleton } from '../States'
@@ -68,6 +70,21 @@ export function FitnessSheet({ view, onClose }: { view: FitnessView | null; onCl
     return v == null ? '--' : String(Math.round(v))
   }
   const about = ABOUT[current]
+  const values = series.map((p) => (current === 'fitness' ? p.fitness : current === 'fatigue' ? p.fatigue : p.form))
+  // Fitness up is good; fatigue and form have no single good direction.
+  const trend = trendOf(values, current === 'fitness' ? 'higher' : null, 0.5)
+  const round = (v: number) => String(Math.round(v))
+  const caption = (() => {
+    if (!data || !trend) return null
+    if (current === 'status') {
+      const f = data.current.form
+      return f == null ? null : `Form ${f > 0 ? '+' : ''}${Math.round(f)} today — ${STATUS_LABEL[data.current.status].toLowerCase()}; ${trend.delta > 0 ? 'fresher' : 'more loaded'} than earlier in this range.`
+    }
+    const name = current === 'fitness' ? 'Fitness' : 'Fatigue'
+    const pct = Math.abs(trend.delta) / Math.max(1, Math.abs(trend.avg)) * 100
+    if (pct < 2) return `${name} has held steady over this range.`
+    return `${name} is ${trend.delta > 0 ? 'up' : 'down'} ${Math.round(Math.abs(trend.delta))} points vs earlier in this range${current === 'fitness' && trend.delta > 0 ? ' — training is building.' : '.'}`
+  })()
 
   return (
     <BottomSheet
@@ -86,14 +103,18 @@ export function FitnessSheet({ view, onClose }: { view: FitnessView | null; onCl
       }
     >
       <RangeSwitch value={range} onChange={setRange} />
-      <h2 className="sheet-heading">
-        {current === 'status' ? 'Training Status' : current === 'fitness' ? 'Fitness' : 'Fatigue'}:{' '}
-        <span className={current === 'status' ? 'muted-strong' : ''}>{heading()}</span>
-      </h2>
+      <div className="sheet-heading-row">
+        <h2 className="sheet-heading">
+          {current === 'status' ? 'Training Status' : current === 'fitness' ? 'Fitness' : 'Fatigue'}:{' '}
+          <span className={current === 'status' ? 'muted-strong' : ''}>{heading()}</span>
+        </h2>
+        <DeltaChip trend={trend} format={round} label="vs the earlier half of this range" />
+      </div>
       {fitness.isPending && <Skeleton height={300} />}
       {fitness.isError && !data && <ErrorState message={errorText(fitness.error)} onRetry={() => fitness.refetch()} />}
       {data && (
-        current === 'status' ? (
+        <ChartFrame caption={caption}>
+        {current === 'status' ? (
           <StatusBandChart data={series.map((p) => ({ date: p.date, form: p.form }))} />
         ) : (
           <MetricChart
@@ -101,7 +122,8 @@ export function FitnessSheet({ view, onClose }: { view: FitnessView | null; onCl
             height={300}
             domain={[0, 'auto']}
           />
-        )
+        )}
+        </ChartFrame>
       )}
       <section className="card about">
         <h3>{about.title}</h3>

@@ -159,6 +159,10 @@ export type Athlete = {
   alcohol_goal?: 'reduce' | 'none'
   sugar_goal?: 'reduce' | 'none'
   daily_limits?: Record<string, number> | null
+  // R9 §B — shown only as 🌙 Private.
+  private_habit_enabled?: boolean
+  private_on_today?: boolean
+  private_goal?: 'reduce' | 'none'
   // R8 §D — location for weather.
   location_lat?: number | null
   location_lon?: number | null

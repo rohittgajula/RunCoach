@@ -1,6 +1,6 @@
 import { dateTime } from '../../lib/format'
 import { errorText, useProgressReview } from '../../lib/queries'
-import type { ProgressReview, ProgressWindow } from '../../lib/types'
+import type { ProgressQuery, ProgressReview } from '../../lib/types'
 import { SparkIcon } from '../Icons'
 import { Markdown } from '../Markdown'
 
@@ -14,9 +14,9 @@ function List({ title, items, tone }: { title: string; items: string[]; tone: st
   )
 }
 
-/** AI review of the comparison, cached per window per day on the server. */
-export function ProgressReviewCard({ review, window }: { review: ProgressReview | null | undefined; window: ProgressWindow }) {
-  const run = useProgressReview(window)
+/** AI review of the comparison, cached per window/dates per day on the server. */
+export function ProgressReviewCard({ review, query }: { review: ProgressReview | null | undefined; query: ProgressQuery }) {
+  const run = useProgressReview(query)
   const fresh = run.data && 'went_well' in run.data ? run.data : null
   const given = fresh ?? review
   // `review` comes back with status "none" and empty lists until one is generated.

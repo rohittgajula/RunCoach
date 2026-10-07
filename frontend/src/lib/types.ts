@@ -494,7 +494,8 @@ export type GarminSendResult = {
 
 // --- R8 §B: habits (smoking, alcohol, sugar) ----------------------------------------
 
-export type HabitKind = 'smoke' | 'alcohol' | 'sugar'
+/** R9 §B — `private` is shown only as 🌙 Private. */
+export type HabitKind = 'smoke' | 'alcohol' | 'sugar' | 'private'
 
 export type HabitLog = {
   id: number
@@ -507,7 +508,8 @@ export type HabitLog = {
 
 export type HabitToday = {
   date: ISODate
-  counts: Record<HabitKind, number>
+  /** `private` is omitted entirely while the private habit is disabled. */
+  counts: Partial<Record<HabitKind, number>>
   last_at: Partial<Record<HabitKind, ISODateTime | null>>
 }
 
@@ -559,7 +561,42 @@ export type HabitSummary = {
     easy_pace_s_per_km: number | null
     efficiency: number | null
   }>
+  /** R9 §B — present only while the private habit is enabled. */
+  private?: { series: HabitCountPoint[]; total: number; per_day_avg: number | null } | null
   summary: HabitSummaryText | null
+  /** R9 §C — habit health report. */
+  report?: HabitReport | null
+}
+
+// --- R9 §C: habit health report ------------------------------------------------------
+
+export type HabitStatus = 'improving' | 'worsening' | 'steady' | 'not_enough_data'
+export type Tone = 'good' | 'bad' | 'neutral'
+
+export type HabitFinding = { tone: Tone; text: string; kind?: string }
+
+export type HabitReportGarmin = {
+  metric: string
+  label: string
+  unit: string
+  now: number | null
+  before: number | null
+  delta: number | null
+  better: boolean | null
+}
+
+export type HabitReportHabit = {
+  habit: HabitKind
+  status: HabitStatus
+  headline: string
+  amount?: { now_per_day: number | null; before_per_day: number | null; change_pct: number | null; now_per_week?: number | null; before_per_week?: number | null } | null
+  findings: HabitFinding[]
+}
+
+export type HabitReport = {
+  overall: { status: HabitStatus; headline: string } | null
+  garmin: HabitReportGarmin[]
+  habits: HabitReportHabit[]
 }
 
 export type HabitLogBody = { kind: HabitKind; quantity?: number; at?: ISODateTime; note?: string }
@@ -567,6 +604,23 @@ export type HabitLogBody = { kind: HabitKind; quantity?: number; at?: ISODateTim
 // --- R8 §C: progress comparison -------------------------------------------------------
 
 export type ProgressWindow = 1 | 5 | 10 | 20
+
+/** R9 §D — either the last-N window or a date range (optionally with a compare range). */
+export type ProgressQuery =
+  | { window: ProgressWindow }
+  | { start: ISODate; end: ISODate; compare_start?: ISODate; compare_end?: ISODate }
+
+export type ProgressPeriod = {
+  mode: 'window' | 'dates'
+  start: ISODate | null
+  end: ISODate | null
+  compare_start: ISODate | null
+  compare_end: ISODate | null
+  runs_current: number
+  runs_previous: number
+}
+
+export type ProgressHighlight = { tone: Tone; text: string }
 
 export type ProgressMetric = {
   key: string
@@ -618,7 +672,10 @@ export type ProgressFocus = { key?: string; kind?: 'improve' | 'check' | string;
 export type ProgressReview = { status?: 'none' | 'ready'; went_well: string[]; improve: string[]; check: string[]; markdown: string; generated_at?: ISODateTime | null }
 
 export type Progress = {
-  window: ProgressWindow
+  window: ProgressWindow | null
+  /** R9 §D */
+  period?: ProgressPeriod | null
+  highlights?: ProgressHighlight[]
   sport?: string
   current_n?: number
   previous_n?: number
@@ -672,3 +729,25 @@ export type WeatherToday = {
   food: string[]
   daily_water_bonus_ml: number
 }
+
+// --- R9 §E: guides ----------------------------------------------------------------------
+
+export type GuideKey = 'form' | 'breathing' | 'strength' | 'fueling' | 'warmup'
+
+export type GuideForYou = { key: GuideKey; reason: string; priority?: number }
+
+/** Inputs the rules used; every field optional — the UI falls back when missing. */
+export type GuidesContext = {
+  window_days?: number
+  runs?: number
+  cadence_avg?: number | null
+  /** Suggested metronome: cadence + 5 % (server-rounded). */
+  metronome_bpm?: number | null
+  hr_drift_runs?: number
+  run_fraction_pct?: number | null
+  smoking?: boolean
+  feels_like_max?: number | null
+  longest_upcoming_run_min?: number | null
+} & Record<string, unknown>
+
+export type GuidesResponse = { for_you: GuideForYou[]; context: GuidesContext }
