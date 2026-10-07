@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Health sleep</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.card{background:#fff;border-radius:20px;padding:16px;box-shadow:0 1px 2px rgba(16,20,24,.05),0 6px 20px rgba(16,20,24,.05)}
+.lbl{font-size:12px;color:#5B6573;font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.chip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+.sec{font-size:13px;font-weight:700;padding:8px 14px;border-radius:999px;background:#fff;border:1px solid #E6E8EC;white-space:nowrap;color:#101418;text-decoration:none}
+.sec.on{background:#101418;color:#fff;border-color:#101418}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:84px;background:#fff;border-top:1px solid #EDEFF2;display:flex;justify-content:space-around;padding-top:10px;box-sizing:border-box}
+.tab{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#7A8494;text-decoration:none}
+.tab.on{color:#101418}
+.rp{background:#F4F5F7;border-radius:14px;padding:10px 12px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;margin-top:6px}
+.li{display:flex;gap:10px;font-size:14px;line-height:1.45}
+.mt{background:#fff;border-radius:18px;padding:14px;box-shadow:0 1px 2px rgba(16,20,24,.05),0 6px 20px rgba(16,20,24,.05)}
+.btn{height:44px;border-radius:12px;border:1px solid #E6E8EC;background:#fff;font-weight:700;font-family:inherit;font-size:14px;color:#101418;padding:0 14px}
+</style>
+</helmet>
+<div style="width:390px;height:1560px;position:relative;box-sizing:border-box;padding:16px 16px 100px;background:#F4F5F7;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#101418;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px">
+    <div style="font-size:28px;font-weight:800;letter-spacing:-.02em">Health</div>
+    <div style="display:flex;background:#fff;border:1px solid #E6E8EC;border-radius:999px;padding:3px;font-size:12px;font-weight:700">
+      <span style="padding:6px 10px;color:#5B6573">7d</span><span style="padding:6px 10px;background:#101418;color:#fff;border-radius:999px">4w</span><span style="padding:6px 10px;color:#5B6573">3m</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;overflow:hidden"><a class="sec" href="Health.dc.html">Overview</a><a class="sec" href="Fitness.dc.html">Fitness</a><a class="sec on" href="Sleep.dc.html">Sleep</a><a class="sec" href="Habits.dc.html">Habits</a><a class="sec" href="Progress.dc.html">Progress</a></div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div class="lbl">Average sleep</div><div style="font-size:36px;font-weight:800;letter-spacing:-.02em" class="num">6h 10m</div></div>
+      <span class="chip" style="background:#FDE9E5;color:#B8341C">Debt 4h 20m</span>
+    </div>
+    <div style="font-size:13px;color:#5B6573">You need about 7h 30m. Short by ~1h 20m on 4 nights.</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#5B6573"><span style="width:28px">Mon</span><div style="flex:1;display:flex;height:16px;border-radius:5px;overflow:hidden;margin-left:12%;margin-right:8%"><div style="flex:2;background:#0B6E6A"></div><div style="flex:4;background:#5FC9C4"></div><div style="flex:1.5;background:#2CA7A2"></div><div style="flex:.4;background:#F2C6B8"></div></div></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#5B6573"><span style="width:28px">Tue</span><div style="flex:1;display:flex;height:16px;border-radius:5px;overflow:hidden;margin-left:18%;margin-right:10%"><div style="flex:1.5;background:#0B6E6A"></div><div style="flex:3.5;background:#5FC9C4"></div><div style="flex:1.2;background:#2CA7A2"></div><div style="flex:.6;background:#F2C6B8"></div></div></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#5B6573"><span style="width:28px">Wed</span><div style="flex:1;display:flex;height:16px;border-radius:5px;overflow:hidden;margin-left:8%;margin-right:6%"><div style="flex:2.2;background:#0B6E6A"></div><div style="flex:4.2;background:#5FC9C4"></div><div style="flex:1.8;background:#2CA7A2"></div><div style="flex:.3;background:#F2C6B8"></div></div></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#5B6573"><span style="width:28px">Thu</span><div style="flex:1;display:flex;height:16px;border-radius:5px;overflow:hidden;margin-left:24%;margin-right:12%"><div style="flex:1.2;background:#0B6E6A"></div><div style="flex:3;background:#5FC9C4"></div><div style="flex:1;background:#2CA7A2"></div><div style="flex:.8;background:#F2C6B8"></div></div></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#5B6573"><span style="width:28px">Fri</span><div style="flex:1;display:flex;height:16px;border-radius:5px;overflow:hidden;margin-left:14%;margin-right:4%"><div style="flex:2;background:#0B6E6A"></div><div style="flex:4.4;background:#5FC9C4"></div><div style="flex:1.6;background:#2CA7A2"></div><div style="flex:.4;background:#F2C6B8"></div></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#7A8494;padding-left:36px"><span>10 pm</span><span>2 am</span><span>6 am</span></div>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#5B6573;margin-top:8px">
+      <span><span style="color:#0B6E6A">■</span> Deep</span><span><span style="color:#5FC9C4">■</span> Light</span><span><span style="color:#2CA7A2">■</span> REM</span><span><span style="color:#E8A08A">■</span> Awake</span>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+    <div class="mt"><div class="lbl">Bedtime regularity</div><div style="font-size:24px;font-weight:800" class="num">±52 min</div><div style="font-size:12px;color:#B8341C;font-weight:700">▲ less regular</div></div>
+    <div class="mt"><div class="lbl">Deep sleep</div><div style="font-size:24px;font-weight:800" class="num">1h 05m</div><div style="font-size:12px;color:#12793B;font-weight:700">▲ 8 min</div></div>
+    <div class="mt"><div class="lbl">Overnight SpO2</div><div style="font-size:24px;font-weight:800" class="num">95%</div><div style="font-size:12px;color:#4A5361;font-weight:700">— steady</div></div>
+    <div class="mt"><div class="lbl">Breathing rate</div><div style="font-size:24px;font-weight:800" class="num">14.2</div><div style="font-size:12px;color:#12793B;font-weight:700">▼ 0.6 /min</div></div>
+  </div>
+  <div class="card">
+    <div style="font-size:16px;font-weight:800">How sleep shows up in your runs</div>
+    <svg viewBox="0 0 330 130" width="100%" style="margin-top:6px" role="img" aria-label="Easy pace heart rate is lower after nights over 7 hours">
+      <rect x="40" y="40" width="90" height="70" rx="10" fill="#E5533D" opacity=".85"></rect>
+      <rect x="200" y="58" width="90" height="52" rx="10" fill="#0E9F9A"></rect>
+      <text x="85" y="32" text-anchor="middle" font-size="14" font-weight="800" fill="#101418" font-family="Plus Jakarta Sans">152 bpm</text>
+      <text x="245" y="50" text-anchor="middle" font-size="14" font-weight="800" fill="#101418" font-family="Plus Jakarta Sans">146 bpm</text>
+      <text x="85" y="126" text-anchor="middle" font-size="11" fill="#5B6573" font-family="Plus Jakarta Sans">under 6 h (n=6)</text>
+      <text x="245" y="126" text-anchor="middle" font-size="11" fill="#5B6573" font-family="Plus Jakarta Sans">7 h + (n=5)</text>
+    </svg>
+    <div style="font-size:13px;color:#5B6573">HR at easy pace was 6 bpm lower after longer nights.</div>
+  </div>
+  <div class="card">
+    <div style="font-size:16px;font-weight:800">Tonight</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+      <div class="li"><span class="dot" style="background:#0E9F9A"></span><span>In bed by 10:45 pm to get 7h 30m before your 6:30 am run</span></div>
+      <div class="li"><span class="dot" style="background:#0E9F9A"></span><span>Last caffeine before 2 pm, no alcohol</span></div>
+      <div class="li"><span class="dot" style="background:#0E9F9A"></span><span>5 min slow breathing (4-6) before bed — open guide</span></div>
+    </div>
+  </div>
+  <nav class="tabbar" aria-label="Main">
+    <a class="tab" href="Today.dc.html"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>Today</a>
+    <a class="tab" href="#"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>Plan</a>
+    <a class="tab" href="#"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>Coach</a>
+    <a class="tab on" href="Health.dc.html"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"></path></svg>Health</a>
+    <a class="tab" href="#"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 6s1 4 3 4v8"></path></svg>Diet</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1560}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

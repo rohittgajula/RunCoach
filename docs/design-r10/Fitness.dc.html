@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Health fitness</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.card{background:#fff;border-radius:20px;padding:16px;box-shadow:0 1px 2px rgba(16,20,24,.05),0 6px 20px rgba(16,20,24,.05)}
+.lbl{font-size:12px;color:#5B6573;font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.chip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+.sec{font-size:13px;font-weight:700;padding:8px 14px;border-radius:999px;background:#fff;border:1px solid #E6E8EC;white-space:nowrap;color:#101418;text-decoration:none}
+.sec.on{background:#101418;color:#fff;border-color:#101418}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:84px;background:#fff;border-top:1px solid #EDEFF2;display:flex;justify-content:space-around;padding-top:10px;box-sizing:border-box}
+.tab{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#7A8494;text-decoration:none}
+.tab.on{color:#101418}
+.rp{background:#F4F5F7;border-radius:14px;padding:10px 12px}
+</style>
+</helmet>
+<div style="width:390px;height:1560px;position:relative;box-sizing:border-box;padding:16px 16px 100px;background:#F4F5F7;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#101418;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px">
+    <div style="font-size:28px;font-weight:800;letter-spacing:-.02em">Health</div>
+    <div style="display:flex;background:#fff;border:1px solid #E6E8EC;border-radius:999px;padding:3px;font-size:12px;font-weight:700">
+      <span style="padding:6px 10px;color:#5B6573">3m</span><span style="padding:6px 10px;background:#101418;color:#fff;border-radius:999px">6m</span><span style="padding:6px 10px;color:#5B6573">1y</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;overflow:hidden">
+    <a class="sec" href="Health.dc.html">Overview</a><a class="sec on" href="Fitness.dc.html">Fitness</a><a class="sec" href="Sleep.dc.html">Sleep</a><a class="sec" href="Habits.dc.html">Habits</a><a class="sec" href="Progress.dc.html">Progress</a>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div class="lbl">VO2max</div><div style="font-size:40px;font-weight:800;letter-spacing:-.02em" class="num">41</div></div>
+      <span class="chip" style="background:#E3F6EA;color:#12793B">▲ 3 in 6 months</span>
+    </div>
+    <svg viewBox="0 0 330 140" width="100%" role="img" aria-label="VO2max rising from 38 to 41 over six months">
+      <line x1="0" y1="30" x2="330" y2="30" stroke="#E6E8EC" stroke-dasharray="3 4"></line>
+      <line x1="0" y1="75" x2="330" y2="75" stroke="#E6E8EC" stroke-dasharray="3 4"></line>
+      <line x1="0" y1="120" x2="330" y2="120" stroke="#E6E8EC"></line>
+      <text x="4" y="26" font-size="10" fill="#7A8494" font-family="Plus Jakarta Sans">42</text>
+      <text x="4" y="71" font-size="10" fill="#7A8494" font-family="Plus Jakarta Sans">40</text>
+      <path d="M10 110 L60 108 L110 100 L160 90 L210 76 L260 60 L320 48 L320 120 L10 120 Z" fill="#2F6BFF" opacity=".10"></path>
+      <polyline fill="none" stroke="#2F6BFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="10,110 60,108 110,100 160,90 210,76 260,60 320,48"></polyline>
+      <circle cx="320" cy="48" r="5" fill="#fff" stroke="#2F6BFF" stroke-width="3"></circle>
+      <text x="10" y="136" font-size="10" fill="#7A8494" font-family="Plus Jakarta Sans">May</text>
+      <text x="300" y="136" font-size="10" fill="#7A8494" font-family="Plus Jakarta Sans">Oct</text>
+    </svg>
+    <div style="font-size:13px;color:#5B6573">Fitter than 62% of men your age. 2 more points reaches "Good".</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+    <div class="card">
+      <div class="lbl">Fitness age</div>
+      <div style="font-size:30px;font-weight:800" class="num">29</div>
+      <div style="font-size:12px;color:#5B6573">You're 31 · <span style="color:#12793B;font-weight:700">2 yrs younger</span></div>
+    </div>
+    <div class="card">
+      <div class="lbl">Endurance score</div>
+      <div style="font-size:30px;font-weight:800" class="num">4,120</div>
+      <div style="font-size:12px;color:#5B6573">Intermediate · <span style="color:#12793B;font-weight:700">▲ 310</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-size:16px;font-weight:800">Race predictions</div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px">
+      <div class="rp"><div class="lbl">5K</div><div style="font-size:20px;font-weight:800" class="num">29:40</div><div style="font-size:11px;color:#12793B;font-weight:700">▼ 1:12 faster</div></div>
+      <div class="rp"><div class="lbl">10K</div><div style="font-size:20px;font-weight:800" class="num">1:02:15</div><div style="font-size:11px;color:#12793B;font-weight:700">▼ 2:30 faster</div></div>
+      <div class="rp"><div class="lbl">Half</div><div style="font-size:20px;font-weight:800" class="num">2:21:00</div><div style="font-size:11px;color:#12793B;font-weight:700">▼ 5:40 faster</div></div>
+      <div class="rp"><div class="lbl">Marathon</div><div style="font-size:20px;font-weight:800" class="num">5:05:30</div><div style="font-size:11px;color:#4A5361;font-weight:700">— vs May</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:16px;font-weight:800">Lactate threshold</span><span class="chip" style="background:#E3EEFF;color:#1F4FCC">Zones updated</span></div>
+    <div style="display:flex;gap:20px;margin-top:8px">
+      <div><div style="font-size:22px;font-weight:800" class="num">171 bpm</div><div class="lbl">threshold HR</div></div>
+      <div><div style="font-size:22px;font-weight:800" class="num">6:05 /km</div><div class="lbl">threshold pace</div></div>
+    </div>
+    <div style="display:flex;height:28px;border-radius:8px;overflow:hidden;margin-top:14px;font-size:10px;font-weight:700;color:#fff;text-align:center;line-height:28px">
+      <div style="flex:2;background:#A9C1FF;color:#173C99">Z1</div><div style="flex:2;background:#6E96FF">Z2</div><div style="flex:1.4;background:#2F6BFF">Z3</div><div style="flex:1;background:#F26B3A">Z4</div><div style="flex:.8;background:#C93D17">Z5</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:#7A8494;margin-top:4px" class="num"><span>110</span><span>138</span><span>153</span><span>171</span><span>185</span></div>
+    <div style="font-size:13px;color:#5B6573;margin-top:8px">Your easy runs now target 138–153 bpm.</div>
+  </div>
+
+  <nav class="tabbar" aria-label="Main">
+    <a class="tab" href="Today.dc.html"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>Today</a>
+    <a class="tab" href="#"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>Plan</a>
+    <a class="tab" href="#"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>Coach</a>
+    <a class="tab on" href="Health.dc.html"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"></path></svg>Health</a>
+    <a class="tab" href="#"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 6s1 4 3 4v8"></path></svg>Diet</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1560}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RunCoach design language</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.card{background:#fff;border-radius:20px;padding:20px;box-shadow:0 1px 2px rgba(16,20,24,.05),0 6px 20px rgba(16,20,24,.05)}
+.h{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5B6573;margin:0 0 14px}
+.sw{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#5B6573}
+.sw b{display:block;height:56px;border-radius:14px}
+.sw span{color:#101418;font-weight:600;font-size:13px}
+.chip{font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;margin-top:6px}
+.li{display:flex;gap:10px;font-size:14px;line-height:1.45}
+</style>
+</helmet>
+<div style="width:1240px;height:1040px;box-sizing:border-box;padding:48px;background:#F4F5F7;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#101418;display:flex;flex-direction:column;gap:24px">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between">
+    <div>
+      <div style="font-size:14px;font-weight:600;color:#2F6BFF">RunCoach · new look</div>
+      <h1 style="margin:6px 0 0;font-size:44px;font-weight:800;letter-spacing:-.03em">Calm cards, one colour per topic, every chart answers a question</h1>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px">
+    <div class="card">
+      <p class="h">Colour by topic</p>
+      <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px">
+        <div class="sw"><b style="background:#2F6BFF"></b><span>Running</span>pace, PRs</div>
+        <div class="sw"><b style="background:#7A5AF8"></b><span>Recovery</span>HRV, RHR</div>
+        <div class="sw"><b style="background:#0E9F9A"></b><span>Sleep</span>stages</div>
+        <div class="sw"><b style="background:#F2A516"></b><span>Habits</span>logs</div>
+        <div class="sw"><b style="background:#F26B3A"></b><span>Fuel</span>diet</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:16px">
+        <div class="sw"><b style="background:#F4F5F7;border:1px solid #E6E8EC;height:36px"></b>Ground</div>
+        <div class="sw"><b style="background:#fff;border:1px solid #E6E8EC;height:36px"></b>Card</div>
+        <div class="sw"><b style="background:#101418;height:36px"></b>Ink</div>
+        <div class="sw"><b style="background:#5B6573;height:36px"></b>Muted</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="h">Better or worse — always shape + colour</p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <span class="chip" style="background:#E3F6EA;color:#12793B">▲ 4 ms</span>
+        <span class="chip" style="background:#E3F6EA;color:#12793B">▼ 2 bpm</span>
+        <span class="chip" style="background:#FDE9E5;color:#B8341C">▲ 7% drift</span>
+        <span class="chip" style="background:#EEF0F3;color:#4A5361">— steady</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px">
+        <span class="chip" style="background:#12A150;color:#fff">Improving</span>
+        <span class="chip" style="background:#E5533D;color:#fff">Worsening</span>
+        <span class="chip" style="background:#101418;color:#fff">Steady</span>
+        <span class="chip" style="background:#EEF0F3;color:#4A5361">Need more data</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:18px">
+        <div class="li"><span class="dot" style="background:#12A150"></span>Green dot = got better</div>
+        <div class="li"><span class="dot" style="background:#E5533D"></span>Red dot = got worse</div>
+        <div class="li"><span class="dot" style="background:#A3ABB7"></span>Grey dot = info or keep logging</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="h">Type</p>
+      <div style="font-size:48px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1">45<span style="font-size:18px;color:#5B6573;font-weight:600"> ms</span></div>
+      <div style="font-size:12px;color:#5B6573;margin-top:4px">Number — 48 / 800</div>
+      <div style="font-size:20px;font-weight:700;margin-top:16px">Card title — 20 / 700</div>
+      <div style="font-size:15px;margin-top:8px;line-height:1.5">Body — 15 / 400. Short sentences, real numbers, no jargon.</div>
+      <div style="font-size:12px;color:#5B6573;margin-top:8px;font-weight:500">Caption — 12 / 500</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="h">Chart grammar — one style everywhere</p>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700">Trend + your normal band</span><span class="chip" style="background:#E3F6EA;color:#12793B">▲ 4</span></div>
+        <svg viewBox="0 0 260 120" width="100%" style="margin-top:10px" role="img" aria-label="Line chart with a shaded normal band">
+          <rect x="0" y="40" width="260" height="36" rx="6" fill="#7A5AF8" opacity=".12"></rect>
+          <line x1="0" y1="110" x2="260" y2="110" stroke="#E6E8EC"></line>
+          <polyline fill="none" stroke="#7A5AF8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="6,80 40,72 74,76 108,62 142,66 176,52 210,48 250,40"></polyline>
+          <circle cx="250" cy="40" r="5" fill="#fff" stroke="#7A5AF8" stroke-width="3"></circle>
+        </svg>
+        <div style="font-size:12px;color:#5B6573">Shaded band = your normal range</div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700">Bars + tooltip</span><span class="chip" style="background:#E3F6EA;color:#12793B">▼ 38%</span></div>
+        <svg viewBox="0 0 260 120" width="100%" style="margin-top:10px" role="img" aria-label="Bar chart with a highlighted bar and tooltip">
+          <line x1="0" y1="110" x2="260" y2="110" stroke="#E6E8EC"></line>
+          <line x1="0" y1="70" x2="260" y2="70" stroke="#E6E8EC" stroke-dasharray="3 4"></line>
+          <rect x="8" y="70" width="22" height="40" rx="6" fill="#F2A516" opacity=".35"></rect>
+          <rect x="40" y="50" width="22" height="60" rx="6" fill="#F2A516" opacity=".35"></rect>
+          <rect x="72" y="80" width="22" height="30" rx="6" fill="#F2A516" opacity=".35"></rect>
+          <rect x="104" y="40" width="22" height="70" rx="6" fill="#F2A516"></rect>
+          <rect x="136" y="90" width="22" height="20" rx="6" fill="#F2A516" opacity=".35"></rect>
+          <rect x="168" y="96" width="22" height="14" rx="6" fill="#F2A516" opacity=".35"></rect>
+          <rect x="200" y="100" width="22" height="10" rx="6" fill="#F2A516" opacity=".35"></rect>
+          <rect x="232" y="104" width="22" height="6" rx="3" fill="#F2A516" opacity=".35"></rect>
+          <rect x="74" y="4" width="84" height="28" rx="10" fill="#101418"></rect>
+          <text x="116" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#fff" font-family="Plus Jakarta Sans">24 Sep · 4</text>
+        </svg>
+        <div style="font-size:12px;color:#5B6573">Dashed line = average</div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700">Score ring</span><span class="chip" style="background:#EEF0F3;color:#4A5361">— steady</span></div>
+        <div style="display:flex;align-items:center;gap:16px;margin-top:10px">
+          <svg viewBox="0 0 120 120" width="110" height="110" role="img" aria-label="Score ring at 74 of 100">
+            <circle cx="60" cy="60" r="48" fill="none" stroke="#E9F6F5" stroke-width="12"></circle>
+            <circle cx="60" cy="60" r="48" fill="none" stroke="#0E9F9A" stroke-width="12" stroke-linecap="round" stroke-dasharray="223 302" transform="rotate(-90 60 60)"></circle>
+            <text x="60" y="68" text-anchor="middle" font-size="28" font-weight="800" fill="#101418" font-family="Plus Jakarta Sans">74</text>
+          </svg>
+          <div style="font-size:13px;color:#5B6573;line-height:1.5">Ring = score out of 100. Colour = topic, never good/bad.</div>
+        </div>
+      </div>
+      <div>
+        <div style="font-weight:700">Then → now</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+          <div style="display:flex;justify-content:space-between;font-size:14px"><span style="color:#5B6573">HRV</span><span style="font-weight:700;font-variant-numeric:tabular-nums">41 → 45 ms <span style="color:#12A150">▲</span></span></div>
+          <div style="display:flex;justify-content:space-between;font-size:14px"><span style="color:#5B6573">Resting HR</span><span style="font-weight:700;font-variant-numeric:tabular-nums">62 → 60 <span style="color:#12A150">▼</span></span></div>
+          <div style="display:flex;justify-content:space-between;font-size:14px"><span style="color:#5B6573">Stress</span><span style="font-weight:700;font-variant-numeric:tabular-nums">34 → 36 <span style="color:#E5533D">▲</span></span></div>
+        </div>
+        <div style="font-size:12px;color:#5B6573;margin-top:10px">Arrow colour = better/worse for you</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="display:flex;gap:40px;align-items:center">
+    <div style="flex:1">
+      <p class="h">Navigation — 5 tabs, nothing more</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <span class="chip" style="background:#101418;color:#fff;padding:8px 14px;font-size:14px">Today</span>
+        <span class="chip" style="background:#fff;border:1px solid #E6E8EC;padding:8px 14px;font-size:14px">Plan</span>
+        <span class="chip" style="background:#fff;border:1px solid #E6E8EC;padding:8px 14px;font-size:14px">Coach</span>
+        <span class="chip" style="background:#fff;border:1px solid #E6E8EC;padding:8px 14px;font-size:14px">Health</span>
+        <span class="chip" style="background:#fff;border:1px solid #E6E8EC;padding:8px 14px;font-size:14px">Diet</span>
+      </div>
+    </div>
+    <div style="flex:1.4;font-size:14px;color:#5B6573;line-height:1.6">Health holds Overview · Fitness · Sleep · Habits · Progress · Guides as swipeable chips. Profile, settings, shoes, reminders and badges live behind your avatar (top-right).</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1240,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
