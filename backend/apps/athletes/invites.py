@@ -23,7 +23,7 @@ def consume_invite(code: str) -> bool:
     if not code:
         return False
     return bool(
-        InviteCode.objects.filter(code=code, uses__lt=F("max_uses"))
+        InviteCode.objects.filter(code=code, uses__lt=F("max_uses"), revoked_at__isnull=True)
         .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
         .update(uses=F("uses") + 1)
     )

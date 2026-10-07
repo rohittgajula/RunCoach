@@ -19,7 +19,7 @@ from django.conf import settings
 from apps.athletes.models import Athlete
 from apps.activities.models import Activity
 
-from .client import AIUnavailable, canonical_hash, complete, model_for
+from .client import AIUnavailable, canonical_hash, complete, model_for, provider_for
 from .context import athlete_state, recent_runs, run_summary, weekly_rollup
 from .models import AIAnalysis, AIRequestLog
 from .prompts import (
@@ -43,6 +43,13 @@ class BudgetExceeded(AIUnavailable):
     """This athlete has used their share for the month."""
 
 
+def budget_for(athlete: Athlete) -> int:
+    """R14 §14: the admin's per-athlete budget, else the default (read at call time so
+    tests can patch MONTHLY_CALL_BUDGET)."""
+    custom = getattr(athlete, "ai_call_budget", None)
+    return MONTHLY_CALL_BUDGET if custom is None else int(custom)
+
+
 def _spent_this_month(athlete: Athlete) -> int:
     start = athlete.local_today.replace(day=1)
     return AIRequestLog.objects.filter(
@@ -53,15 +60,20 @@ def _spent_this_month(athlete: Athlete) -> int:
 
 def check_budget(athlete: Athlete, operation: str, model: str) -> None:
     """Raise BudgetExceeded (and log the refusal) once the monthly ceiling is hit."""
-    if _spent_this_month(athlete) >= MONTHLY_CALL_BUDGET:
+    _refuse_over_budget(athlete, operation, model)
+
+
+def _refuse_over_budget(athlete: Athlete, operation: str, model: str) -> None:
+    budget = budget_for(athlete)
+    if _spent_this_month(athlete) >= budget:
         AIRequestLog.objects.create(
-            athlete=athlete, operation=operation, provider=settings.AI_PROVIDER,
+            athlete=athlete, operation=operation, provider=provider_for(operation),
             model=model, prompt_version=PROMPT_VERSION,
             status=AIRequestLog.Status.REFUSED,
-            error=f"Monthly budget of {MONTHLY_CALL_BUDGET} calls reached.",
+            error=f"Monthly budget of {budget} calls reached.",
         )
         raise BudgetExceeded(
-            f"You have used your {MONTHLY_CALL_BUDGET} coaching requests for this month."
+            f"You have used your {budget} coaching requests for this month."
         )
 
 
@@ -72,16 +84,17 @@ def log_call(
     """One AIRequestLog row per model call, failures included — they are billed too."""
     stats = dict(stats or {})
     model = stats.pop("model", "") or ""
+    provider = stats.pop("provider", "") or provider_for(operation)
     if error is not None:
         AIRequestLog.objects.create(
-            athlete=athlete, operation=operation, provider=settings.AI_PROVIDER,
+            athlete=athlete, operation=operation, provider=provider,
             model=model, prompt_version=prompt_version,
             status=AIRequestLog.Status.ERROR, error=str(error)[:500],
             retry_count=stats.get("retry_count", 0),
         )
         return
     AIRequestLog.objects.create(
-        athlete=athlete, operation=operation, provider=settings.AI_PROVIDER,
+        athlete=athlete, operation=operation, provider=provider,
         model=model, prompt_version=prompt_version, status=AIRequestLog.Status.OK,
         **{k: v for k, v in stats.items() if k in {
             "input_tokens", "output_tokens", "latency_ms", "estimated_cost_usd", "retry_count",
@@ -111,16 +124,7 @@ def _run(
         # would make the cost log lie in the direction of looking worse.
         return schema.model_validate(cached.result), True
 
-    if _spent_this_month(athlete) >= MONTHLY_CALL_BUDGET:
-        AIRequestLog.objects.create(
-            athlete=athlete, operation=operation, provider=settings.AI_PROVIDER,
-            model=model, prompt_version=PROMPT_VERSION,
-            status=AIRequestLog.Status.REFUSED,
-            error=f"Monthly budget of {MONTHLY_CALL_BUDGET} calls reached.",
-        )
-        raise BudgetExceeded(
-            f"You have used your {MONTHLY_CALL_BUDGET} coaching requests for this month."
-        )
+    _refuse_over_budget(athlete, operation, model)
 
     try:
         result, stats = complete(
@@ -128,7 +132,7 @@ def _run(
         )
     except Exception as exc:
         AIRequestLog.objects.create(
-            athlete=athlete, operation=operation, provider=settings.AI_PROVIDER,
+            athlete=athlete, operation=operation, provider=provider_for(operation),
             model=model, prompt_version=PROMPT_VERSION,
             status=AIRequestLog.Status.ERROR, error=str(exc)[:500],
         )
@@ -150,8 +154,10 @@ def _run(
             "; ".join(f.detail for f in checked.findings),
         )
 
+    stats = dict(stats)
+    provider = stats.pop("provider", "") or provider_for(operation)
     AIRequestLog.objects.create(
-        athlete=athlete, operation=operation, provider=settings.AI_PROVIDER,
+        athlete=athlete, operation=operation, provider=provider,
         prompt_version=PROMPT_VERSION,
         # A response with findings is still logged as OK: it was billed and it was
         # returned. INVALID is reserved for one that could not be parsed at all.

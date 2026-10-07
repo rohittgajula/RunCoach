@@ -29,6 +29,26 @@ class AthleteSerializer(serializers.ModelSerializer):
     savings_goal_amount = serializers.FloatField(min_value=1, max_value=10_000_000,
                                                  allow_null=True, required=False)
 
+    # R14
+    today_layout = serializers.JSONField(allow_null=True, required=False)
+
+    def validate_today_layout(self, value):
+        import re
+
+        if value is None:
+            return None
+        if not isinstance(value, list) or len(value) > 30:
+            raise serializers.ValidationError("Must be a list of at most 30 card keys, or null.")
+        seen = set()
+        for key in value:
+            if not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", key):
+                raise serializers.ValidationError(
+                    "Each key must be lower-case letters, digits or _ (max 32).")
+            if key in seen:
+                raise serializers.ValidationError(f"'{key}' is listed twice.")
+            seen.add(key)
+        return value
+
     def get_strength_per_week_suggested(self, athlete):
         from planning.strength import SUGGESTED_PER_WEEK
 
@@ -121,6 +141,8 @@ class AthleteSerializer(serializers.ModelSerializer):
             # R13
             "auto_adjust_plan", "strength_per_week", "strength_per_week_suggested",
             "caffeine_on_today", "pain_daily_check", "savings_goal_name", "savings_goal_amount",
+            # R14
+            "today_layout", "weather_auto_apply",
         ]
         # System-managed. A client that could PATCH garmin_connected=True could make
         # the UI claim sync works when it does not.
@@ -276,5 +298,6 @@ class RegisterSerializer(serializers.Serializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "username", "email"]
+        # R14 §14: is_staff lets the app show the Admin entry without probing /admin/.
+        fields = ["id", "username", "email", "is_staff"]
         read_only_fields = fields

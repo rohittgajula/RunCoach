@@ -8,6 +8,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health/", health, name="health"),
     path("api/health/live/", live, name="health-live"),
+    # R14 §14: the in-app admin page's API (staff only). Not Django admin (/admin/).
+    path("api/admin/", include("apps.adminpanel.urls")),
     path("api/", include("apps.athletes.urls")),
     path("api/", include("apps.ingest.urls")),
     path("api/", include("apps.activities.urls")),

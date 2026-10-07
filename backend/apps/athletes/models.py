@@ -160,6 +160,15 @@ class Athlete(models.Model):
     savings_goal_name = models.CharField(max_length=60, blank=True, default="")
     savings_goal_amount = models.FloatField(null=True, blank=True)
 
+    # R14 §1: the optional Today cards that are on, in order (null = the app default).
+    # The frontend owns the card catalogue; the backend only checks the shape.
+    today_layout = models.JSONField(null=True, blank=True)
+    # R14 §3: apply weather swaps without asking (default: suggest only).
+    weather_auto_apply = models.BooleanField(default=False)
+    # R14 §14: per-athlete monthly AI call budget set by an admin (null = the default,
+    # AI_MONTHLY_CALL_BUDGET). Never writable through the athlete API.
+    ai_call_budget = models.PositiveIntegerField(null=True, blank=True)
+
     # Whether the athlete has been through onboarding. Needed as an explicit flag
     # rather than inferred: the router has to decide where a freshly-registered
     # athlete lands, and racing a redirect against a state update silently skipped
@@ -375,6 +384,8 @@ class InviteCode(models.Model):
     max_uses = models.PositiveIntegerField(default=1)
     uses = models.PositiveIntegerField(default=0)
     expires_at = models.DateTimeField(null=True, blank=True)
+    # R14 §14: revoked from the admin page (kept for the record, never usable again).
+    revoked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -392,7 +403,7 @@ class InviteCode(models.Model):
     def is_usable(self) -> bool:
         from django.utils import timezone
 
-        return self.uses < self.max_uses and (
+        return self.revoked_at is None and self.uses < self.max_uses and (
             self.expires_at is None or self.expires_at > timezone.now()
         )
 

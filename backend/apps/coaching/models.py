@@ -18,10 +18,15 @@ class AIRequestLog(models.Model):
         REFUSED = "refused", "Refused by safety gate"
         ERROR = "error", "Error"
 
+    # Null only for an admin's "test a prompt" call (R14 §14), which belongs to nobody.
     athlete = models.ForeignKey(
-        "athletes.Athlete", on_delete=models.CASCADE, related_name="ai_requests"
+        "athletes.Athlete", on_delete=models.CASCADE, related_name="ai_requests",
+        null=True, blank=True,
     )
     operation = models.CharField(max_length=40, db_index=True)
+    # R14: the tier the operation resolved through when the call was made, so the stats
+    # stay right after an operation moves to another tier.
+    tier = models.CharField(max_length=10, blank=True, default="", db_index=True)
     provider = models.CharField(max_length=20)
     model = models.CharField(max_length=60)
     prompt_version = models.CharField(max_length=20)
@@ -42,6 +47,54 @@ class AIRequestLog(models.Model):
 
     def __str__(self):
         return f"{self.operation} {self.status} {self.input_tokens}+{self.output_tokens}"
+
+    def save(self, *args, **kwargs):
+        if not self.tier:
+            from django.conf import settings
+
+            self.tier = ("admin" if self.operation == "admin_test"
+                         else settings.AI_MODEL_TIERS.get(self.operation, "fast"))
+        super().save(*args, **kwargs)
+
+
+class AIConfig(models.Model):
+    """R14 §14: which provider + model serves a tier. A row overrides the env default
+    (AI_PROVIDER + AI_<TIER>_MODEL) for that tier; no row = env. Operator data, not tenant
+    data."""
+
+    class Tier(models.TextChoices):
+        LITE = "lite", "Lite"
+        FAST = "fast", "Fast"
+        COACH = "coach", "Coach"
+        DEEP = "deep", "Deep"
+
+    tier = models.CharField(max_length=10, choices=Tier.choices, unique=True)
+    provider = models.CharField(max_length=20)
+    model = models.CharField(max_length=80)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.tier}: {self.provider}/{self.model}"
+
+
+class ModelPrice(models.Model):
+    """R14 §14: USD per million tokens, editable by an admin. Also the list of models
+    a tier can be pointed at. Approximate — the provider's dashboard is authoritative."""
+
+    provider = models.CharField(max_length=20)
+    model = models.CharField(max_length=80)
+    input_per_m_usd = models.FloatField()
+    output_per_m_usd = models.FloatField()
+    note = models.CharField(max_length=200, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["provider", "model"]
+        constraints = [models.UniqueConstraint(fields=["provider", "model"],
+                                               name="uniq_model_price")]
+
+    def __str__(self):
+        return f"{self.provider}/{self.model} {self.input_per_m_usd}/{self.output_per_m_usd}"
 
 
 class AIAnalysis(OwnedByAthlete):

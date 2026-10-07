@@ -334,6 +334,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "athletes.export_cleanup",
         "schedule": crontab(minute=50),
     },
+    # R14 §3: weather-smart reschedule check, 18:xx local (the task filters by hour).
+    "weather-checks": {
+        "task": "planning.weather_checks",
+        "schedule": crontab(minute=12),
+    },
     "send-reminders": {
         "task": "reminders.send_due",
         "schedule": crontab(minute="*/5"),
@@ -378,7 +383,10 @@ VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "")
 AI_PROVIDER = os.environ.get("AI_PROVIDER", "openai")
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-# Second provider, added at M6 to prove the abstraction seam is real.
+# R14 §14: Google AI Studio (Gemini) through its OpenAI-compatible endpoint, same client
+# code (apps/coaching/client.py PROVIDERS). Empty = the provider shows "not configured"
+# and no tier can be pointed at it. AI_PROVIDER stays the env default for every tier;
+# the admin page's AIConfig rows override it per tier.
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 # Provider-neutral names: only one provider is live, and operations resolve through
@@ -427,6 +435,10 @@ AI_MODEL_TIERS = {
 AI_MONTHLY_CALL_BUDGET = int(os.environ.get("AI_MONTHLY_CALL_BUDGET", "200"))
 
 AI_TIMEOUT_SEC = int(os.environ.get("AI_TIMEOUT_SEC", "60"))
+
+# R14 §14: the GCP free-trial card on the admin page. Shown only, never enforced.
+GCP_TRIAL_END = os.environ.get("GCP_TRIAL_END", "2027-01-03")
+GCP_CREDIT_INR = os.environ.get("GCP_CREDIT_INR", "")
 AI_MAX_RETRIES = int(os.environ.get("AI_MAX_RETRIES", "2"))
 
 # --- Training safety ---------------------------------------------------------

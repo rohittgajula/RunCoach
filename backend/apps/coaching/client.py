@@ -22,17 +22,45 @@ T = TypeVar("T", bound=BaseModel)
 # Cached. NEVER construct a client inline: building and using one in a single
 # expression lets it be garbage-collected mid-request, closing its connection pool on
 # the way out, and the call dies with "client has been closed".
-_CLIENTS: dict[str, Any] = {}
+_CLIENTS: dict[tuple, Any] = {}
 
-# USD per million tokens, for the cost log. Approximate and only used for reporting —
-# the authoritative number is the OpenAI dashboard.
+# R14 §14: Google AI Studio's OpenAI-compatible endpoint. Gemini goes through the same
+# `openai` SDK and the same two functions below — only the base URL and key differ.
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+PROVIDERS: dict[str, dict] = {
+    "openai": {
+        "label": "OpenAI", "base_url": None, "key_setting": "OPENAI_API_KEY",
+        # Function tools on /v1/chat/completions need reasoning off for the gpt-5.x family.
+        "chat_extra": {"reasoning_effort": "none"},
+        "features": {"tools": True, "json_schema": True, "streaming": True, "vision": True},
+    },
+    "gemini": {
+        "label": "Google AI Studio (Gemini)", "base_url": GEMINI_BASE_URL,
+        "key_setting": "GEMINI_API_KEY",
+        # Not every Gemini model accepts reasoning_effort="none" (2.5 Pro / 3.x keep
+        # thinking on), so nothing extra is sent; thinking tokens are billed as output.
+        "chat_extra": {},
+        "features": {"tools": True, "json_schema": True, "streaming": True, "vision": True},
+    },
+}
+
+# USD per million tokens — the fallback when the editable price table (ModelPrice,
+# R14) has no row for a model. Approximate and only used for reporting; the provider's
+# dashboard is the authoritative number.
 PRICING = {
     "gpt-5.6-terra": (2.00, 12.00),
     "gpt-5.6-luna": (0.20, 1.20),
     "gpt-5.6-sol": (5.00, 30.00),
     "gpt-5.4-mini": (0.75, 4.50),
     "gpt-5-nano": (0.05, 0.40),
+    "gemini-2.5-flash-lite": (0.10, 0.40),
+    "gemini-2.5-flash": (0.30, 2.50),
+    "gemini-2.5-pro": (1.25, 10.00),
+    "gemini-3-flash-preview": (0.50, 3.00),
+    "gemini-3-pro-preview": (2.00, 12.00),
 }
+TIERS = ("lite", "fast", "coach", "deep")
 
 
 class AIUnavailable(Exception):
@@ -43,27 +71,95 @@ class AIUnavailable(Exception):
     """
 
 
+def provider_key(provider: str) -> str:
+    info = PROVIDERS.get(provider)
+    return getattr(settings, info["key_setting"], "") if info else ""
+
+
+def provider_configured(provider: str) -> bool:
+    return bool(provider_key(provider))
+
+
 def get_client(provider: str = "openai"):
-    if provider not in _CLIENTS:
+    info = PROVIDERS.get(provider)
+    if info is None:
+        raise AIUnavailable(f"Unknown AI provider '{provider}'.")
+    key = provider_key(provider)
+    if not key:
+        raise AIUnavailable(f"No {info['key_setting']} configured.")
+    import hashlib
+
+    cache_key = (provider, hashlib.sha256(key.encode()).hexdigest()[:16])
+    if cache_key not in _CLIENTS:
         from openai import OpenAI
 
-        key = settings.OPENAI_API_KEY
-        if not key:
-            raise AIUnavailable("No OPENAI_API_KEY configured.")
-        _CLIENTS[provider] = OpenAI(api_key=key, timeout=settings.AI_TIMEOUT_SEC)
-    return _CLIENTS[provider]
+        kwargs = {"api_key": key, "timeout": settings.AI_TIMEOUT_SEC}
+        if info["base_url"]:
+            kwargs["base_url"] = info["base_url"]
+        _CLIENTS[cache_key] = OpenAI(**kwargs)
+    return _CLIENTS[cache_key]
+
+
+def tier_for(operation: str) -> str:
+    if operation == "admin_test":
+        return "admin"
+    return settings.AI_MODEL_TIERS.get(operation, "fast")
+
+
+def _db_route(tier: str) -> tuple[str, str] | None:
+    """The admin's choice for a tier (AIConfig), or None. Never raises: outside a
+    database (pure tests, scripts) the env default applies."""
+    try:
+        from .models import AIConfig
+
+        row = AIConfig.objects.filter(tier=tier).values_list("provider", "model").first()
+    except Exception:  # noqa: BLE001
+        return None
+    return (row[0], row[1]) if row and row[1] else None
+
+
+def env_route(tier: str) -> tuple[str, str]:
+    model = settings.AI_MODELS.get(tier) or settings.AI_MODELS.get("fast") or ""
+    return settings.AI_PROVIDER, model
+
+
+def route_for(operation: str) -> tuple[str, str]:
+    """(provider, model) for an operation: AIConfig row for its tier, else env."""
+    tier = tier_for(operation)
+    provider, model = _db_route(tier) or env_route(tier)
+    if not model:
+        raise AIUnavailable(f"No model configured for tier '{tier}'.")
+    return provider, model
 
 
 def model_for(operation: str) -> str:
-    tier = settings.AI_MODEL_TIERS.get(operation, "fast")
-    model = settings.AI_MODELS.get(tier) or settings.AI_MODELS.get("fast")
-    if not model:
-        raise AIUnavailable(f"No model configured for tier '{tier}'.")
-    return model
+    return route_for(operation)[1]
 
 
-def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    rates = PRICING.get(model)
+def provider_for(operation: str) -> str:
+    """The provider an operation would use (for log rows written without a call)."""
+    tier = tier_for(operation)
+    return (_db_route(tier) or env_route(tier))[0]
+
+
+def price_for(model: str, provider: str | None = None) -> tuple[float, float] | None:
+    try:
+        from .models import ModelPrice
+
+        rows = ModelPrice.objects.filter(model=model)
+        if provider:
+            rows = rows.filter(provider=provider)
+        row = rows.values_list("input_per_m_usd", "output_per_m_usd").first()
+        if row:
+            return float(row[0]), float(row[1])
+    except Exception:  # noqa: BLE001
+        pass
+    return PRICING.get(model)
+
+
+def estimate_cost(model: str, input_tokens: int, output_tokens: int,
+                  provider: str | None = None) -> float:
+    rates = price_for(model, provider)
     if not rates:
         return 0.0
     return round(input_tokens / 1e6 * rates[0] + output_tokens / 1e6 * rates[1], 6)
@@ -85,28 +181,24 @@ def complete(
     prevents. A schema-valid answer can still be semantically wrong — that is what
     the validators downstream are for.
     """
-    client = get_client()
-    model = model_for(operation)
+    provider, model = route_for(operation)
+    client = get_client(provider)
     retries = settings.AI_MAX_RETRIES if max_retries is None else max_retries
+    json_mode = "schema"
 
     last_error: Exception | None = None
-    for attempt in range(retries + 1):
+    attempt = -1
+    while attempt < retries:
+        attempt += 1
         started = time.monotonic()
         try:
             response = client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": system},
+                    {"role": "system", "content": _system_for(system, schema, json_mode)},
                     {"role": "user", "content": _user_content(user, image_data_url)},
                 ],
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": schema.__name__,
-                        "strict": True,
-                        "schema": _strict_schema(schema),
-                    },
-                },
+                response_format=_response_format(schema, json_mode),
             )
             latency = int((time.monotonic() - started) * 1000)
 
@@ -118,18 +210,8 @@ def complete(
             if getattr(choice.message, "refusal", None):
                 raise AIUnavailable(f"Model refused: {choice.message.refusal}")
 
-            usage = response.usage
-            stats = {
-                "model": model,
-                "input_tokens": usage.prompt_tokens if usage else 0,
-                "output_tokens": usage.completion_tokens if usage else 0,
-                "latency_ms": latency,
-                "retry_count": attempt,
-            }
-            stats["estimated_cost_usd"] = estimate_cost(
-                model, stats["input_tokens"], stats["output_tokens"]
-            )
-            return schema.model_validate_json(choice.message.content), stats
+            stats = _usage_stats(provider, model, response, latency, attempt)
+            return schema.model_validate_json(_json_text(choice.message.content)), stats
 
         except ValidationError as exc:
             last_error = exc
@@ -143,6 +225,15 @@ def complete(
                 logger.warning("ai %s rate limited", operation)
                 raise AIUnavailable("Rate limited. Try again shortly.") from exc
             logger.warning("ai %s error (attempt %s): %s", operation, attempt, message)
+            if _is_client_error(exc):
+                # A provider that rejects the strict json_schema (seen with some
+                # OpenAI-compatible endpoints) gets one try in plain JSON mode, with the
+                # schema in the prompt and the same Pydantic validation after.
+                if json_mode == "schema" and _schema_rejected(message):
+                    json_mode = "object"
+                    attempt -= 1          # the fallback does not use up a retry
+                    continue
+                raise AIUnavailable(f"{operation} rejected: {message[:300]}") from exc
 
         if attempt < retries:
             time.sleep(min(2**attempt, 8))
@@ -160,9 +251,41 @@ def _user_content(text: str, image_data_url: str | None):
     ]
 
 
-def _usage_stats(model: str, response, latency_ms: int, attempt: int) -> dict:
+def _response_format(schema, json_mode: str) -> dict:
+    if json_mode == "object":
+        return {"type": "json_object"}
+    return {"type": "json_schema",
+            "json_schema": {"name": schema.__name__, "strict": True,
+                            "schema": _strict_schema(schema)}}
+
+
+def _system_for(system: str, schema, json_mode: str) -> str:
+    if json_mode != "object":
+        return system
+    return (f"{system}\n\nAnswer with one JSON object only, matching this JSON schema "
+            f"exactly:\n{json.dumps(_strict_schema(schema))}")
+
+
+def _schema_rejected(message: str) -> bool:
+    text = message.lower()
+    return any(word in text for word in ("response_format", "json_schema", "schema"))
+
+
+def _json_text(content: str | None) -> str:
+    """The JSON object in a reply. Strict mode returns it bare; JSON mode on some
+    providers wraps it in a ```json fence."""
+    text = (content or "").strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text[:4].lower() == "json":
+            text = text[4:]
+    return text.strip()
+
+
+def _usage_stats(provider: str, model: str, response, latency_ms: int, attempt: int) -> dict:
     usage = response.usage
     stats = {
+        "provider": provider,
         "model": model,
         "input_tokens": usage.prompt_tokens if usage else 0,
         "output_tokens": usage.completion_tokens if usage else 0,
@@ -170,7 +293,7 @@ def _usage_stats(model: str, response, latency_ms: int, attempt: int) -> dict:
         "retry_count": attempt,
     }
     stats["estimated_cost_usd"] = estimate_cost(
-        model, stats["input_tokens"], stats["output_tokens"]
+        model, stats["input_tokens"], stats["output_tokens"], provider
     )
     return stats
 
@@ -200,8 +323,9 @@ def chat_with_tools(
     there) and `on_call(stats, error)` after it (the request log). Both are hooks so
     this module stays free of athlete and database concerns.
     """
-    client = get_client()
-    model = model_for(operation)
+    provider, model = route_for(operation)
+    client = get_client(provider)
+    extra = dict(PROVIDERS.get(provider, {}).get("chat_extra") or {})
     retries = settings.AI_MAX_RETRIES
     conversation = list(messages)
     audit: list[dict] = []
@@ -221,22 +345,24 @@ def chat_with_tools(
                     messages=conversation,
                     tools=tools,
                     tool_choice="none" if final_turn else "auto",
-                    # Function tools on /v1/chat/completions are rejected for reasoning
-                    # models unless reasoning is off (a 400 on gpt-5.6-terra). Chat is a
-                    # conversational loop over tools that do the thinking in Python, so
-                    # no reasoning is the right setting anyway. `complete` is untouched.
-                    reasoning_effort="none",
+                    # OpenAI: function tools on /v1/chat/completions are rejected for
+                    # reasoning models unless reasoning is off (a 400 on gpt-5.6-terra).
+                    # Chat is a conversational loop over tools that do the thinking in
+                    # Python, so no reasoning is the right setting anyway. Per provider:
+                    # see PROVIDERS[...]["chat_extra"].
+                    **extra,
                 )
                 if on_call:
                     on_call(
-                        _usage_stats(model, response, int((time.monotonic() - started) * 1000), attempt),
+                        _usage_stats(provider, model, response,
+                                     int((time.monotonic() - started) * 1000), attempt),
                         None,
                     )
                 break
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
                 if on_call:
-                    on_call({"model": model, "retry_count": attempt}, exc)
+                    on_call({"provider": provider, "model": model, "retry_count": attempt}, exc)
                 message = str(exc)
                 if "429" in message or "rate limit" in message.lower():
                     raise AIUnavailable("Rate limited. Try again shortly.") from exc
@@ -261,16 +387,18 @@ def chat_with_tools(
                 raise AIUnavailable(f"Model refused: {message.refusal}")
             return (message.content or "").strip(), audit
 
+        # Gemini may return tool calls without an id; the reply must still pair each
+        # result with its call, so one is made up. Gemini 3 also attaches a "thought
+        # signature" (extra_content) that has to be sent back with the call, or the
+        # next request is a 400.
+        call_ids = [getattr(call, "id", None) or f"call_{iteration}_{i}"
+                    for i, call in enumerate(tool_calls)]
         conversation.append({
             "role": "assistant",
             "content": message.content or "",
-            "tool_calls": [
-                {"id": call.id, "type": "function",
-                 "function": {"name": call.function.name, "arguments": call.function.arguments}}
-                for call in tool_calls
-            ],
+            "tool_calls": [_echo_call(call, call_id) for call, call_id in zip(tool_calls, call_ids)],
         })
-        for call in tool_calls:
+        for call, call_id in zip(tool_calls, call_ids):
             name = call.function.name
             args: dict = {}
             try:
@@ -284,11 +412,22 @@ def chat_with_tools(
             audit.append({"name": name, "arguments": args, "result": result})
             conversation.append({
                 "role": "tool",
-                "tool_call_id": call.id,
+                "tool_call_id": call_id,
                 "content": json.dumps(result, default=str)[:20000],
             })
 
     raise AIUnavailable("Tool loop ended without an answer.")  # pragma: no cover
+
+
+def _echo_call(call, call_id: str) -> dict:
+    out = {"id": call_id, "type": "function",
+           "function": {"name": call.function.name, "arguments": call.function.arguments}}
+    extra = getattr(call, "extra_content", None)
+    if extra is None:
+        extra = (getattr(call, "model_extra", None) or {}).get("extra_content")
+    if extra:
+        out["extra_content"] = extra
+    return out
 
 
 def _is_client_error(exc: Exception) -> bool:
