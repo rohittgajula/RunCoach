@@ -2151,6 +2151,40 @@ Status meaning: `ok` answered; `busy` 503/overloaded (or a per-minute rate 429);
 `no_quota` 429 quota/billing (free tier: Pro models need billing); `unavailable` 404 / not
 offered to this key; `error` anything else (auth, bad request, timeout).
 
+**Model cards** (what each model is, how fast, how costly). `GET /admin/ai/models/?provider=gemini|openai`
+(optional `refresh=1`) → `{provider, source: "live"|"price_table", fetched_at: datetime|null,
+models: [ModelCard]}` — one card per entry of the provider's `models` list, same order:
+```
+ModelCard = ModelInfo + {
+  label: str,                                   # "Gemini 3.5 Flash-Lite"
+  family: str,                                  # flash-lite | flash | pro | nano | mini | full | other
+  known: bool,                                  # false = generic summary derived from the name
+  summary: str,                                 # 1–2 plain sentences: what it is good at
+  best_for: ["lite"|"fast"|"coach"|"deep"],     # tiers it suits
+  speed: "fast"|"medium"|"slow",
+  quality: "basic"|"good"|"strong"|"best",
+  cost_level: "free_tier"|"$"|"$$"|"$$$",       # free_tier = Gemini, works on the free key
+  price_in_per_1m: number|null, price_out_per_1m: number|null,   # USD, from the price table
+  est_cost_per_call_usd: {lite: number|null, fast: …, coach: …, deep: …},
+                                                # median tokens per call of each tier over the
+                                                # last 30 days (defaults when no data) × price
+  context_window: int|null,                     # tokens, when known
+  free_tier_ok: bool|null,                      # Gemini only: last probe ok (true), no_quota/
+                                                # unavailable (false), never probed (null)
+  calls: int, avg_latency_ms: int|null,         # our own AIRequestLog, last 30 days
+  error_rate: number (0–1), avg_cost_usd: number|null }
+```
+The static descriptions live in `backend/apps/coaching/model_catalog.py`; unknown ids get a
+generic card from the name family (flash-lite = cheapest/fastest, flash = balanced, pro =
+strongest/most expensive; OpenAI nano < mini < full).
+
+**One-click provider switch.** `POST /admin/ai/config/switch/ {provider}` → the `config` body
+plus `changed: [{tier, model}]`, `unchanged: [{tier, reason}]`. Each tier is pointed at that
+provider's recommended model for the tier (the catalog's preference list, skipping models
+whose last probe was not ok and, when the live list is known, models not in it; for the env
+provider, its env model for the tier is preferred). Stored fallbacks are kept. 400 for an
+unknown/unconfigured provider. Per-tier `PUT /admin/ai/config/` is unchanged.
+
 **Per-tier fallback.** `GET|PUT /admin/ai/config/` — each `Tier` gains:
 ```
 fallback_provider: str|null, fallback_model: str|null,   # the stored choice (null = env default)
