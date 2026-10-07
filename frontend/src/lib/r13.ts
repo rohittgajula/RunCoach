@@ -573,6 +573,10 @@ export function useRequestExport() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: () => api<ExportJob>('/export/', { method: 'POST' }),
-    onSuccess: (job) => client.setQueryData(['export'], { export: job }),
+    onSuccess: (job) => {
+      client.setQueryData(['export'], { export: job })
+      // A fetch re-arms refetchInterval (setQueryData alone does not).
+      client.invalidateQueries({ queryKey: ['export'] })
+    },
   })
 }

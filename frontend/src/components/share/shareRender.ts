@@ -206,18 +206,18 @@ function drawRun(ctx: CanvasRenderingContext2D, c: Extract<ShareCard, { kind: 'r
   big(ctx, c.title || 'Run', 80, 120 + size + 16, size)
   const raw = c.route ?? []
   const pts = c.endpointsHidden ? raw : trimRoute(raw)
-  drawRoute(ctx, pts, { x: 80, y: 260, w: W - 160, h: 600 })
+  drawRoute(ctx, pts, { x: 80, y: 250, w: W - 160, h: 570 })
   const kmText = c.distance_m != null ? (c.distance_m / 1000).toFixed(2) : '--'
-  label(ctx, 'Distance', 80, 940)
-  big(ctx, kmText, 80, 1060, 120)
+  label(ctx, 'Distance', 80, 900)
+  big(ctx, kmText, 80, 1015, 120)
   ctx.font = `800 120px ${FONT}`
   const w = ctx.measureText(kmText).width
   ctx.fillStyle = 'rgba(255,255,255,0.8)'
   ctx.font = `700 44px ${FONT}`
-  ctx.fillText(' km', 80 + w, 1060)
+  ctx.fillText(' km', 80 + w, 1015)
   const stats: Array<[string, string]> = [['Time', fmtDur(c.duration_s)], ['Pace /km', fmtPace(c.pace_s_per_km)]]
   if (c.avg_hr != null) stats.push(['Avg HR', `${Math.round(c.avg_hr)}`])
-  statRow(ctx, stats, 1130)
+  statRow(ctx, stats, 1090)
   brand(ctx)
 }
 

@@ -67,8 +67,9 @@
 .export-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 
 /* --- races + race plan ------------------------------------------------------------------ */
-.race-row { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); }
-.race-row .race { border-bottom: none; flex: 1; min-width: 0; }
+.race-row { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; border-bottom: 1px solid var(--line); }
+.race-row .race { border-bottom: none; flex: 1 1 100%; min-width: 0; }
+.race-row .race-plan-btn { margin: -4px 0 12px 66px; }
 .races li.race-row:last-child { border-bottom: none; }
 .race-plan-btn { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
 .race-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
@@ -165,7 +166,7 @@
 .injury-card.is-high { box-shadow: inset 4px 0 0 var(--bad), var(--shadow); }
 .injury-card.is-moderate { box-shadow: inset 4px 0 0 var(--habits), var(--shadow); }
 .injury-title { display: inline-flex; align-items: center; gap: 6px; }
-.injury-title svg { color: var(--bad); }
+.injury-title > svg { color: var(--bad); }
 .injury-flags, .injury-pains, .injury-guidance { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .injury-flags li { display: flex; align-items: center; gap: 10px; font-size: 14px; min-height: 36px; }
 .injury-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--habits); }
@@ -256,7 +257,7 @@
 
 /* --- reports ---------------------------------------------------------------------------- */
 .report-tabs .segmented-option { text-align: center; text-decoration: none; color: var(--muted); min-height: 44px; display: grid; place-items: center; }
-.report-tabs .segmented-option.is-active { color: var(--fg); }
+.report-tabs a.segmented-option.is-active { color: var(--on-primary); }
 .quicklog-head .quicklog-label { white-space: nowrap; }
 .quicklog-head .quicklog-aside { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .craving-btn { white-space: nowrap; flex: none; }
