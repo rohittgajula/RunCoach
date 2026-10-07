@@ -137,11 +137,12 @@ function Invites() {
   const [days, setDays] = useState('14')
   const [revoking, setRevoking] = useState<number | null>(null)
   const [copied, setCopied] = useState<number | null>(null)
+  const [form, setForm] = useState(false)
   const list = invites.data ?? []
   const create = () =>
     write.mutate(
       { path: '/admin/invites/', method: 'POST', body: { note: note.trim(), max_uses: Math.min(100, Math.max(1, Number(uses) || 1)), expires_in_days: days ? Number(days) : null } },
-      { onSuccess: () => setNote('') },
+      { onSuccess: () => { setNote(''); setForm(false) } },
     )
   const copy = async (i: Invite) => {
     try {
@@ -151,13 +152,22 @@ function Invites() {
   }
   return (
     <section className="card stack-sm">
-      <CardHead title="Invites" sub={`${list.filter((i) => i.usable).length} usable`} />
+      <CardHead
+        title="Invites"
+        sub={`${list.filter((i) => i.usable).length} usable`}
+        aside={!form ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => setForm(true)}>New invite</button> : undefined}
+      />
+      {form && <>
       <div className="grid-2">
         <Field label="Note"><input value={note} maxLength={200} placeholder="Who it's for" onChange={(e) => setNote(e.target.value)} /></Field>
         <Field label="Uses"><input inputMode="numeric" value={uses} onChange={(e) => setUses(e.target.value.replace(/[^\d]/g, ''))} /></Field>
         <Field label="Expires in (days)" hint="Empty = never"><input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.replace(/[^\d]/g, ''))} /></Field>
       </div>
-      <button type="button" className="btn btn-primary btn-sm" disabled={write.isPending} onClick={create}>Create invite</button>
+      <div className="row-wrap">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setForm(false)}>Cancel</button>
+        <button type="button" className="btn btn-primary btn-sm" disabled={write.isPending} onClick={create}>Create invite</button>
+      </div>
+      </>}
       {invites.isPending && <Skeleton lines={2} />}
       <ul className="admin-list">
         {list.map((i) => (
@@ -523,7 +533,7 @@ function Breakdown({ title, rows }: { title: string; rows: Array<{ name: string;
               <span className="grow">
                 <span className="kit-head"><b className="grow">{r.name}</b><span>{usd(r.cost_usd)}</span></span>
                 <Meter value={r.cost_usd} max={max} topic="run" label={`${r.name} cost`} />
-                <span className="muted small">{r.calls} calls · {kTok(r.input_tokens + r.output_tokens)} tokens{r.errors ? ` · ${r.errors} errors` : ''}</span>
+                <span className="muted small">{r.calls} calls · {kTok(r.input_tokens + r.output_tokens)} tokens{r.errors ? ` · ${r.errors} error${r.errors === 1 ? '' : 's'}` : ''}</span>
               </span>
             </li>
           ))}
@@ -556,7 +566,7 @@ function SystemTab() {
       </section>
 
       {g && (
-        <Disclosure id="sys-garmin" title="Garmin sync" sub={g.breaker_open ? `Breaker open${g.reason ? ` · ${g.reason}` : ''}` : `${g.users.filter((u) => u.connected).length} linked users`}>
+        <Disclosure id="sys-garmin" title="Garmin sync" sub={g.breaker_open ? `Breaker open${g.reason ? ` · ${g.reason}` : ''}` : `${g.users.filter((u) => u.connected).length} of ${g.users.length} linked`}>
           <section className="card">
             {g.breaker_open && <p className="bad small">{g.reason ?? 'Paused'}{g.retry_after_s != null ? ` · retry in ${Math.ceil(g.retry_after_s / 60)} min` : ''}</p>}
             <ul className="admin-list">
@@ -605,11 +615,7 @@ function SystemTab() {
               <NodeBar label="CPU" pct={n.cpu_pct} text={n.cpu_used_cores != null ? `${n.cpu_used_cores.toFixed(1)} of ${n.cpu_cores} cores` : `${n.cpu_cores} cores`} />
               <NodeBar label="Memory" pct={n.memory_pct} text={`${gb(n.memory_used_bytes)} of ${gb(n.memory_bytes)}`} />
               {n.disk_bytes != null && (
-                <NodeBar
-                  label="Disk"
-                  pct={n.disk_allocatable_bytes != null ? Math.round(100 - (n.disk_allocatable_bytes / n.disk_bytes) * 100) : null}
-                  text={`${gb(n.disk_allocatable_bytes)} free of ${gb(n.disk_bytes)}`}
-                />
+                <NodeBar label="Disk" pct={null} text={`${gb(n.disk_bytes)}${n.disk_allocatable_bytes != null ? ` · ${gb(n.disk_allocatable_bytes)} allocatable to pods` : ''}`} />
               )}
             </section>
           ))}

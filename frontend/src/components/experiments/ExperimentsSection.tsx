@@ -249,7 +249,10 @@ function ResultBody({ e, result: r, onClose }: { e: Experiment; result: Experime
                 <span role="cell">
                   <b className="block">{m.label}</b>
                   <span className={`small ${m.direction === 'better' ? 'good-text' : m.direction === 'worse' ? 'bad' : 'muted'}`}>
-                    {m.enough_data ? (m.direction === 'better' ? '▲ better' : m.direction === 'worse' ? '▼ worse' : 'no clear difference') : 'not enough data'}
+                    {!m.enough_data ? 'not enough data'
+                      : m.direction === 'better' || m.direction === 'worse'
+                        ? `${m.diff != null && m.diff !== 0 ? `${m.diff > 0 ? '▲' : '▼'} ${Math.abs(Math.round(m.diff * 10) / 10)} · ` : ''}${m.direction}`
+                        : 'no clear difference'}
                   </span>
                 </span>
                 <span role="cell">{fmt(m.before, m.unit)}<span className="muted small block">n={m.n_before}</span></span>

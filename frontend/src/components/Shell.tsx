@@ -12,14 +12,19 @@ const TABS = [
   { to: '/diet', label: 'Diet', Icon: ForkIcon },
 ]
 
-type ShellValue = { openSettings: () => void }
+type ShellValue = { openSettings: (focus?: unknown) => void }
 const ShellContext = createContext<ShellValue>({ openSettings: () => {} })
 export const useShell = () => useContext(ShellContext)
 
 /** Five tabs — Today · Plan · Coach · Health · Diet. Me sits behind the avatar. */
 export function Shell({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const openSettings = useCallback(() => setSettingsOpen(true), [])
+  // R14: a settings group to open (and scroll to) straight away, e.g. "today".
+  const [focus, setFocus] = useState<string | undefined>()
+  const openSettings = useCallback((f?: unknown) => {
+    setFocus(typeof f === 'string' ? f : undefined)
+    setSettingsOpen(true)
+  }, [])
   const value = useMemo(() => ({ openSettings }), [openSettings])
   const { pathname } = useLocation()
 
@@ -46,7 +51,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </nav>
       </div>
       <BadgeToast />
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsSheet open={settingsOpen} focus={focus} onClose={() => setSettingsOpen(false)} />
     </ShellContext.Provider>
   )
 }

@@ -1,3 +1,5 @@
+import { Disclosure, Row, RowGroup } from '../Disclose'
+import { HealthIcon } from '../Icons'
 import { dayMonth, duration, pace } from '../../lib/format'
 import { errorText, useHealthFitness, useInsights } from '../../lib/queries'
 import type { AthleteZones, HealthFitness, RacePred } from '../../lib/types'
@@ -34,9 +36,14 @@ export function FitnessSection() {
     <div className={`stack ${fitness.isPlaceholderData ? 'is-stale' : ''}`}>
       {vo2?.current != null && <Vo2Card vo2={vo2} period={period} />}
       <AgeEndurance f={f} period={period} />
-      <RaceCard f={f} />
-      <ThresholdCard f={f} />
-      <TrainingStatusCard period={chosen} />
+      <RowGroup>
+        <Row to="/health/heart" icon={<HealthIcon size={20} />} title="Heart adaptation" sub="Heart rate at your easy pace, run by run" />
+      </RowGroup>
+      <Disclosure id="fitness-details" title="Race predictions, threshold & training status" sub="Garmin’s estimates and what they mean">
+        <RaceCard f={f} />
+        <ThresholdCard f={f} />
+        <TrainingStatusCard period={chosen} />
+      </Disclosure>
       {!hasAnything && (
         <Empty title="No fitness data yet">Garmin adds VO2max, race predictions and your threshold after a few runs with heart rate. Sync and check back.</Empty>
       )}

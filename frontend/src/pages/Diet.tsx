@@ -8,6 +8,7 @@ import { MealSummary } from '../components/MealCard'
 import { BodyCard } from '../components/BodyCard'
 import { BalanceCard } from '../components/diet/BalanceCard'
 import { PageHeader } from '../components/PageHeader'
+import { Disclosure, SeeDetails } from '../components/Disclose'
 import { useShell } from '../components/Shell'
 import { WaterTarget } from '../components/weather/WaterTarget'
 import { Empty, ErrorState, Skeleton } from '../components/States'
@@ -84,7 +85,6 @@ export default function Diet() {
             </button>
           )}
           <TargetsCard day={data} />
-          {date === todayISO() && <BodyCard />}
           {data.fueling.length > 0 && <FuelCard day={data} />}
           <MealsCard
             meals={data.meals}
@@ -94,7 +94,11 @@ export default function Diet() {
         </>
       )}
 
-      <BalanceCard />
+      {/* R14 §1: weight and the calorie balance live behind "Trends". */}
+      <Disclosure id="diet-trends" title="Trends" sub="Weight, body fat and calories vs your weight">
+        <BodyCard />
+        <BalanceCard />
+      </Disclosure>
 
       <button type="button" className="fab" onClick={() => setLogOpen(true)} aria-label="Log meal">
         <PlusIcon size={22} /> Log meal
@@ -120,11 +124,15 @@ function TargetsCard({ day }: { day: DietDay }) {
       </div>
       <div className="targets-foot">
         <WaterTarget day={day} />
-        {targets.rationale && <p className="rationale">{targets.rationale}</p>}
-        <p className="muted small">
-          Burn: {Math.round(burn.bmr)} BMR · {Math.round(burn.non_exercise)} daily life · {Math.round(burn.exercise)} exercise
-          {burn.exercise_source !== 'none' && ` (${burn.exercise_source === 'garmin' ? 'from Garmin' : 'planned'})`}
-        </p>
+        <SeeDetails label="How today’s targets work" title="Today’s targets">
+          <section className="card stack-sm">
+            {targets.rationale && <p className="rationale">{targets.rationale}</p>}
+            <p className="muted small">
+              Burn: {Math.round(burn.bmr)} BMR · {Math.round(burn.non_exercise)} daily life · {Math.round(burn.exercise)} exercise
+              {burn.exercise_source !== 'none' && ` (${burn.exercise_source === 'garmin' ? 'from Garmin' : 'planned'})`}
+            </p>
+          </section>
+        </SeeDetails>
       </div>
     </section>
   )

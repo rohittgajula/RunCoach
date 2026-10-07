@@ -1,3 +1,4 @@
+import { Disclosure } from '../Disclose'
 import { Link } from 'react-router-dom'
 import { dur, parseDate } from '../../lib/format'
 import { errorText, useHealthSleep, useWakePlan } from '../../lib/queries'
@@ -50,13 +51,18 @@ export function SleepSection() {
 
   return (
     <div className={`stack ${sleep.isPlaceholderData ? 'is-stale' : ''}`}>
+      {/* R14 §1: summary + tonight first; the numbers and the planner one tap down. */}
       <SleepHero s={s} />
-      <SleepTiles s={s} />
-      <SleepTrend nights={s.series?.length ? s.series : s.nights} need={s.debt?.need_s ?? s.averages?.need_s ?? null} period={period} />
-      <SleepVsRuns s={s} />
-      <WakePlannerCard />
-      <WatchAlarmsCard showFlags={false} />
       <Tonight s={s} />
+      <Disclosure id="sleep-details" title="Sleep details" sub="Regularity, stages, trend and sleep vs your runs">
+        <SleepTiles s={s} />
+        <SleepTrend nights={s.series?.length ? s.series : s.nights} need={s.debt?.need_s ?? s.averages?.need_s ?? null} period={period} />
+        <SleepVsRuns s={s} />
+      </Disclosure>
+      <Disclosure id="sleep-wake" title="Wake planner & alarms" sub="Bedtime and wake time around tomorrow’s run" defaultOpen={new Date().getHours() >= 17}>
+        <WakePlannerCard />
+        <WatchAlarmsCard showFlags={false} />
+      </Disclosure>
     </div>
   )
 }

@@ -1,3 +1,5 @@
+import { Disclosure, Row, RowGroup } from '../Disclose'
+import { HealthIcon } from '../Icons'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../lib/auth'
@@ -126,12 +128,19 @@ export function ProgressSection() {
         <div className={`stack ${progress.isPlaceholderData ? 'is-stale' : ''}`}>
           <Highlights items={data.highlights} />
           <section className="card stack">
-            <h3 className="habit-sub">Compared</h3>
-            <BucketTable data={data} />
-          </section>
-          <section className="card stack">
             <ProgressChart series={data.series ?? []} />
           </section>
+          <RowGroup>
+            <Row to="/health/heart" icon={<HealthIcon size={20} />} title="Heart adaptation" sub="Day by day: HR at your easy pace, time under your cap" />
+          </RowGroup>
+          {/* R14 §1: the full table, bests, focus, records, form and the coach review, grouped. */}
+          <Disclosure id="progress-details" title="Compared in detail" sub="Every number, side by side">
+            <section className="card stack">
+              <h3 className="habit-sub">Compared</h3>
+              <BucketTable data={data} />
+            </section>
+          </Disclosure>
+          <Disclosure id="progress-more" title="Bests, records, form & coach review" sub="What to work on next">
           {bestsList(data.bests).length > 0 && (
             <section className="card stack">
               <h3 className="habit-sub">Bests</h3>
@@ -149,6 +158,7 @@ export function ProgressSection() {
           <section className="card">
             <ProgressReviewCard key={progressParams(query)} review={data.review} query={query} />
           </section>
+          </Disclosure>
         </div>
       )}
     </div>

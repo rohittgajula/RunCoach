@@ -118,11 +118,17 @@ function MapPrivacy() {
 // R14: only loads when the group is opened.
 const CustomiseToday = lazy(() => import('./settings/CustomiseToday').then((m) => ({ default: m.CustomiseToday })))
 
-function Section({ title, sub, children, forceOpen = false }: { title: string; sub?: string; children: ReactNode; forceOpen?: boolean }) {
-  const [open, setOpen] = useState(false)
+function Section({ title, sub, children, forceOpen = false, initialOpen = false }: { title: string; sub?: string; children: ReactNode; forceOpen?: boolean; initialOpen?: boolean }) {
+  const [open, setOpen] = useState(initialOpen)
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!initialOpen) return
+    const t = setTimeout(() => ref.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }), 250)
+    return () => clearTimeout(t)
+  }, [initialOpen])
   const shown = open || forceOpen
   return (
-    <section className={`card settings-section settings-collapsible ${shown ? 'is-open' : ''}`}>
+    <section ref={ref} className={`card settings-section settings-collapsible ${shown ? 'is-open' : ''}`}>
       <button type="button" className="settings-section-head" aria-expanded={shown} onClick={() => setOpen(!open)}>
         <span className="grow">
           <span className="card-title block">{title}</span>
@@ -135,7 +141,7 @@ function Section({ title, sub, children, forceOpen = false }: { title: string; s
   )
 }
 
-export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SettingsSheet({ open, onClose, focus }: { open: boolean; onClose: () => void; focus?: string }) {
   const { athlete, username, updateAthlete, logout } = useAuth()
   const client = useQueryClient()
   const navigate = useNavigate()
@@ -328,20 +334,22 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           <HabitSettings draft={draft} set={set} errors={errors} />
         </Section>
 
-        <Section title="Location" sub="For weather and the best time to run" forceOpen={hasErrors}>
+        <Section title="Location" sub="For weather and the best time to run" forceOpen={hasErrors} initialOpen={focus === 'location'}>
           {athlete && <LocationSettings draft={draft} set={set} athlete={athlete} errors={errors} />}
         </Section>
 
         {errors.detail && <p className="bad">{errors.detail}</p>}
-        <button type="button" className="btn btn-primary btn-block" onClick={save} disabled={busy}>
-          {busy ? 'Saving…' : saved ? 'Saved' : 'Save profile'}
-        </button>
+        {(dirty || saved) && (
+          <button type="button" className="btn btn-primary btn-block" onClick={save} disabled={busy || !dirty}>
+            {busy ? 'Saving…' : saved && !dirty ? 'Saved' : 'Save profile'}
+          </button>
+        )}
 
-        <Section title="Customise Today" sub="Choose and order the cards under the top card">
+        <Section title="Customise Today" sub="Choose and order the cards under the top card" initialOpen={focus === 'today'}>
           <Suspense fallback={null}><CustomiseToday /></Suspense>
         </Section>
 
-        <Section title="Weather" sub="Weather-smart rescheduling">
+        <Section title="Weather" sub="Weather-smart rescheduling" initialOpen={focus === 'weather'}>
           <WeatherSwapSetting />
         </Section>
 

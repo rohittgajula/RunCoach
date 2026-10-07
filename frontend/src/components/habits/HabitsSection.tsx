@@ -1,3 +1,4 @@
+import { Disclosure } from '../Disclose'
 import { useState } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { ApiError } from '../../lib/auth'
@@ -92,32 +93,43 @@ export function HabitsPage() {
             <PrivateCard data={data} entry={entry('private')} shown={privateShown} onToggle={togglePrivate} />
           )}
 
-          {quitting && (
-            <InsightCard title="Since you quit">
-              {data.smoke.since_quit ? (
-                <SinceQuit smoke={data.smoke} title={false} />
-              ) : (
-                <p className="muted small">Set your quit date in Settings → Habits to track days, cigarettes avoided and money saved.</p>
-              )}
-            </InsightCard>
+          {/* R14 §1: the deeper cards are grouped and collapsed. */}
+          {(quitting || athlete?.smoke_goal === 'reduce' || !!athlete?.smoke_quit_date) && (
+            <Disclosure id="habits-quit" title="Quitting & savings" sub="Since you quit, cravings, money saved, lung recovery">
+            {quitting && (
+              <InsightCard title="Since you quit">
+                {data.smoke.since_quit ? (
+                  <SinceQuit smoke={data.smoke} title={false} />
+                ) : (
+                  <p className="muted small">Set your quit date in Settings → Habits to track days, cigarettes avoided and money saved.</p>
+                )}
+              </InsightCard>
+            )}
+
+            {(quitting || athlete?.smoke_goal === 'reduce') && <CravingPatternsCard range={range} />}
+            <SavingsGoalCard />
+
+            <LungRecoveryCard enabled={!!athlete?.smoke_quit_date} />
+
+            </Disclosure>
           )}
+          {!(quitting || athlete?.smoke_goal === 'reduce' || !!athlete?.smoke_quit_date) && <SavingsGoalCard />}
 
-          {(quitting || athlete?.smoke_goal === 'reduce') && <CravingPatternsCard range={range} />}
-          <SavingsGoalCard />
+          <Disclosure id="habits-caffeine" title="Caffeine" sub="How much, how late — and your sleep">
+            <CaffeineCard range={range} freq={freq} period={caption} />
+          </Disclosure>
 
-          <LungRecoveryCard enabled={!!athlete?.smoke_quit_date} />
+          <Disclosure id="habits-impact" title="Impact, coach summary & history" sub="How habits moved your HRV, sleep and runs">
+            <InsightCard title="Impact detail">
+              <ImpactCards impact={data.impact ?? []} hidePrivate={!privateShown} title={false} />
+            </InsightCard>
 
-          <CaffeineCard range={range} freq={freq} period={caption} />
+            <section className="card">
+              <HabitSummaryCard summary={data.summary} range={range} />
+            </section>
 
-          <InsightCard title="Impact detail">
-            <ImpactCards impact={data.impact ?? []} hidePrivate={!privateShown} title={false} />
-          </InsightCard>
-
-          <section className="card">
-            <HabitSummaryCard summary={data.summary} range={range} />
-          </section>
-
-          <LogHistory start={period.start} end={period.end} kinds={historyKinds} />
+            <LogHistory start={period.start} end={period.end} kinds={historyKinds} />
+          </Disclosure>
         </div>
       )}
     </div>

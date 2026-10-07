@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { Disclosure } from '../Disclose'
 import { addDays, parseDate, todayISO } from '../../lib/format'
 import { errorText, useDayTrends, useHealthDay } from '../../lib/queries'
 import type { DayMarker, DayTrends, HealthDay } from '../../lib/types'
@@ -53,16 +54,20 @@ export function DaySection() {
         </Empty>
       ) : (
         <>
-          <TimelineCard d={d} />
+          {/* R14 §1: summary first, then the timeline; the per-metric cards are one tap down. */}
           <ScoreCard d={d} />
-          <StepsCard d={d} />
-          <SittingCard d={d} />
-          <StressCard d={d} trends={trends.data ?? null} />
-          <BodyBatteryCard d={d} />
-          <AwakeHrCard d={d} />
+          <TimelineCard d={d} />
+          <Disclosure id="day-details" title="Steps, sitting, stress, Body Battery, awake HR" sub="Each one in detail, with what’s normal for you">
+            <StepsCard d={d} />
+            <SittingCard d={d} />
+            <StressCard d={d} trends={trends.data ?? null} />
+            <BodyBatteryCard d={d} />
+            <AwakeHrCard d={d} />
+            {trends.data?.day_night_run && <DayNightRun dnr={trends.data.day_night_run} />}
+          </Disclosure>
         </>
       )}
-      {trends.data?.day_night_run && <DayNightRun dnr={trends.data.day_night_run} />}
+      {(!d || !d.available) && trends.data?.day_night_run && <DayNightRun dnr={trends.data.day_night_run} />}
       <Link to="/health/day/trends" className="card link-row">
         <span className="grow">
           <span className="link-row-title">Trends</span>

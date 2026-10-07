@@ -54,7 +54,7 @@ function NoWeather({ reason }: { reason: string | null }) {
   return (
     <Empty
       title={reason === 'no_location' ? 'Where do you run?' : 'The forecast is unavailable right now'}
-      action={reason === 'no_location' ? <button type="button" className="btn btn-secondary btn-sm" onClick={openSettings}>Set your location</button> : undefined}
+      action={reason === 'no_location' ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => openSettings('location')}>Set your location</button> : undefined}
     >
       {reason === 'no_location' ? 'Add your city in Settings → Location (or sync a run with GPS) to get the forecast.' : 'Try again in a little while.'}
     </Empty>
@@ -87,11 +87,12 @@ function Report({ r }: { r: WeatherReport }) {
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string | null }) {
   return (
     <div className="wx-stat">
       <span className="lbl">{label}</span>
       <b>{value}</b>
+      {sub && <span className="muted small">{sub}</span>}
     </div>
   )
 }
@@ -122,7 +123,7 @@ function NowCard({ r }: { r: WeatherReport }) {
         <Stat label="Humidity" value={n.humidity != null ? `${Math.round(n.humidity)}%` : '—'} />
         <Stat label="Dew point" value={deg(n.dew_point)} />
         <Stat label="Wind" value={n.wind != null ? `${Math.round(n.wind)} km/h` : '—'} />
-        <Stat label="UV" value={n.uv != null ? `${Math.round(n.uv)}${n.uv_level ? ` ${n.uv_level.replace('_', ' ')}` : ''}` : '—'} />
+        <Stat label="UV" value={n.uv != null ? String(Math.round(n.uv)) : '—'} sub={n.uv_level ? n.uv_level.replace('_', ' ') : null} />
         <Stat label="Sunrise" value={r.sun?.sunrise ? clock(r.sun.sunrise) : '—'} />
         <Stat label="Sunset" value={r.sun?.sunset ? clock(r.sun.sunset) : '—'} />
       </div>

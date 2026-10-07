@@ -359,7 +359,7 @@ function DayRow({
               onGuide={() => onGuide(item.workout)}
             />
           ) : item.type === 'strength' ? (
-            <StrengthCard key={`s${item.strength.id}`} session={item.strength} />
+            <StrengthCard key={`s${item.strength.id}`} session={item.strength} compact={!isToday} />
           ) : (
             <ActivityCardView
               key={`a${item.activity.id}`}

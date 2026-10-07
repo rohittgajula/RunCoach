@@ -98,8 +98,8 @@ function MeHome() {
       </RowGroup>
 
       <RowGroup title="App">
-        <Row onClick={openSettings} icon={<GearIcon size={20} />} title="Settings" sub="Garmin, training days, diet, habits, Customise Today" />
-        <Row onClick={openSettings} icon={<TodayIcon size={20} />} title="Customise Today" sub="Choose which cards show under the top card" />
+        <Row onClick={() => openSettings()} icon={<GearIcon size={20} />} title="Settings" sub="Garmin, training days, diet, habits, Customise Today" />
+        <Row onClick={() => openSettings('today')} icon={<TodayIcon size={20} />} title="Customise Today" sub="Choose which cards show under the top card" />
         <Row to="/me/account" icon={<LockIcon size={20} />} title="Account" sub="Export my data, log out, delete account" />
         <Row to="/health/guides" icon={<HelpIcon size={20} />} title="Guides" sub="Form, breathing, strength, fuelling, warm-up" />
         {isStaff && <Row to="/admin-panel" icon={<LockIcon size={20} />} title="Admin" sub="Users, AI models & costs, system" />}
