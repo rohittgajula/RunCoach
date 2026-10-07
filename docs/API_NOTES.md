@@ -1712,3 +1712,312 @@ url: "/", tag: "briefing"}`, `{title: "Run reviewed", url: "/activities/{id}", t
   beat entries monthly-reports, morning-briefings, strength-topup, export-cleanup). New
   AI tier names `morning_briefing` (lite), `run_review`, `monthly_report` (coach) — no new
   env vars, no new dependencies. Off-site backups: deploy/RESTORE.md.
+
+## R14 (SPEC_R14.md) — contract for Today layout, weather report + smart reschedule, calendar feed, experiments, goals, heart adaptation, admin + Gemini
+
+Conventions as R10–R13: every path is under `/api/`, needs a signed-in athlete (401
+otherwise) and only reads/writes the requester's own rows (another athlete's id → 404).
+Dates `YYYY-MM-DD`; datetimes ISO 8601 with offset; local clock times `"HH:MM"`; hourly
+weather times are local `"YYYY-MM-DDTHH:MM"` (as `/weather/today/`). `|null` = absent / not
+enough data — hide it. Errors `400 {detail: str}` unless noted (DRF field errors
+`400 {field: [str]}` on the Athlete PATCH). Pace = seconds per km; speeds in m/s;
+temperatures °C; money from the AI log in **USD** (`*_usd`), GCP credit in **INR**.
+Exceptions to the auth rule: `GET /cal/{token}.ics` (token only) and `/admin/…` (staff only).
+
+### §1 Athlete JSON (`GET/PATCH /athlete/`) — new fields
+```
+today_layout: [str] | null       # ordered keys of the optional Today cards that are ON;
+                                 # null = the app's default layout. Writable. Each key
+                                 # matches ^[a-z][a-z0-9_]{0,31}$, unique, ≤ 30 keys
+                                 # (else 400 {today_layout: [...]}). The backend does not
+                                 # own the card catalogue — unknown keys are stored as-is.
+weather_auto_apply: bool         # default false — "Auto-apply weather swaps" (§3)
+```
+
+### §3 Weather report — `GET /weather/report/` (always 200)
+```
+{ available: bool, reason: null|"no_location"|"unavailable",
+  location_name: str|null, source: "runs"|"city"|"none", generated_at: datetime,
+  now: null | {time, temp, feels_like, humidity, dew_point, wind (km/h), uv,
+               weather_code, condition: str|null,
+               aqi: number|null, pm25: number|null,
+               aqi_level: "good"|"moderate"|"sensitive"|"unhealthy"|"very_unhealthy"|"hazardous"|null,
+               aqi_meaning: str|null,            # plain words, e.g. "Unhealthy for sensitive groups — keep runs easy"
+               uv_level: "low"|"moderate"|"high"|"very_high"|"extreme"|null},
+  hourly: [Hour],                                # next 48 h from the current hour
+  best_windows: [{date, start, end, reason, feels_like: number|null, aqi: number|null}],
+                                                 # ≤ 1 per local day in the 48 h, coolest/cleanest
+                                                 # slot starting 05–08 or 17–19 local, from now on
+  daily: [Day],                                  # 7 days from today
+  sun: {sunrise: "HH:MM"|null, sunset: "HH:MM"|null},     # today
+  heat: "cool"|"warm"|"hot"|"very_hot"|null, pace_slowdown_pct: int,
+  advisories: [{level: "info"|"caution"|"warning", text}],
+  hydration: {before_ml, during_ml_per_h, after_note, electrolytes} | null,
+  food: [str], daily_water_bonus_ml: int,        # same rules as /weather/today/
+  runs: [RunVsWeather],                          # planned runs today … today+6
+  suggestions: [WeatherSuggestion] }             # pending ones (same as §3 list below)
+Hour = {time, temp, feels_like, humidity, dew_point, precip_prob, wind, uv, weather_code,
+        condition, aqi, pm25, run: "good"|"ok"|"poor"|"bad"|null, best: bool}
+        # run: bad = thunder, rain ≥ 70 %, AQI > 150 or feels-like ≥ 34; poor = feels ≥ 30,
+        # rain ≥ 40 % or AQI > 100; ok = feels ≥ 26 or AQI > 50; else good. best = inside a best window.
+Day = {date, temp_min, temp_max, feels_like_max, precip_prob_max: int|null,
+       precip_mm: number|null, weather_code, condition, uv_max, aqi_max: number|null,
+       sunrise: "HH:MM"|null, sunset: "HH:MM"|null,
+       run_verdict: "good"|"caution"|"bad"|null,   # bad = no candidate window (05–08, 17–19) is runnable
+       reasons: [str]}
+RunVsWeather = {date, workout_id, title, kind, duration_s, verdict: "good"|"caution"|"bad"|null,
+                reasons: [str], best_window: {start, end, reason}|null,
+                suggestion_id: int|null}
+```
+Unavailable → `now`, `heat`, `hydration` null, lists empty, bonus 0 (as `/weather/today/`).
+Open-Meteo forecast (7 days) + air quality (5 days; AQI null beyond), cached per rounded
+place per hour. Reading the report also runs the reschedule check (idempotent).
+
+### §3 Weather-smart reschedule
+```
+WeatherSuggestion = {
+  id, workout_id: int|null, workout_title: str, workout_kind: str, duration_s: int,
+  from_date: date, to_date: date,
+  action: "move"|"swap",                 # swap: the target day's optional walk goes to from_date
+  swap_with: {workout_id, title, kind}|null,
+  text: str,                             # "Weather: move Thu run to Fri?"
+  reason: str,                           # "Thu: feels like 35 °C even at 06:00; Fri morning 29 °C."
+  reasons: [{key: "heat"|"storm"|"rain"|"air", text: str}],
+  from_weather: DayBrief, to_weather: DayBrief,
+  status: "pending"|"applied"|"dismissed"|"expired",
+  auto_applied: bool, created_at, decided_at: datetime|null }
+DayBrief = {date, best_feels_like: number|null, precip_prob_max: int|null,
+            aqi_max: number|null, condition: str|null, verdict: "good"|"caution"|"bad"}
+```
+- `GET /plan/weather-suggestions/?status=pending|all` (default pending) →
+  `{auto_apply: bool, suggestions: [WeatherSuggestion]}` newest first (`all`: last 30 days).
+- `POST /plan/weather-suggestions/{id}/apply/` → 200 `WeatherSuggestion` (status applied).
+  409 `{detail}` when it no longer holds (not pending, workout moved/done/edited, from_date is
+  today or past, target day now taken, spacing broken). The watch copy is re-sent.
+- `POST /plan/weather-suggestions/{id}/dismiss/` → 200 (status dismissed; that workout on
+  that date is never suggested again). 409 when not pending.
+- `POST /plan/weather-suggestions/check/` → 200 `{created: int, suggestions: [...]}` (runs the
+  check now; also runs on `GET /weather/report/` and daily at 18:xx local).
+- Rules: planned runs (EASY, RUN_WALK, LONG, TEMPO, INTERVALS; never RACE/WALK/REST) dated
+  today+1 … today+3, not completed/skipped. A day is bad when every candidate window
+  (05–08, 17–19 local) has feels-like ≥ 34 °C, a thunderstorm or rain ≥ 70 %, or AQI > 150.
+  Target = an available training day in the same Mon–Sun week, after today, on or before
+  the day before the race, with no planned run (an optional WALK there is swapped), with
+  a runnable window that scores better. Spacing: a LONG/TEMPO/INTERVALS session never lands
+  next to another LONG/hard/race day; no run lands on the day before a race. The session's
+  content never changes (moving never makes it harder). With `weather_auto_apply` on, the
+  suggestion is applied at once (`auto_applied: true`); otherwise nothing moves until Move.
+  Pending suggestions expire when from_date is today or past or the workout changed.
+
+### §5 Calendar feed (ICS)
+```
+CalendarFeed = { enabled: bool, url: str|null,        # "https://<host>/api/cal/<token>.ics"
+                 webcal_url: str|null,                  # same with webcal://
+                 google_url: str|null,                  # https://calendar.google.com/calendar/r?cid=<webcal url, encoded>
+                 path: str|null,                        # "/api/cal/<token>.ics" (build your own origin)
+                 created_at: datetime|null, last_fetched_at: datetime|null }
+```
+- `GET /calendar-feed/` → `CalendarFeed` (`enabled: false`, nulls before one is made).
+- `POST /calendar-feed/` → 201 `CalendarFeed` — creates it, or **regenerates** the token (the
+  old URL stops working at once).
+- `DELETE /calendar-feed/` → 204 (revoked; the URL 404s).
+- `GET /cal/{token}.ics` — **no auth header**; unknown/revoked token → 404. `text/calendar;
+  charset=utf-8`, `ETag`, `Last-Modified`, `Cache-Control: private, max-age=900`;
+  `If-None-Match` / `If-Modified-Since` → 304. Contents: planned/completed workouts of the
+  active plan (today−30 … today+180), planned/completed strength sessions, and races.
+  Workouts and strength are all-day events (no time of day exists); a race with
+  `start_time` is a timed event in UTC (`…Z`). `UID` stable per item
+  (`workout-<id>@runcoach`, `strength-<id>@runcoach`, `race-<id>@runcoach`); `SEQUENCE`
+  increases each time an item's date/title/steps change. Titles like
+  "🏃 Easy run · 30 min"; DESCRIPTION = the steps ("Walk warm-up 2 min", "Run 4:30 easy
+  (HR 130–145)", …) and purpose. No location, no health data.
+
+### §7 Self-experiments
+```
+Experiment = { id, kind: "no_alcohol"|"no_late_caffeine"|"no_sugar"|"smoke_free"|"bed_by"|"steps"|"custom",
+               title: str, start: date, end: date, days: int (7–42),
+               rule: Rule, status: "scheduled"|"active"|"completed"|"stopped",
+               decision: "keep"|"stop"|null, created_at, ended_at: datetime|null,
+               progress: {day: int, days: int, pct: int},            # day 0 before it starts
+               adherence: {days_counted: int, days_kept: int, pct: int|null,
+                           today: bool|null,                         # null = not known yet
+                           series: [{date, kept: bool|null, value: number|null}]},
+               chip: str }                                           # "No alcohol · day 9/21 · 8 of 9 days kept"
+Rule = {habit?: "alcohol"|"caffeine"|"sugar"|"smoke"|"private", max_per_day?: number,
+        after?: "HH:MM",       # caffeine: counts only logs at/after this time
+        bedtime?: "HH:MM",     # bed_by: sleep start at or before this (from Garmin sleep)
+        min_steps?: int}       # steps
+```
+- `GET /experiments/templates/` → `[{kind, title, description, rule, default_days, source:
+  "habits"|"caffeine"|"sleep"|"steps"}]` (custom: rule `{habit: "alcohol", max_per_day: 0}` to edit).
+- `GET /experiments/?status=active|scheduled|completed|stopped|all` (default all) → `[Experiment]`
+  newest first.
+- `POST /experiments/ {kind, days? (7–42, default template), start? (today … today+14,
+  default today), title? (≤ 80), rule? (custom: {habit, max_per_day 0–50}; bed_by:
+  {bedtime}; steps: {min_steps 1000–50000}; others fixed)}` → 201 `Experiment`. One
+  scheduled/active experiment at a time → 409 `{detail}`. Private habit allowed only when
+  `private_habit_enabled` (label stays "Private").
+- `GET /experiments/{id}/` → `Experiment` + `result: Result`.
+- `PATCH /experiments/{id}/ {title?, decision?: "keep"|"stop"|null}` → `Experiment`.
+- `POST /experiments/{id}/stop/` → `Experiment` (status stopped, end = yesterday or start).
+- `DELETE /experiments/{id}/` → 204.
+- `GET /experiments/active/` → `{experiment: Experiment|null}` (the Today chip: active one, else a
+  completed one with `decision: null` that ended in the last 7 days).
+```
+Result = { final: bool,                         # false while running ("so far")
+           baseline: {start, end}, during: {start, end},
+           adherence_pct: int|null,
+           metrics: [{key: "hrv"|"rhr"|"sleep_score"|"stress"|"easy_hr"|"mood"|"energy",
+                      label, unit, before: number|null, during: number|null,
+                      diff: number|null, n_before: int, n_during: int,
+                      higher_is_better: bool, enough_data: bool,           # n ≥ 4 each side (easy_hr: ≥ 2 runs)
+                      direction: "better"|"worse"|"no_clear_difference"|null,
+                      sentence: str}],
+           summary: str, caveat: str,          # non-causal wording
+           share: {title: str, lines: [str]} } # share card text (no private-habit name)
+```
+Baseline = the same number of days right before `start`. Kept = the day's logs meet the rule
+(habit days with no log count as kept once the day is over; bed_by/steps days without Garmin
+data are `null`, not counted).
+
+### §8 Long-term goals
+```
+Goal = { id, kind: "race_time"|"distance"|"weight"|"smoke_free_days"|"vo2max"|"resting_hr"|"weekly_km"|"custom",
+         title: str, unit: str,                # s | km | kg | days | ml/kg/min | bpm | free text
+         target: number, target_date: date|null,
+         start_value: number|null, start_date: date,
+         distance_km: number|null,             # race_time only: 5 | 10 | 21.1 | 42.2
+         direction: "up"|"down",               # from start → target
+         current: number|null, current_as_of: date|null, current_source: str|null,
+         progress_pct: int|null,               # 0–100
+         status: "active"|"achieved"|"abandoned", achieved_on: date|null,
+         milestones: [{pct: 25|50|75|100, value: number, reached_on: date|null}],
+         projection: {date: date|null, method: "trend"|null, label: "estimate",
+                      on_track: bool|null,     # vs target_date (null without one)
+                      note: str},
+         series: [{date, value}],              # ≤ 120 points, oldest first
+         display: {target: str, current: str|null, start: str|null},   # "52:30", "68.4 kg"
+         chip: str, created_at }
+```
+- Current value: race_time = Garmin race prediction for that distance (`current_source:
+  "garmin_prediction"`); distance = longest single run (km) since start; weight = latest
+  weight entry; smoke_free_days = current smoke-free streak; vo2max = latest Garmin VO2max;
+  resting_hr = 7-day median resting HR; weekly_km = last 7 days' run+walk km of runs;
+  custom = latest value posted below.
+- `GET /goals/?status=active|achieved|abandoned|all` (default active) → `[Goal]`.
+- `POST /goals/ {kind, target, target_date? (> today), title? (≤ 80), distance_km? (race_time,
+  required), unit? (custom, ≤ 12), start_value? (custom required; else taken from data, and
+  required when there is no data yet)}` → 201 `Goal`. Max 10 active → 409.
+- `GET /goals/{id}/`, `PATCH /goals/{id}/ {title?, target?, target_date?, status?: "active"|"abandoned"}`,
+  `DELETE /goals/{id}/` → 204.
+- `POST /goals/{id}/values/ {value, date? (≤ today)}` → 201 `Goal` (custom only; else 400).
+- `GET /goals/chip/` → `{goal: Goal|null, text: str|null}` — the active goal closest to done.
+- Reaching 25/50/75/100 % stores a badge (Achievement key `goal_<id>_<pct>`, label "Goal 50%:
+  <title>") so it shows in `/achievements/` recent; 100 % sets status achieved.
+- Projection: least-squares line over the last 60 days of `series` (≥ 3 points over ≥ 14 days),
+  moving towards the target → the date it crosses (≤ 3 years), else `date: null` with a note.
+
+### §9 Heart adaptation — `GET /health/heart/?range=` (R12 period params; default 3m; also `all`)
+Optional `ref_hr` (100–200; default the athlete's `hr_ceiling` − 5, i.e. 150 at the default
+ceiling) and `ref_pace` (s/km 180–1200; default the middle of the easy band). 400 otherwise.
+```
+{ range, start, end, ref_hr: int, ref_hr_band: 3, ref_pace_s_per_km: int, ref_pace_band_s: 15,
+  hot_threshold_c: 28,
+  runs: [HeartRun],                                    # oldest first, runs in the range
+  trend: [{date, activity_id, hr_at_ref_pace, pace_at_ref_hr, efficiency, decoupling_pct,
+           duration_under_cap_s}],                     # rolling median of the last 7 runs (≥ 3)
+  trend_cool: [same],                                  # hot runs left out (the hot-day toggle)
+  since_day1: null | {first: Snapshot, latest: Snapshot, sentences: [str]},
+  heat: {hot_runs: int, cool_runs: int, unknown_runs: int,
+         hot_vs_cool: null | {metric: "hr_at_ref_pace", hot_avg, cool_avg, diff, n_hot, n_cool},
+         adaptation: null | {early_hot_avg, recent_hot_avg, diff, n_early, n_recent},
+         sentence: str|null},
+  headline: str,                                       # "Now 11 min at ≤150 bpm (day 1: 5 min)."
+  sentences: [str],
+  key_numbers: [{key: "duration_under_cap"|"hr_at_ref_pace"|"pace_at_ref_hr"|"decoupling",
+                 label, value: number|null, unit, display: str|null,
+                 change: number|null,                  # latest 7-run median vs first 3 runs
+                 better: bool|null, info: str}],       # info = the (i) text
+  weather_pending: bool,                               # run weather still being fetched
+  caveat: str }
+HeartRun = { activity_id, date, started_at, distance_km, run_s, steady_s,
+             hr_at_ref_pace: int|null, hr_at_ref_pace_adj: int|null,     # adj = heat-normalised
+             pace_at_ref_hr: int|null, efficiency: number|null, efficiency_adj: number|null,
+             decoupling_pct: number|null, hr_recovery_bpm: int|null,
+             hr_recovery_end_bpm: int|null, settle_s: int|null,
+             duration_under_cap_s: int, feels_like_c: number|null,
+             hot: bool|null, elev_gain_per_km: number|null, hilly: bool,
+             flags: [str] }                                # "hot" | "hilly" | "short" | "no_hr"
+Snapshot = {date, runs: int, duration_under_cap_s: int|null, hr_at_ref_pace: int|null,
+            pace_at_ref_hr: int|null, efficiency: number|null}
+```
+`efficiency` = metres per minute per bpm over steady running (higher = more speed per beat).
+`since_day1` uses all history: first = median of the first 3 runs, latest = of the last 3.
+
+### §14 Admin (staff only: `is_staff`; everyone else 403, signed-out 401)
+All under `/api/admin/`. Never returns keys or secrets — only `configured: bool`.
+```
+AdminUser = { id, username, display_name, email, joined: datetime, last_active: datetime|null,
+              is_active: bool, is_staff: bool, garmin_connected: bool,
+              garmin_last_sync: datetime|null,
+              plan: {id, name, race_date: date|null}|null,
+              ai: {calls_month: int, cost_month_usd: number, budget: int,
+                   budget_source: "default"|"custom"} }
+Invite = {id, code, note, max_uses, uses, expires_at|null, created_at, usable: bool, revoked: bool}
+```
+- `GET /admin/users/` → `{registration_mode: "open"|"invite"|"closed", default_budget: int,
+  users: [AdminUser]}` (newest first).
+- `PATCH /admin/users/{id}/ {is_active?: bool, ai_budget?: int|null (0–100000; null = default)}`
+  → `AdminUser`. Disabling also signs the user out everywhere. Your own account → 400.
+- `GET /admin/invites/` → `[Invite]`; `POST /admin/invites/ {note? (≤ 200), max_uses? (1–100,
+  default 1), expires_in_days? (1–365|null)}` → 201 `Invite`; `POST /admin/invites/{id}/revoke/`
+  → 200 `Invite` (kept, unusable).
+- `GET /admin/ai/providers/` → `[{key: "openai"|"gemini", label, configured: bool,
+  base_url: str|null, features: {tools: bool, json_schema: bool, streaming: bool, vision: bool},
+  models: [str]}]` (models = the price table rows for that provider).
+- `GET /admin/ai/config/` → `{tiers: [Tier], operations: {operation: tier}}`
+  `Tier = {tier: "lite"|"fast"|"coach"|"deep", provider, model, source: "db"|"env",
+  env_provider, env_model, available: bool, updated_at: datetime|null}`.
+- `PUT /admin/ai/config/ {tiers: [{tier, provider, model} | {tier, reset: true}]}` → same body.
+  Provider must be configured and the model in its price table (else 400).
+- `POST /admin/ai/test/ {provider, model, prompt (1–2000 chars), json?: bool}` →
+  `{ok: bool, text: str, json: object|null, latency_ms, input_tokens, output_tokens,
+  cost_usd, error: str|null}` (logged as operation `admin_test`, no budget).
+- `GET /admin/ai/prices/` → `[{id, provider, model, input_per_m_usd, output_per_m_usd, note,
+  updated_at}]`; `POST /admin/ai/prices/` (same fields) → 201; `PATCH /admin/ai/prices/{id}/`;
+  `DELETE /admin/ai/prices/{id}/` → 204 (409 while a tier uses it).
+- `GET /admin/ai/stats/?range=7d|4w|3m|6m|1y` (default 4w) →
+```
+{ range, start, end,
+  totals: {calls, ok, errors, refused, cached: 0, error_rate: number (0–1), input_tokens,
+           output_tokens, cost_usd, avg_latency_ms: int|null},
+  month: {start, calls, cost_usd, input_tokens, output_tokens},     # calendar month to date (UTC)
+  by_day: [{date, calls, errors, input_tokens, output_tokens, cost_usd}],   # every day in range
+  by_month: [{month: "YYYY-MM", calls, errors, input_tokens, output_tokens, cost_usd}],  # last 12
+  by_tier: [{tier, calls, errors, input_tokens, output_tokens, cost_usd}],
+  by_operation: [{operation, tier, calls, errors, input_tokens, output_tokens, cost_usd}],
+  by_user: [{athlete_id: int|null, name: str, calls, errors, input_tokens, output_tokens, cost_usd}],
+  by_model: [{provider, model, calls, errors, input_tokens, output_tokens, cost_usd, avg_latency_ms}],
+  recent_errors: [{at, operation, provider, model, status, error}] }   # ≤ 20, error ≤ 200 chars
+```
+- `GET /admin/system/` →
+```
+{ version: {git_sha: str|null, image: str|null, source: "env"|"kubernetes"|null},
+  garmin: {breaker_open: bool, reason: str|null, retry_after_s: int|null,
+           users: [{athlete_id, name, connected, last_sync: datetime|null,
+                    hours_since_sync: number|null, backfilled: bool}]},
+  celery: {available: bool, queues: [{name, length: int}]},
+  backups: {available: bool, reason: str|null, schedule: str|null,
+            last_success_at: datetime|null, last_schedule_at: datetime|null,
+            jobs: [{name, status: "succeeded"|"failed"|"running", started_at, finished_at}],
+            r2: {configured: bool|null, note: str}},
+  kubernetes: {available: bool, reason: null|"not_in_cluster"|"forbidden"|"error",
+               nodes: [{name, ready: bool, cpu_cores: number, cpu_used_cores: number|null,
+                        cpu_pct: int|null, memory_bytes: int, memory_used_bytes: int|null,
+                        memory_pct: int|null, disk_bytes: int|null,
+                        disk_allocatable_bytes: int|null}],
+               pods: [{name, app: str|null, phase, ready: bool, restarts: int,
+                       started_at: datetime|null, node: str|null}]},
+  gcp: {configured: bool, trial_end: date|null, days_left: int|null, credit_inr: number|null},
+  checked_at: datetime }
+```
