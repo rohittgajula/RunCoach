@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AuthProvider } from './lib/AuthContext'
+import { initServiceWorker, wireDataVersion } from './lib/r18'
 import { applyTheme, watchSystemTheme } from './lib/theme'
 import '@fontsource/plus-jakarta-sans/latin-400.css'
 import '@fontsource/plus-jakarta-sans/latin-500.css'
@@ -22,6 +23,7 @@ import './styles/r13.css'
 import './styles/r14.css'
 import './styles/r16.css'
 import './styles/r17.css'
+import './styles/r18.css'
 import './styles/motion.css'
 
 // Before the first paint, so a dark-theme device never flashes white.
@@ -41,6 +43,8 @@ const queryClient = new QueryClient({
     },
   },
 })
+wireDataVersion(queryClient)
+initServiceWorker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

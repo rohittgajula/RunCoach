@@ -6,7 +6,12 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // R18 §D: the app registers the worker itself (lib/r18.tsx initServiceWorker) so it
+      // can check for updates on every return to the app and reload into a new deploy.
+      // The injected registerSW.js only registered once per navigation — an installed PWA
+      // resumed from the background never navigates, so it sat on an old bundle for days.
       registerType: 'autoUpdate',
+      injectRegister: false,
       includeAssets: ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'RunCoach',
@@ -34,6 +39,10 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api/, /^\/admin/],
         // R10 reminders: push + notificationclick handlers live in public/push-handler.js.
         importScripts: ['push-handler.js'],
+        // A new worker takes over as soon as it installs; the page decides when to reload.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
       },
       // Off in development on purpose. A service worker caching assets while you
       // are editing them produces stale-bundle bugs that look like your change

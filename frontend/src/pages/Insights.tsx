@@ -8,6 +8,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Skeleton } from '../components/States'
 import { intentHandlers, isPlainClick, navigateSmooth } from '../lib/navMotion'
 import { prefetchSection, sections } from '../lib/healthSections'
+import { PullToRefresh, RefreshButton } from '../lib/r18'
 import { whenIdle } from '../lib/preload'
 
 // R13 §16: each Health section is its own chunk; Overview stays with the tab. The
@@ -102,8 +103,9 @@ export default function Health() {
       <div className="health-top">
         <PageHeader
           title="Health"
-          right={key ? <RangePill period={period} onClick={() => setSheet(true)} /> : undefined}
+          right={<span className="health-head-right">{key && <RangePill period={period} onClick={() => setSheet(true)} />}<RefreshButton /></span>}
         />
+        <PullToRefresh />
         <nav className="section-chips" aria-label="Health sections" ref={chips}>
           {chipList.map((s, index) => (
             <NavLink

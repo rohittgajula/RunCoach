@@ -101,7 +101,30 @@ export async function api<T = unknown>(path: string, init: RequestInit = {}): Pr
     const detail = await response.json().catch(() => response.statusText)
     throw new ApiError(response.status, detail)
   }
-  return response.status === 204 ? (undefined as T) : ((await response.json()) as T)
+  // Mutations and sync-status polls (a background sync finished) trigger; other reads only record.
+  const trigger = (init.method ?? 'GET').toUpperCase() !== 'GET' || path.startsWith('/sync/status')
+  const header = response.headers.get('X-Data-Version')
+  if (response.status === 204) {
+    noteDataVersion(header, null, trigger)
+    return undefined as T
+  }
+  const body = (await response.json()) as T
+  noteDataVersion(header, body, trigger)
+  return body
+}
+
+// R18 §B: the server bumps a per-athlete data_version on every change that ripples
+// (settings, memory, decisions, illness, edits, syncs). A mutation reply carrying a
+// different one than we last saw means "everything derived may have changed".
+let dataVersion: unknown
+const dvListeners = new Set<() => void>()
+export const onDataVersionChange = (fn: () => void) => { dvListeners.add(fn); return () => { dvListeners.delete(fn) } }
+function noteDataVersion(header: string | null, body: unknown, trigger: boolean) {
+  const v = header ?? (body && typeof body === 'object' && 'data_version' in body ? String((body as { data_version: unknown }).data_version) : null)
+  if (v == null || v === 'null' || v === 'undefined') return
+  const changed = dataVersion !== undefined && v !== dataVersion
+  dataVersion = v
+  if (changed && trigger) dvListeners.forEach((l) => l())
 }
 
 export const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) })
@@ -134,6 +157,8 @@ export async function restoreSession(): Promise<boolean> {
 // --- types -------------------------------------------------------------------
 
 export type User = { id: number; username: string; email: string; is_staff?: boolean }
+
+export type SleepNeed = { minutes: number; source: string; garmin_minutes: number | null; label: string }
 
 export type Athlete = {
   id: number
@@ -207,6 +232,14 @@ export type Athlete = {
   strength_reflow?: { created: number; removed: number }
   // Only on a PATCH response: what changing the training days did to the active plan.
   plan_reflow?: PlanReflow | null
+  // R18 §B — the athlete's own values win over Garmin's (null = use Garmin's / default).
+  sleep_need_minutes?: number | null
+  /** Read-only: the effective need used everywhere. */
+  sleep_need?: SleepNeed | null
+  /** "HH:MM" local, or null. */
+  usual_run_time?: string | null
+  loop_distance_km?: number | null
+  data_version?: number | string
 }
 
 export type PlanReflow = {

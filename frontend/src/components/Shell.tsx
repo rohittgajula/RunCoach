@@ -5,6 +5,7 @@ import { intentHandlers, isPlainClick, navigateSmooth, reducedMotion, routeCommi
 import { prefetchHealth, preloadTabs, whenIdle } from '../lib/preload'
 import { prefetchTab } from '../lib/queries'
 import { SyncingPill, useAutoSync } from '../lib/r16'
+import { UpdateBanner } from '../lib/r18'
 import { useAuth } from '../lib/AuthContext'
 import { CoachIcon, ForkIcon, HealthIcon, PlanIcon, TodayIcon } from './Icons'
 import { BadgeToast } from './me/Badges'
@@ -37,6 +38,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const { pathname } = location
   const navigate = useNavigate()
   const tab = pathname.split('/')[1]
+  // A link inside Settings (R18: "from your memory note") leaves the sheet behind.
+  useEffect(() => { setSettingsOpen(false) }, [pathname])
   // R16 §C: sync Garmin on open / focus when the server says it's due.
   const { athlete } = useAuth()
   useAutoSync(!!athlete?.garmin_connected)
@@ -137,6 +140,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </nav>
       </div>
       {tab !== 'today' && <div className="sync-float"><SyncingPill /></div>}
+      <UpdateBanner />
       <BadgeToast />
       <GlobalToast />
       <SettingsSheet open={settingsOpen} focus={focus} onClose={() => setSettingsOpen(false)} />

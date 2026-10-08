@@ -5,11 +5,12 @@
  */
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { api, json } from './auth'
+import { api } from './auth'
 import { addDays, dayMonth, todayISO } from './format'
 import { invalidatePlanData } from './queries'
-import { isSyncing, setSyncing, useSyncing } from './syncFlag'
-import type { ISODate, ISODateTime, SyncResult } from './types'
+import { fullSync } from './r18'
+import { isSyncing, phaseText, useSyncPhase, useSyncing } from './syncFlag'
+import type { ISODate, ISODateTime } from './types'
 
 // --- §A types ------------------------------------------------------------------------
 
@@ -94,6 +95,7 @@ const AUTO_KEY = 'rc.autosync.at'
 const AUTO_SPACING_MS = 30 * 60_000
 /** And don't ask /sync/status/ on every focus flick. */
 const CHECK_SPACING_MS = 5 * 60_000
+const RUN_AWARE_MS = 5 * 60_000 - 10_000
 
 function lastAuto(): number {
   try { return Number(localStorage.getItem(AUTO_KEY)) || 0 } catch { return 0 }
@@ -101,18 +103,6 @@ function lastAuto(): number {
 function markAuto() {
   try { localStorage.setItem(AUTO_KEY, String(Date.now())) } catch { /* private mode: spacing is per load */ }
 }
-
-const SYNC_KEYS = [
-  'garmin-status', 'sync-status', 'calendar', 'profile-summary', 'diet-day', 'calendar-month', 'insights', 'today',
-  'briefing', 'checkins-pending', 'health-day', 'health-day-summary', 'health-body', 'health-fitness', 'training-status', 'health-sleep',
-  'health-form', 'health-records', 'readiness-forecast', 'achievements', 'gear', 'lung-recovery', 'progress', 'habits-summary',
-  'adjustments', 'workout',
-]
-export function refreshAfterSync(client: QueryClient) {
-  for (const key of SYNC_KEYS) client.invalidateQueries({ queryKey: [key] })
-}
-
-type AutoSyncReply = Partial<SyncResult> & { skipped?: 'recent' | 'running' | 'breaker_open' | 'not_connected' | 'too_early'; status?: SyncStatus }
 
 /**
  * R16 §C auto-sync: on open and on regaining focus, ask GET /sync/status/; when the
@@ -129,7 +119,10 @@ export function useAutoSync(enabled: boolean) {
     const check = async () => {
       if (busy.current || isSyncing() || document.visibilityState !== 'visible') return
       const now = Date.now()
-      if (new Date().getHours() < 5 || now - checkedAt.current < CHECK_SPACING_MS || now - lastAuto() < AUTO_SPACING_MS) return
+      // R18 run-aware: while today's run is awaited the server allows a sync every 5 min.
+      const waiting = (client.getQueryData(['sync-status']) as { run_aware?: { active?: boolean } | null } | undefined)?.run_aware?.active
+      const spacing = waiting ? RUN_AWARE_MS : AUTO_SPACING_MS
+      if (new Date().getHours() < 5 || now - checkedAt.current < (waiting ? RUN_AWARE_MS : CHECK_SPACING_MS) || now - lastAuto() < spacing) return
       busy.current = true
       checkedAt.current = now
       try {
@@ -137,14 +130,8 @@ export function useAutoSync(enabled: boolean) {
         if (status) client.setQueryData(['sync-status'], status)
         if (!status?.auto_sync_due) return
         markAuto()
-        setSyncing(true)
-        try {
-          const r = await api<AutoSyncReply>('/garmin/sync/', { method: 'POST', ...json({ auto: true, limit: 20 }) })
-          if (r.status) client.setQueryData(['sync-status'], r.status)
-          if (!r.skipped) refreshAfterSync(client)
-        } finally {
-          setSyncing(false)
-        }
+        // R18 §A: auto-sync takes the same full path (server throttles; run-aware).
+        await fullSync(client, true)
       } catch {
         /* auto-sync never shows an error; the Sync button does */
       } finally {
@@ -152,11 +139,14 @@ export function useAutoSync(enabled: boolean) {
       }
     }
     const t = setTimeout(check, 1500)
+    // Run-aware polling needs a tick while the app stays open on Today.
+    const iv = setInterval(check, 60_000)
     const onVis = () => { if (document.visibilityState === 'visible') void check() }
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('focus', onVis)
     return () => {
       clearTimeout(t)
+      clearInterval(iv)
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('focus', onVis)
     }
@@ -166,6 +156,7 @@ export function useAutoSync(enabled: boolean) {
 /** Small "Syncing…" pill while any sync runs (auto or the Sync button). */
 export function SyncingPill() {
   const on = useSyncing()
+  const phase = useSyncPhase()
   const [shown, setShown] = useState(false)
   // Don't flash for a sync that finishes in a blink.
   useEffect(() => {
@@ -174,5 +165,5 @@ export function SyncingPill() {
     return () => clearTimeout(t)
   }, [on])
   if (!shown) return null
-  return <span className="syncing-pill" role="status"><span className="syncing-dot" aria-hidden="true" />Syncing…</span>
+  return <span className="syncing-pill" role="status"><span className="syncing-dot" aria-hidden="true" />{phaseText(phase)}</span>
 }

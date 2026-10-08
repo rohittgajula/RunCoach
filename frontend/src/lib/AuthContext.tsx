@@ -2,7 +2,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
   type ReactNode,
 } from 'react'
-import { api, json, restoreSession, setAccessToken, type Athlete, type Session } from './auth'
+import { api, json, onDataVersionChange, restoreSession, setAccessToken, type Athlete, type Session } from './auth'
 
 type AuthValue = {
   athlete: Athlete | null
@@ -52,6 +52,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // The access token does not survive a reload; the refresh cookie does. Trade it
   // for a new one before deciding the user is logged out.
+  // R18 §B: settings can change from memory edits, chat tools or another device —
+  // a new data_version re-reads the athlete so every screen sees the effective values.
+  const signedIn = !!athlete
+  useEffect(() => {
+    if (!signedIn) return
+    let t: ReturnType<typeof setTimeout> | undefined
+    const off = onDataVersionChange(() => {
+      clearTimeout(t)
+      t = setTimeout(() => { api<Athlete>('/athlete/').then(setAthlete, () => {}) }, 300)
+    })
+    return () => { clearTimeout(t); off() }
+  }, [signedIn])
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {

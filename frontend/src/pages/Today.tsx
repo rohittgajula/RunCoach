@@ -28,6 +28,7 @@ import { parseDate, todayISO } from '../lib/format'
 import { preloadTabs } from '../lib/preload'
 import { errorText, useHabitSummary, useSync, useWeek } from '../lib/queries'
 import { SyncingPill } from '../lib/r16'
+import { PullToRefresh, WaitingForRun } from '../lib/r18'
 import { useIllness } from '../lib/r17'
 import { useSyncing } from '../lib/syncFlag'
 
@@ -110,7 +111,7 @@ export default function Today() {
           <span className="lbl today-date-line">{dateLabel}<SyncingPill /></span>
           <h1 className="today-greeting">{greeting()}{name ? `, ${name}` : ''}</h1>
         </div>
-        <ChipButton label="Sync Garmin" onClick={runSync} disabled={syncing} className="chip-plain">
+        <ChipButton label="Refresh — sync everything from Garmin" onClick={runSync} disabled={syncing} className="chip-plain">
           <RefreshIcon className={syncing ? 'spin' : ''} />
         </ChipButton>
         <TodayMore />
@@ -121,6 +122,8 @@ export default function Today() {
       {week.isError && !week.data && (
         <ErrorState message={errorText(week.error, 'Today’s plan did not load.')} onRetry={() => week.refetch()} />
       )}
+      <PullToRefresh />
+      <WaitingForRun />
       <StaleNotice onSync={runSync} />
       {illness ? <IllnessHero illness={illness} /> : <TodayHero day={day} loading={week.isPending} />}
       <RecoveryCard />

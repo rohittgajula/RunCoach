@@ -3,7 +3,7 @@ import {
 } from '@tanstack/react-query'
 import { ApiError, api, json } from './auth'
 import { addDays, todayISO } from './format'
-import { setSyncing } from './syncFlag'
+import { fullSync } from './r18'
 import type {
   ActivityCard, CalendarResponse, DietDay, DietTrend, FitnessResponse, GarminStatus,
   Meal, MealEstimate, MemoryFact, Message, MetricEntriesResponse, MetricEntry, MetricKind,
@@ -168,31 +168,13 @@ export const startGuide = (workoutId: number) =>
 export const startReview = (activityId: number) =>
   api<{ thread_id: number }>(`/activities/${activityId}/review/`, { method: 'POST' })
 
+/** R18 §A: every Sync / Refresh is a full sync (phases + refetch of all athlete data). */
 export function useSync() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: async () => {
-      setSyncing(true)
-      try {
-        return await api<SyncResult>('/garmin/sync/', { method: 'POST', ...json({ limit: 20 }) })
-      } finally {
-        setSyncing(false)
-      }
-    },
-    onSuccess: () => {
-      // R16 §C: the dated day metrics and the auto-sync gate read these.
-      for (const key of ['sync-status', 'briefing', 'health-day', 'health-day-summary', 'health-body', 'adjustments']) client.invalidateQueries({ queryKey: [key] })
-      client.invalidateQueries({ queryKey: ['garmin-status'] })
-      client.invalidateQueries({ queryKey: ['calendar'] })
-      client.invalidateQueries({ queryKey: ['profile-summary'] })
-      client.invalidateQueries({ queryKey: ['diet-day'] })
-      client.invalidateQueries({ queryKey: ['calendar-month'] })
-      client.invalidateQueries({ queryKey: ['insights'] })
-      client.invalidateQueries({ queryKey: ['today'] })
-      client.invalidateQueries({ queryKey: ['checkins-pending'] })
-      for (const key of ['health-fitness', 'training-status', 'health-sleep', 'health-form', 'health-records', 'readiness-forecast', 'achievements', 'gear', 'lung-recovery', 'progress', 'habits-summary']) {
-        client.invalidateQueries({ queryKey: [key] })
-      }
+      const r = await fullSync(client)
+      return { imported: r.imported ?? 0, skipped: r.skipped ? 1 : 0, failed: r.failed ?? 0, errors: r.errors ?? [] } as SyncResult
     },
   })
 }
