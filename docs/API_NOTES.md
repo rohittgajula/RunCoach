@@ -2336,3 +2336,245 @@ the server), exactly as `/activities/{id}/route/`.
 - **Deploy**: migrations `activities.0007_r15`, `coaching.0010_r15`, `reminders.0005_r15`
   (drops `run_reviewed`, adds `run_summary` default true). New Celery task
   `coaching.check_models` (ai queue) — restart the workers. No new env or dependencies.
+
+## R16 — contract for editing workouts (app + chat), the honest coach, dated day metrics, auto-sync
+
+Conventions as R10–R15 (paths under `/api/`, signed-in athlete, own rows only — another
+athlete's id → 404; dates `YYYY-MM-DD`; datetimes ISO 8601 with offset; errors
+`400 {detail}` unless noted). Every change below is **additive**: no existing key is removed
+or changes meaning.
+
+### §A Edit a workout
+
+**Workout JSON** (everywhere: `/calendar/`, `/today/`, `/workouts/{id}/`, plans, chat
+attachments) gains:
+```
+edited_by: "user"|null,            # "user" once the athlete (app or chat) edited it
+edited_at: datetime|null,
+edited_via: "app"|"chat"|null,
+notes: str,                        # the athlete's own notes ("" when none), ≤ 1000 chars
+can_edit: bool,                    # planned, today or later, not completed (RACE: notes only)
+can_undo_edit: bool,               # edited_by == "user" and still editable
+planned: null | {title, kind, duration_s, run_s},   # the generated version (before the
+                                   # first user edit); null when not edited
+```
+Steps of an edited workout carry two extra keys (generated steps are unchanged):
+`target: "hr"|"pace"|"none"|"auto"` (what the watch shows for that step) and
+`note: str|null`. Step `kind` may now also be `"other"`.
+
+**Editor model — `GET /workouts/{id}/edit/`** (the step editor reads this, not the raw steps):
+```
+{ workout_id, date, title, kind,
+  editable: bool, notes_only: bool,          # notes_only: RACE
+  reason: str|null,                          # why not editable ("Already done.", "In the past.")
+  notes: str,
+  total_s: int, run_s: int, walk_s: int,
+  steps: [EditItem],                         # consecutive identical blocks folded into repeats
+  planned: null | {title, kind, duration_s, run_s},
+  edited_by: "user"|null,
+  limits: {total_min_s: 300, total_max_s: 14400, step_min_s: 10, step_max_s: 5400,
+           repeat_min: 2, repeat_max: 30, max_steps: 100,
+           hr_min: int, hr_max: int,          # resting HR (else 40) .. max HR (else 220−age, else 210)
+           pace_min_s: 150, pace_max_s: 1200},  # s/km
+  hr: {resting: int|null, max: int|null, ceiling: int, easy_low: int, easy_high: int},
+  pace: {easy_low: int, easy_high: int} }      # s/km, the athlete's easy band (fast edge first)
+
+EditItem = EditStep | {repeat: int (2–30), steps: [EditStep] (1–10, no nesting)}
+EditStep = { kind: "warmup"|"run"|"walk"|"recovery"|"cooldown"|"strides"|"other",
+             duration_s: int (10–5400),
+             intensity?: "walk"|"easy"|"moderate"|"hard",   # default by kind: run easy, walk/
+                                                            # recovery/warmup/cooldown walk,
+                                                            # strides hard, other easy
+             target?: "hr"|"pace"|"none"|"auto",            # default: hr if hr_low/hr_high given,
+                                                            # else pace if pace_*, else auto
+             hr_low?: int|null, hr_high?: int|null,         # bpm
+             pace_low?: int|null, pace_high?: int|null,     # s/km; low = FAST edge (smaller number)
+             note?: str|null (≤ 80) }
+```
+`target: "auto"` = the app's default watch target (the R7 rule: run steps their band, walk
+steps the gentle band). `"none"` = no target on the watch. In GET, a generated step that has
+an HR band comes back as `target: "hr"`; generated `stride` → `strides`, `interval` → `run`
+with intensity `hard`.
+
+**`PATCH /workouts/{id}/edit/`** — body: any of
+```
+{ steps?: [EditItem],                       # replaces all steps (applied first)
+  total_minutes?: number (5–240),           # scale every step to this total (whole result
+                                            #   rounded so the steps sum exactly to it)
+  add_minutes?: number (−120…120, ≠ 0),     # ± minutes …
+  apply_to?: "run"|"walk"|"both",           # … spread over the run parts (default), walk
+                                            #   parts or all parts, proportionally, 30-s grid
+  add_walk_breaks?: number (1–30),          # split every run step longer than N+1 min into
+                                            #   N min run / 1 min walk; total time unchanged
+  hr_low?: int, hr_high?: int,              # set this HR range (target "hr") on every
+                                            #   non-walk step (both required together)
+  notes?: str (≤ 1000),
+  dry_run?: bool }                          # validate + preview + warnings, nothing saved
+```
+Order when several are sent: steps → total_minutes → add_minutes → add_walk_breaks →
+hr range → notes. Run parts = non-walk steps of intensity easy (if none: every non-walk
+step except strides); walk parts = walk-intensity steps.
+- 200 → `EditResponse`:
+```
+{ ...Workout,                               # the saved workout (dry_run: the preview, unsaved)
+  warnings: [{key: "run_increase"|"hr_above_ceiling"|"hard_days_in_a_row"|"long_run_share",
+              text: str}],                  # plain words; NEVER block the save
+  edit: {dry_run: bool, changed: bool,
+         before: Brief, after: Brief,       # Brief = {title, duration_s, run_s, walk_s}
+         summary: str},                     # "Sat 12 Oct: 40 → 45 min"
+  watch: {was_on_watch: bool,
+          status: "not_on_watch"|"updated"|"unchanged"|"pending"|"failed",
+          detail: str} }
+```
+  `garmin_status` in the body is read after the re-send. dry_run → `watch.status`
+  `"not_on_watch"` or `"pending"` (nothing is sent).
+- 400 `{detail}` on invalid input (limits above; HR outside hr_min..hr_max or low ≥ high;
+  pace outside 150–1200 s/km or low > high; nested repeat; unknown kind; no field given).
+- 409 `{detail}` when not editable: completed, skipped, in the past, or RACE with anything
+  but `notes`.
+- Warnings (computed against the **generated** version, i.e. `planned` when already edited):
+  `run_increase` running time > +25 %; `hr_above_ceiling` any HR target top above the
+  athlete's `hr_ceiling`; `hard_days_in_a_row` this session is hard (INTERVALS/TEMPO/LONG/
+  RACE, ≥ 5 min of moderate/hard steps, or an HR target low above the easy top) and the day
+  before or after has a hard session; `long_run_share` this session's running > 40 % of
+  its Mon–Sun week's running (week has ≥ 2 runs).
+- Saving marks the workout `edited_by: "user"`; the first edit stores the generated version
+  (`planned`). Title minutes ("45m easy aerobic run", "Long run 60m") follow the new total;
+  duration, load and fueling are recomputed.
+- **Watch**: if the workout was on the watch (`garmin_workout_id` set) it is re-sent right
+  away through the normal send job (registry sweep, old copy deleted, new one uploaded and
+  scheduled). The request waits up to 20 s: `updated`/`unchanged`; still queued → `pending`
+  (it completes in the background; `garmin_status` stays `changed` until then); breaker
+  open / Garmin refused → `failed` (UI: "Update on watch"). Never fails the save.
+- **Garmin payload** for steps with `target`: `"hr"` → custom HR range (as R7, also on walk
+  steps); `"pace"` → `targetType {workoutTargetTypeId: 6, workoutTargetTypeKey: "pace.zone",
+  displayOrder: 6}`, `targetValueOne` = slow edge, `targetValueTwo` = fast edge, in **m/s**
+  (1000 / s-per-km, 4 dp); `"none"` → no.target; `"auto"`/absent → the R7 rule. The
+  athlete's notes are appended to the Garmin description. Generated workouts produce exactly
+  the same payload (and hash) as before.
+- **Protected**: an edited workout is never changed by auto-adjust (R13 §1), the weekly
+  adaptation (R6 §2) or weather swaps (R14 §3, neither moved nor swapped with). Re-flow
+  (training days changed) may move its date but never drops it; re-layout (runs per week)
+  keeps it as it is (content and date) and re-splits only the other runs of that week. The
+  morning check-in "Use this" is the athlete's own action and still applies.
+
+**`POST /workouts/{id}/edit/undo/`** → 200 `EditResponse` (warnings `[]`) with the generated
+version restored, `edited_by: null`, watch re-sent as above. 409 `{detail}` when not edited
+or no longer editable.
+
+**`POST /plan/week-edit/`** — body:
+```
+{ week_start: date,                          # the 7 days week_start … week_start+6 (the plan
+                                             #   week header's start; need not be a Monday)
+  action: "add_minutes"|"scale"|"add_walk_breaks"|"set_hr_range",
+  value: number | {hr_low, hr_high} | [low, high],
+        # add_minutes: −60…60 (≠ 0) min per session; scale: factor 0.5–1.5;
+        # add_walk_breaks: 1–30 (run minutes between 1-min walks); set_hr_range: the range
+  apply_to?: "run"|"walk"|"both",            # add_minutes only (default run)
+  kinds?: [str],                             # only these workout kinds (EASY, LONG, …)
+  dry_run?: bool }
+```
+Matches every workout of the active plan in that week that is planned, today or later, not
+completed, not RACE/REST, with steps (and of `kinds`). → 200
+```
+{ week_start, week_end, action, dry_run: bool,
+  changed: [{workout_id, date, title, before: Brief, after: Brief, summary: str}],
+  skipped: [{workout_id, date, title, reason: str}],     # e.g. would drop below 5 min
+  warnings: [{workout_id, date, key, text}],
+  watch: {updated: int, unchanged: int, pending: int, failed: int, not_on_watch: int} }
+```
+400 on bad input; 404 `{detail}` without an active plan. Changed workouts are marked
+`edited_by: "user"` exactly like a single edit.
+
+### §B Coach chat edits — and never pretends
+
+New chat tools (same service, same validation, warnings and watch re-send; `edited_via: "chat"`):
+```
+edit_workout(id, total_minutes?, add_minutes?, apply_to?, steps?, hr_low?, hr_high?,
+             add_walk_breaks?, notes?, confirmed?)
+edit_week(week_start, action, value, kinds?, apply_to?, confirmed?)
+```
+Tool results: success `{status: "updated", workout_id, date, before, after, summary,
+warnings: [str], watch_status}` (edit_week: `{status: "updated", changed: [...], skipped,
+warnings, watch}`); `{status: "needs_confirmation", increase_pct, summary, message}` when the
+change adds more than **20 %** running to a session (vs its generated version; total time
+for a session without running) and `confirmed` is not true — nothing is saved, the coach must
+ask and call again with `confirmed: true`; `{error: str}` otherwise.
+
+**Chat message JSON** (`GET /chat/threads/{id}/messages/`, the POST reply's `assistant`) gains
+```
+plan_changed: [{workout_id: int, date: date, summary: str}]   # [] when nothing changed
+```
+filled from mutating tools that succeeded in that turn (edit_workout, edit_week,
+move_workout, skip_workout, clear_day). The POST reply also has top-level `plan_changed`
+(same list). UI: "Plan updated" chip → the workout; invalidate Plan/Today/calendar queries.
+
+**Honesty guard** (server side, every chat turn): if the final reply claims a change ("I've
+updated/increased/changed/moved/extended/shortened/added/adjusted/rescheduled/skipped…" next
+to a plan word — workout, run, session, plan, week, minutes, watch …, or "… has been
+updated/moved …") and no mutating tool (the five above, or propose_plan) succeeded in the
+turn, the model is re-prompted once with the facts (which tools ran and what they returned)
+and told to either make the change with a tool now or say plainly that nothing changed. If
+the second reply still claims an unmade change (or the re-prompt fails), the reply gets the
+line "_Correction: nothing in your plan was changed in this reply._" appended. Each firing
+is logged (`coaching.chat` warning) and stored on the message (`ChatMessage.guard`, not in
+the API).
+
+### §C Dated day metrics + freshness
+
+Additive `date`/`as_of` keys; `stale` flags follow one rule (`apps/health/freshness.py`):
+`stale` is true when the athlete has wellness data at all, it is 05:00 or later local, and
+today's row has no sleep **or** no readiness yet. `stale_reason`:
+`"sleep_missing"|"readiness_missing"|"both_missing"|null`; `stale_text` the one-liner
+("Showing yesterday's sleep — your watch hasn't synced last night yet.") or null.
+`latest_sleep_date` / `latest_readiness_date` = newest day that has it (any age) or null.
+```
+Freshness = { as_of: datetime, today: date, stale: bool, stale_reason, stale_text,
+              latest_sleep_date: date|null, latest_readiness_date: date|null,
+              last_sync_at: datetime|null }
+```
+- `GET /today/` gains top-level `as_of`, `freshness: Freshness`, and every `reasons[]` item
+  gains `date: date|null` — the day the value is from (sleep, HRV, readiness: today; resting
+  HR, body battery: today or yesterday; rpe: yesterday; load, habits, weather, pain: today).
+- `GET /briefing/today/` gains `as_of`, `freshness`, and `readiness.date` (today or null).
+- `GET /insights/` gains `as_of`, `freshness`; `readiness.date`, `hrv.last_night_date`,
+  `resting_hr.current_date`, `vo2max.date` (when vo2max is present), `body_battery.date`
+  and `stress.date` (newest day in the series, or null).
+- `GET /health/day/summary/` gains `as_of` (datetime) and `freshness`.
+- `GET /health/sleep/` gains `as_of` and `last_night_date` (newest night in `nights`, or null).
+- `GET /health/readiness-forecast/` gains `as_of` and `today.date` (the day `today.score`
+  is from, or null).
+UI rule (spec): show a date only when it isn't today / last night.
+
+### §C Auto-sync
+
+**`GET /sync/status/`** →
+```
+{ connected: bool,                    # stored Garmin flag (no probe — cheap)
+  last_sync_at: datetime|null,        # last successful sync
+  last_attempt_at: datetime|null,     # last sync start (manual, auto or scheduled)
+  running: bool,                      # a sync for this athlete is in progress
+  breaker_open: bool,                 # Garmin rate-limit breaker
+  can_sync_now: bool,                 # connected and not running and breaker closed
+  auto_sync_due: bool,                # can_sync_now, local time ≥ 05:00, last_sync_at older
+                                      #   than 60 min (or never), no attempt in the last 30 min
+  next_auto_sync_at: datetime|null,   # earliest time an auto POST will run (null: now/never)
+  min_interval_s: 1800 }
+```
+**`POST /garmin/sync/ {auto: true}`** (the existing endpoint; manual calls unchanged): runs
+only when an attempt is allowed; otherwise **200** `{skipped: "recent"|"running"|
+"breaker_open"|"not_connected"|"too_early", status: SyncStatus}` without calling Garmin. When it
+runs: the usual sync body plus `status: SyncStatus`. Server-side: at most one auto attempt per
+30 min per athlete (any sync start counts), and a sync never runs twice at once (a
+second POST while one runs → `skipped: "running"`; a manual POST then → 409 `{detail}`). The
+frontend should call it when `auto_sync_due` is true (still counts against the `garmin`
+10/hour throttle).
+
+### R16 backend choices
+- Edited workouts store their generated version in `PlannedWorkout.pre_edit`; undo restores
+  it. Steps edited in the editor are stored flat (repeat blocks expanded); GET folds them.
+- Chat `+20 %` is measured against the generated version, so repeated small edits can't
+  ratchet past it without confirmation.
+- Deploy: migrations `planning.0008_r16` (PlannedWorkout `edited_by, edited_at, edited_via,
+  notes, pre_edit`), `coaching.0011_r16` (ChatMessage `plan_changed, guard`). No new env,
+  tasks or dependencies.
