@@ -2599,3 +2599,343 @@ overlay). Owner only: another athlete's id → 404 as before.
 - Deploy: migrations `planning.0008_r16` (PlannedWorkout `edited_by, edited_at, edited_via,
   notes, pre_edit`), `coaching.0011_r16` (ChatMessage `plan_changed, guard, needs_confirmation`). No new env,
   tasks or dependencies.
+
+## R17 — contract for recovery routine, bad-data filter + data review, illness mode, coach memory page, deleting activities
+
+Conventions as R10–R16 (paths under `/api/`, signed-in athlete, own rows only — another
+athlete's id → 404; dates `YYYY-MM-DD`; datetimes ISO 8601 with offset; errors
+`400 {detail}` unless noted). Every change is **additive**: no existing key is removed or
+changes meaning. **Rohit's rule for R17: nothing is ever excluded or removed
+automatically.** The app *suggests*; only the athlete's explicit decision excludes a run
+or a day from trends, or removes an activity. Raw data is never modified.
+
+### §1 Recovery routine after runs
+
+`GET /activities/{id}/recovery/` →
+```
+Recovery = { activity_id: int, available: bool,
+             reason_unavailable: null|"not_a_run",    # walks, rides, strength → steps []
+             minutes: int,                    # 5–8 (sum of non-optional steps, rounded)
+             total_s: int,                    # non-optional steps, both sides counted
+             reason: str,                     # why this set: "Hilly 52-min easy run — extra calf and quad time."
+             focus: [str],                    # tags: "long"|"hard"|"hills"|"cadence"|"ground_contact"|"pain"|"injury_watch"
+             steps: [Step],
+             avoided: [{area: str, text: str}],   # painful areas softened/skipped ("Knee (left): skipped the quad stretch — never stretch into pain.")
+             notes: [str],                    # always includes "Ease into each stretch — mild tension, never pain."
+             done: bool, done_at: datetime|null,
+             streak: {current: int, best: int},   # runs in a row with the routine done
+             show_until: datetime }           # run end + 6 h (Today card visibility)
+Step = { key: str,            # "cooldown_walk"|"calf_stretch"|"hamstring_stretch"|"quad_stretch"|
+                              # "hip_flexor_stretch"|"glute_stretch"|"it_band_stretch"|
+                              # "adductor_stretch"|"lower_back_stretch"|"calf_roll"|
+                              # "hamstring_roll"|"quad_roll"|"it_band_roll"|"glute_roll"
+         title: str, seconds: int,           # per side when per_side
+         per_side: bool, cue: str,
+         figure: str,                        # walk|calf|hamstring|quad|hip_flexor|glute|it_band|
+                                             # adductor|lower_back|calf_roll|hamstring_roll|
+                                             # quad_roll|it_band_roll|glute_roll
+         optional: bool,                     # foam-roll variants (not in `minutes`)
+         softened: bool,                     # shortened/gentler because of a pain report
+         area: str|null }                    # body area worked (calf, hamstring, quad, hip, glute, lower_back, adductor)
+```
+- Pure `analysis/recovery_routine.py`. Base: 2–3 min cool-down walk (`cooldown_walk`, first)
+  + calf, hamstring, hip flexor (+ quad, glute on longer/harder runs). Hills (≥ 15 m
+  gain per km) → longer calf and quad; long (≥ 60 min) → + glute/piriformis and lower
+  back; hard (INTERVALS/TEMPO/RACE or ≥ 20 % in Z4–Z5) → + adductor and IT band; low
+  cadence (< 160) or high ground contact (> 280 ms) → longer calf hold. Pain reports for
+  that run or the last 3 days (R13 §3) at severity 1 → stretch for that area softened (half
+  time, gentler cue); severity ≥ 2 → skipped and listed in `avoided`. Injury-watch flags
+  (risk moderate/high) → softened only. Trimmed/extended to stay within 5–8 min
+  (non-optional). Foam-roll steps are `optional: true` and come last.
+- `POST /activities/{id}/recovery/done/ {skipped?: [step key]}` → 200
+  `{activity_id, done: true, done_at, streak: {current, best}, new_badges: [{key, label}]}`.
+  Idempotent (second call → same `done_at`). 409 `{detail}` for a non-run.
+- `GET /recovery/today/` → `{routine: null | {activity_id, minutes, title: "Recovery · 6 min",
+  show_until, done}}` — the newest run whose `show_until` is still ahead and which is not
+  done (the Today card).
+- Achievements gain group `recovery` (unit "runs"): `recovery_streak_3|7|14` = the
+  routine done after N runs in a row. Shown once the athlete has done one routine. The
+  streak counts runs from the first routine done; a run without it breaks the streak.
+- Reminders gain the event key `recovery_ready` ("Recovery routine ready", **off by
+  default**, `time: null`; PATCH with `time` → 400). Sent once per run when a run from the
+  last 6 h is processed and not during quiet hours: `{title: "Recovery routine ready",
+  body: "6 min for your legs after that run.", url: "/activities/{id}?recovery=1",
+  tag: "recovery"}`.
+
+### §2 Bad-data filter (HR spikes, GPS jumps) — suggestions only
+
+Pure `analysis/data_quality.py`, run during derivation for every activity with records;
+the result is stored in `ActivityQuality` (one row per activity). The cleaned series is
+recomputed from the raw records + the stored parameters whenever needed; **records are
+never changed.**
+
+```
+Quality = { version: int, score: int,             # 0–100 (100 = nothing found)
+            status: "clean"|"fixed"|"review",     # review = something for the athlete to decide
+            chip: str,           # "Clean" | "Fixed 2 HR spikes" | "Check this run — wrist HR unreliable"
+            summary: str,        # one plain sentence of what was found / done
+            flags: [Flag], counts: {<kind>: int},
+            hr_fixed_s: int, gps_fixed_s: int,    # seconds affected
+            hr_fixed_pct: int, gps_fixed_pct: int,
+            affected: [str],     # "avg_hr"|"hr_drift"|"time_in_zone"|"heart_adaptation"|"pace"|"distance"|"splits"|"route"|"records"
+            suggestion: "exclude"|null,           # score < 50 → suggest leaving it out of trends
+            suggestion_reason: str|null,          # "Wrist HR unreliable" | "GPS unreliable"
+            decision: null|"include"|"exclude",   # the athlete's choice; null = undecided
+            excluded_from_trends: bool,           # true ONLY when decision == "exclude"
+            use: "cleaned"|"raw",                 # what analysis uses for this run now
+            use_default: "cleaned"|"raw",
+            use_choice: null|"cleaned"|"raw",     # the athlete's explicit choice
+            use_suggestion: "cleaned"|null,       # default is raw but fixes exist → suggest cleaned
+            pending_review: bool,                 # (suggestion and no decision) or (use_suggestion and no use_choice)
+            info: str }                           # the (i) text
+Flag = { kind: "hr_cadence_lock"|"hr_spike"|"hr_flatline"|"hr_above_max"|
+               "gps_speed"|"gps_teleport"|"gps_drift"|"pause_mismarked",
+         start_s: number, end_s: number, severity: "low"|"medium"|"high",
+         fix: "interpolated"|"masked"|"flagged",  # flagged = noted, nothing changed
+         text: str }
+```
+**Rules** (definitions also in the module docstring; all time-based, smart recording safe):
+- `hr_cadence_lock`: |HR − cadence| ≤ 5 continuously for > 60 s (cadence ≥ 120 spm) →
+  HR masked over the span.
+- `hr_spike`: HR jumps > 25 bpm within < 5 s with no matching pace change (speed change
+  < 15 %) and returns within 10 bpm of the pre-jump level within 60 s → HR linearly
+  interpolated across it. A jump that doesn't come back is left alone (real).
+- `hr_flatline`: the same HR value for ≥ 60 s while moving → masked.
+- `hr_above_max`: HR above the athlete's max HR + 3 (220 when unknown) → masked.
+- `gps_teleport`: > 50 m between samples ≤ 1.5 s apart → position masked, distance
+  increment replaced by the plausible one (speed sensor / neighbours).
+- `gps_speed`: implied speed > 7 m/s (foot sports only) → as above.
+- `gps_drift`: stopped (cadence < 30) for ≥ 30 s while distance grows ≥ 25 m → distance
+  held flat, speed 0.
+- `pause_mismarked`: ≥ 60 s stationary while the timer ran, or a ≥ 10 s recording gap
+  across which you moved ≥ 20 m → flagged only.
+- Score = 100 − min(60, 150 × HR-fixed share) − min(40, 120 × GPS-fixed share)
+  − 2 per spike (max 10) − 2 per pause flag (max 6).
+- **`use` default**: `cleaned` when nothing was found or the only fixes are `hr_spike`
+  interpolations; otherwise `raw` with `use_suggestion: "cleaned"`. The athlete's
+  `use_choice` always wins. With `use: "raw"` analysis sees the raw stream exactly as
+  before R17.
+- **Trends honour only an explicit `decision: "exclude"`.** An excluded run is left out
+  of: progress (`/progress/`), compare run metrics, form, heart adaptation, computed
+  records (`/health/records/` computed keys), run-review "typical" baselines. It is
+  **never** removed from training load, weekly volume, plan compliance, achievements or
+  the activity list (leaving load out would make the plan harder).
+- "Downstream analysis uses the cleaned series" = segmentation, metrics (HR drift, zones,
+  averages), heart adaptation, progress (fastest 1 km), share splits, chat splits, the
+  route, compliance HR, all read the series chosen by `use`.
+
+Endpoints:
+- `quality: Quality|null` is added to `GET /activities/{id}/`, `GET /activities/{id}/route/`
+  and `GET /activities/{id}/share-data/` (null = not processed yet).
+- `GET /activities/{id}/quality/` → `{activity_id, quality: Quality|null,
+  series: [{t: int, hr_raw: number|null, hr_clean: number|null, fixed: bool}]}` (≤ 320
+  bucket-averaged points; `fixed` = the bucket contains a masked/interpolated HR sample →
+  grey it).
+- `PATCH /activities/{id}/quality/ {decision?: "include"|"exclude"|null, use?: "cleaned"|"raw"|null}`
+  → `{activity_id, quality}`. `null` resets to undecided/default. Changing `use`
+  re-derives that run immediately (segments/metrics follow). 400 on bad values.
+- `GET /activities/{id}/series/` points gain `hr_clean: number|null` and `hr_fixed: bool`
+  (`hr` stays the raw value).
+
+### Data review — `GET /data-review/`, `POST /data-review/decide/`
+
+One list of "Review these days/runs?" items, all reversible.
+```
+GET /data-review/?all=0|1      # default: pending only; all=1 adds decided items (last 180 days)
+→ { pending: int, items: [Item] }
+Item =
+ | { kind: "run", id: int (activity id), date, title: str, score: int,
+     suggestion: "exclude"|null, suggestion_reason: str|null, use_suggestion: "cleaned"|null,
+     decision: null|"include"|"exclude", use_choice: null|"cleaned"|"raw",
+     pending: bool, text: str }          # "Wrist HR looks unreliable on Tue's run — leave it out of trends?"
+ | { kind: "illness", id: int (illness id), type, label, start: date, end: date,  # end = recovered_on or today
+     days: [{date, decision: null|"include"|"exclude", has_data: bool}],
+     decision: null|"include"|"exclude"|"mixed",
+     pending: bool, text: str }          # "You were sick 3–6 Oct — resting HR and HRV may look off. Leave those days out of trends?"
+ | { kind: "deleted_in_garmin", id: int (activity id), date, title: str,
+     detected_at: datetime, decision: null|"remove"|"keep", pending: bool,
+     text: str }                         # "This run is no longer in Garmin Connect — remove it here too?"
+```
+Ordered newest first. `pending` counts items with `pending: true`.
+
+`POST /data-review/decide/ {items: [Decision]}` (1–200 items, all-or-nothing) →
+`{updated: int, items: [Item]}` (the affected items, re-read).
+```
+Decision = {kind: "run", id, decision?: "include"|"exclude"|null, use?: "cleaned"|"raw"|null}
+         | {kind: "day", date, decision: "include"|"exclude"|null}
+         | {kind: "illness", id, decision: "include"|"exclude"|null}     # every day of it
+         | {kind: "deleted_in_garmin", id, decision: "remove"|"keep"}
+```
+`null` = back to undecided (reversal). `remove` performs the same delete + tombstone as
+`DELETE /activities/{id}/` (reversible through `/activities/deleted/…/reimport/` while
+Garmin still has nothing… i.e. only if it still exists there); `keep` stops the question.
+400 `{detail}` on an unknown kind/id/date or bad value (nothing is saved).
+
+**Illness days are flagged, never auto-excluded.** Every day from an illness's start to
+its recovery (or today) is `flagged` with reason `"illness"`. They stay in every trend
+unless the athlete excludes them. Day decisions `exclude` are honoured by: the morning
+check-in baselines (28-day HRV / resting-HR means), compare (`/health/compare/`
+wellness metrics), day trends (`/health/day/trends/`), weekly and monthly report wellness
+averages, and the R9 habit impact reports. Annotations:
+- `/health/day/?date=` gains `flagged: null | {reason: "illness", text, illness_id,
+  decision: null|"include"|"exclude"}`.
+- `/health/day/trends/` gains top-level `flagged_days: [{date, reason: "illness",
+  excluded: bool}]`; excluded days' values are left out of the series and averages.
+
+### §10 Illness mode
+```
+Illness = { id, type: "cold"|"flu"|"stomach"|"injury"|"other",
+            type_label: str,                    # "Cold" | "Fever / flu" | "Stomach bug" | "Injury" | "Other"
+            symptoms: "above_neck"|"below_neck",
+            fever: bool,                        # default true for flu
+            start_date: date, expected_days: int|null, note: str,
+            status: "active"|"recovered",
+            recovered_on: date|null, days_off: int|null,  # recovered_on − start_date
+            days_so_far: int,                   # active: today − start_date + 1
+            paused_workouts: int,               # how many sessions it paused
+            advice: [str],                      # plain words, non-medical
+            see_doctor: [str],                  # "See a doctor if …" lines
+            return_block: null | ReturnBlock,
+            race_warning: null | {race_id, name, date, days_after_block: int, text},
+            created_at, updated_at }
+ReturnBlock = { rule: "short"|"week"|"rebuild",
+                label: str,                     # "2 easy sessions" | "One easy week" | "2-week rebuild"
+                start: date, end: date,         # first/last day of the block
+                resumes_on: date,               # the plan continues from here
+                sessions: [{workout_id: int|null, date, title, kind: "EASY"|"RUN_WALK",
+                            duration_s: int, hr_cap: int|null, pct_of_usual: int,
+                            status: str|null}],     # workout status, null without a plan
+                usual_duration_s: int,          # the "previous duration" reference
+                note: str }
+```
+- `GET /illness/` → `{active: Illness|null, history: [Illness]}` (history = recovered,
+  newest first, ≤ 20). `GET /illness/history/` → `[Illness]` (all, newest first).
+- `POST /illness/ {type, symptoms? (default above_neck; flu → below_neck allowed),
+  fever? (default type == "flu"), start_date? (default today; today−14 … today),
+  expected_days? (1–60), note? (≤ 200)}` → 201 Illness. 409 `{detail}` when one is already
+  active.
+- `PATCH /illness/{id}/` (active only; else 409) any of `type, symptoms, fever,
+  expected_days, note` → Illness.
+- `POST /illness/{id}/recover/ {date? (default today; start_date … today), dry_run?}` →
+  200 Illness (`status: "recovered"`, `return_block` set). `dry_run` previews, nothing
+  saved. 409 when not active.
+- `DELETE /illness/{id}/` (active only — "started by mistake") → 204; un-pauses
+  everything it paused (future dates), no return block. 409 otherwise.
+- **While active**: every `planned` workout of the active plan dated today or later
+  (from max(start_date, today)) gets `status: "paused"` — user-edited ones too, with
+  their content untouched. RACE workouts are never paused. Planned strength sessions are
+  paused too. Paused copies on the watch are removed through the Garmin registry (the
+  normal delete job). Paused workouts are left out of `/today/`, auto-adjust, weather
+  swaps, re-flow, re-layout, the weekly adaptation, fueling and the ICS feed. The
+  strength top-up and weekly adaptation skip the athlete.
+- Workout JSON gains `paused_by_illness: int|null` and `illness_return: int|null`
+  (the illness id when it is a return-block session); `status` may be `"paused"`.
+  Strength JSON `status` may be `"paused"`.
+- `/today/` gains top-level `illness: null | {id, type, type_label, start_date,
+  days_so_far, advice: [str]}`; while active `verdict: "rest"`, headline "Rest and get
+  well", `note` = the first advice line, `workout: null`, `adjusted: null`, and the
+  `illness` reason is in `reasons`. `/briefing/today/` gains `illness` (same object);
+  `focus = {key: "illness", text}`.
+- Reminders while active: `morning_checkin` says "Rest day — focus on getting well."
+  (no run talk); `best_run_time` is not sent.
+- Weekly report gains `illness: [{id, type, type_label, start, end, days_in_week}]` and a
+  went-well line "You rested while unwell — the right call."; monthly report gains
+  `illness: [{id, type, type_label, start, end, days_in_month}]`.
+- Streaks don't break: illness days are neutral for `run_streak` (they neither count nor
+  break it) and a Mon–Sun week containing an illness day with < 2 runs is skipped over by
+  `consistent_weeks` (neither counts nor breaks).
+- Chat tools: `set_illness(type, symptoms?, fever?, start_date?, expected_days?, note?)` →
+  `{status: "started", illness: {...}, paused: int}` | `{error}`;
+  `recover_illness(date?)` → `{status: "recovered", return_block, race_warning}` | `{error}`.
+  Both count as plan changes (`plan_changed` chips). The model sees only type, dates and
+  counts.
+- **Return rules** (`planning/illness.py`, pure). days_off = recovered_on − start_date.
+  Reference "usual" duration = median moving time of runs in the 28 days before
+  start_date (≥ 2 runs), else median of the paused run workouts, else 30 min.
+  - `short` (days_off ≤ 3, no fever, above the neck): 2 sessions (days_off ≤ 1) or 3, at
+    50 / 60 / 70 % of usual; EASY.
+  - `week` (4–7 days, no fever, above the neck): one easy week (7 days), sessions at
+    50 / 60 / 70 / 80 % (then 80 %); EASY.
+  - `rebuild` (> 7 days, or fever, or below the neck): 7 days (14 when days_off > 14, or
+    fever with days_off > 7). First week RUN_WALK (2 min run / 1 min walk) at 40 / 50 /
+    60 %; second week EASY at 60 / 70 / 80 %.
+  - Injury: same day rules, the first 2 sessions are RUN_WALK, "stop if it hurts".
+  - Block starts the day after recovery; with fever or below-the-neck symptoms 2 days
+    after ("symptom-free for 24–48 h first").
+  - Sessions sit **only on dates where the paused plan had a run** (never on a plan rest
+    day). Duration = min(pct × usual, that day's planned duration), ≥ 10 min, whole
+    minutes. HR cap = easy top − 10 bpm for the first 2 sessions, − 5 after (never above
+    the plan's own cap). They are new PlannedWorkouts in the active plan
+    (`illness_return` set); the paused originals on those dates stay `paused` (content
+    kept). Without an active plan the block is advice only (`workout_id: null`, dates on
+    the athlete's available days).
+  - Paused workouts dated on/after `resumes_on` go back to `planned` (edited ones exactly
+    as edited); earlier paused ones stay `paused` as history. Nothing is re-sent to the
+    watch automatically (use "Send week to watch").
+  - `race_warning` when a race of the plan falls inside the block or ≤ 14 days after
+    `resumes_on`. The race itself is never moved.
+- Health data during illness: see "Illness days are flagged" above.
+
+### §16 Coach memory page
+```
+Fact = { id, text: str (≤ 300), category: "health"|"schedule"|"goals"|"other",
+         category_label: str,          # "Injuries & health" | "Schedule & preferences" | "Goals" | "Other"
+         source: "chat"|"checkin"|"app",   # stored "manual" → "app"
+         pinned: bool, created_at, updated_at, edited: bool }
+```
+- `GET /memory/` → `[Fact]` (as before, with the new keys; pinned first, then newest).
+  `GET /memory/?grouped=1` → `{count, pinned: int, groups: [{key, label, facts: [Fact]}]}`
+  (all four groups, fixed order, possibly empty).
+- `POST /memory/ {text, category?, pinned?}` → 201 Fact (200 + existing when the text is
+  already known). `category` defaults to a keyword guess.
+- `PATCH /memory/{id}/ {text?, category?, pinned?}` → Fact. Same text as another fact →
+  400 `{detail: "The coach already knows this."}`.
+- `DELETE /memory/{id}/` → 204.
+- Pinned facts (max 10; an 11th → 400) are always in the chat context; then the newest
+  others up to 40 in total. Edits are what the next chat turn uses.
+- **Private habit never stored**: any fact (app, chat tool, automatic extraction,
+  check-in) that mentions the private habit is refused — POST/PATCH → 400
+  `{detail: "The private habit is never stored in the coach's memory."}`; chat/extraction
+  silently drop it.
+- Check-in notes: durable facts the check-in note extraction finds are added with
+  `source: "checkin"` (same filter).
+
+### Deleting activities
+- `DELETE /activities/{id}/` → 200 `{deleted: id, tombstone_id: int, workouts_reopened: [id],
+  records_removed: [key]}`. Removes the activity and everything derived from it
+  (records, segments, metrics, quality, review, recovery log, heart stats, weather,
+  shoe assignment, its check-in journal entry, the raw FIT file, cached routes/splits).
+  A planned workout it completed goes back to `planned` (the UI shows past planned ones
+  as missed); a strength session it auto-completed goes back to planned. Computed PR
+  events dated that day are removed and re-evaluated (badges already earned stay, as in
+  R10). A tombstone (Garmin id and/or file hash) stops every later sync, backfill,
+  reingest or re-upload of the same file from bringing it back.
+- `GET /activities/deleted/` → `[{id (tombstone id), garmin_activity_id: int|null,
+  date, sport, distance_m, deleted_at, reason: "user"|"deleted_in_garmin",
+  can_reimport: bool}]` newest first.
+- `POST /activities/deleted/{id}/reimport/` → 200 `{reimported: bool, activity_id: int|null,
+  detail}`: removes the tombstone, then re-downloads from Garmin (garmin queue, waits
+  ≤ 20 s) when it has a Garmin id. Garmin no longer has it → `reimported: false`
+  (tombstone gone anyway). 503 `{detail}` when Garmin can't be called (breaker /
+  not connected; tombstone kept). A FIT upload (no Garmin id): tombstone removed,
+  `reimported: false`, "Upload the file again."
+- **Deleted in Garmin**: activities RunCoach has that Garmin no longer lists are found
+  (never deleted automatically) by (a) the daily slow sync — one `get_activities(0, 100)`
+  call; the fully fetched window is from the day after the oldest listed entry (all 60
+  days when fewer than 100 came back) and only RunCoach activities of the last 60 days
+  inside that window, older than 2 h, are compared; and (b) a full backfill listing. Each
+  becomes a `deleted_in_garmin` data-review item (above). "keep" is remembered; "remove"
+  = the delete above with reason `deleted_in_garmin`.
+
+### R17 deploy
+- Migrations (new models cascade from the Athlete; account deletion covers them):
+  `ActivityQuality`, `RecoveryLog`, `ActivityTombstone`, `GarminDeletionCheck`
+  (activities), `Illness`, `DayDataDecision` (health), PlannedWorkout/StrengthSession
+  `paused_by`/`illness_return` (planning), MemoryFact `category, pinned, updated_at,
+  edited` (coaching), ReminderSettings `recovery_ready` (reminders).
+- Segmentation `ALGORITHM_VERSION` 1 → 2 (segmentation now reads the series chosen by
+  the quality `use`). **After deploying run once:** `python manage.py derive` — it
+  re-derives every activity still at v1 and stores its `ActivityQuality` (the
+  20-minute `derive-anything-stale` beat would do the same in batches of 200). Caches
+  keyed on the segmentation version (routes, fastest 1 km, heart stats) refresh by
+  themselves. `python manage.py derive --all` forces everything.
