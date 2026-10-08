@@ -2700,7 +2700,8 @@ Flag = { kind: "hr_cadence_lock"|"hr_spike"|"hr_flatline"|"hr_above_max"|
 - `hr_spike`: HR jumps > 25 bpm within < 5 s with no matching pace change (speed change
   < 15 %) and returns within 10 bpm of the pre-jump level within 60 s → HR linearly
   interpolated across it. A jump that doesn't come back is left alone (real).
-- `hr_flatline`: the same HR value for ≥ 60 s while moving → masked.
+- `hr_flatline`: the same HR value for ≥ 120 s while moving → masked (60 s flagged real
+  steady-state plateaus in testing).
 - `hr_above_max`: HR above the athlete's max HR + 3 (220 when unknown) → masked.
 - `gps_teleport`: > 50 m between samples ≤ 1.5 s apart → position masked, distance
   increment replaced by the plausible one (speed sensor / neighbours).
@@ -2767,8 +2768,8 @@ Decision = {kind: "run", id, decision?: "include"|"exclude"|null, use?: "cleaned
          | {kind: "deleted_in_garmin", id, decision: "remove"|"keep"}
 ```
 `null` = back to undecided (reversal). `remove` performs the same delete + tombstone as
-`DELETE /activities/{id}/` (reversible through `/activities/deleted/…/reimport/` while
-Garmin still has nothing… i.e. only if it still exists there); `keep` stops the question.
+`DELETE /activities/{id}/` (undo: `POST /activities/deleted/{id}/reimport/` — re-fetches
+it only if Garmin still has it); `keep` stops the question for that activity.
 400 `{detail}` on an unknown kind/id/date or bad value (nothing is saved).
 
 **Illness days are flagged, never auto-excluded.** Every day from an illness's start to
@@ -2927,11 +2928,40 @@ Fact = { id, text: str (≤ 300), category: "health"|"schedule"|"goals"|"other",
   becomes a `deleted_in_garmin` data-review item (above). "keep" is remembered; "remove"
   = the delete above with reason `deleted_in_garmin`.
 
+### Experiments — up to 3 at once (R17 change to R14 §7)
+- `POST /experiments/`: at most **3** scheduled/active experiments → a 4th is 409
+  `{detail: "You already have 3 experiments running — stop one first."}`. The same
+  template (for `custom`: the same habit) overlapping in dates with an open one → 400.
+- Every `Experiment` (list, detail, create, stop, active) gains
+  `overlapping: [{id, title, start, end, days}]` (other experiments whose window overlaps
+  this one; `days` = number of overlapping days). The detail `result` gains the same
+  `overlapping` plus `overlap_note: str|null` — "Another experiment ran at the same time,
+  so the changes can't be pinned on one of them." when the list is non-empty.
+- `GET /experiments/active/` → `{experiment: Experiment|null` (unchanged: the oldest active
+  one, else a recently completed undecided one)`, active_list: [Experiment], max_active: 3}`.
+  `active_list` = every active experiment (oldest start first) then completed ones still
+  waiting for keep/stop (≤ 7 days).
+
+### R17 backend choices
+- Only an explicit `decision: "exclude"` removes a run from trend analyses; only a day
+  decision `exclude` removes a day's wellness numbers. Load, volume, compliance,
+  achievements and the activity list never drop anything.
+- The cadence-lock rule is the spec's (|HR − cadence| ≤ 5 for > 60 s). A runner whose real
+  HR sits at their cadence would be flagged too — which is why the default `use` stays
+  `raw` for every fix except spike interpolation, and the athlete decides.
+- Illness → ids on PlannedWorkout/StrengthSession are plain integers
+  (`paused_by_illness`, `illness_return`), not FKs, to keep planning/health migrations
+  independent. Starting a new plan while unwell does not pause it (out of scope).
+- A deleted activity's computed PR events dated that day are removed; badges already
+  earned are kept (R10 rule). A data-review "remove" is the same delete.
+
 ### R17 deploy
 - Migrations (new models cascade from the Athlete; account deletion covers them):
-  `ActivityQuality`, `RecoveryLog`, `ActivityTombstone`, `GarminDeletionCheck`
-  (activities), `Illness`, `DayDataDecision` (health), PlannedWorkout/StrengthSession
-  `paused_by`/`illness_return` (planning), MemoryFact `category, pinned, updated_at,
+  `activities.0008_r17` (`ActivityQuality`, `RecoveryLog`, `RecoveryPush`,
+  `ActivityTombstone`, `GarminDeletionCheck`), `health.0004_r17`, `planning.0009_r17`,
+  `coaching.0012_r17` (also guesses `category` for existing facts),
+  `reminders.0006_r17` — `Illness`, `DayDataDecision` (health), PlannedWorkout/StrengthSession
+  `paused_by_illness`/`illness_return` (planning), MemoryFact `category, pinned, updated_at,
   edited` (coaching), ReminderSettings `recovery_ready` (reminders).
 - Segmentation `ALGORITHM_VERSION` 1 → 2 (segmentation now reads the series chosen by
   the quality `use`). **After deploying run once:** `python manage.py derive` — it
@@ -2939,3 +2969,6 @@ Fact = { id, text: str (≤ 300), category: "health"|"schedule"|"goals"|"other",
   20-minute `derive-anything-stale` beat would do the same in batches of 200). Caches
   keyed on the segmentation version (routes, fastest 1 km, heart stats) refresh by
   themselves. `python manage.py derive --all` forces everything.
+- New Celery task `ingest.reimport_one` (garmin queue) — restart the workers. The daily
+  slow sync makes one extra `get_activities(0, 100)` call (deletion check). No new env or
+  dependencies.
