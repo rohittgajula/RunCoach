@@ -1,0 +1,43 @@
+/* R17 main-chunk bits: recovery card, illness hero, data-check chip, paused workouts,
+   menus, app toast. Screens and sheets: r17lazy.css (lazy). */
+.recovery-card {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; font: inherit; color: inherit;
+  border: 1px solid var(--line-soft); cursor: pointer; min-height: 64px;
+}
+.recovery-card-ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--recovery-tint); color: var(--recovery-ink); }
+.recovery-card-title { display: block; font-weight: 700; font-size: 15px; }
+.recovery-card-go { flex: none; padding: 8px 14px; border-radius: 999px; background: var(--recovery); color: #fff; font-weight: 800; font-size: 14px; }
+.recovery-btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin: 4px 0 8px; }
+.ill-hero { display: flex; flex-direction: column; gap: 8px; background: linear-gradient(180deg, var(--recovery-tint), var(--card) 70%); }
+.ill-hero .lbl { color: var(--recovery-ink); }
+.ill-hero-text { font-size: 15px; line-height: 1.45; }
+.ill-hero .btn { align-self: flex-start; min-width: 140px; }
+.dq-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 6px 12px; margin: 6px 0 2px;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; font-size: 13px; font-weight: 700;
+}
+.dq-chip-k { color: var(--muted); font-weight: 600; }
+.dq-chip.is-ok > span:first-child { color: var(--ok); }
+.dq-chip.is-warn > span:first-child { color: var(--warn); }
+.dq-chip.is-muted { color: var(--muted); background: var(--card-2); }
+.menu-list { display: flex; flex-direction: column; margin: 0 -16px; }
+.row-danger .row-icon { background: var(--bad-bg); color: var(--bad-fg); }
+.row-danger .row-title { color: var(--bad); }
+.toast-link { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.toast-link a { color: inherit; font-weight: 800; text-decoration: underline; min-height: 32px; display: inline-flex; align-items: center; }
+.cal-card.is-paused { opacity: 0.5; }
+.cal-card.is-paused .cal-card-title, .cal-card.is-paused .cal-compact-title { color: var(--muted); }
+.tag-paused { background: var(--recovery-tint); color: var(--recovery-ink); }
+.tag-return { background: var(--recovery-tint); color: var(--recovery-ink); }
+.excluded-note { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.excluded-note button { color: inherit; text-decoration: underline; background: none; border: 0; font: inherit; min-height: 44px; padding: 0 4px; }
+.review-badge {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; color: inherit;
+  border: 1px dashed var(--line); background: transparent; box-shadow: none; padding: 10px 14px; min-height: 48px; border-radius: var(--radius);
+}
+.review-badge b { font-weight: 700; }
+.review-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; }
+.exp-overlap-note { font-size: 13px; line-height: 1.4; padding: 10px 12px; border-radius: 10px; background: var(--habits-tint); color: var(--fg); }
+.row.is-disabled { opacity: 0.5; cursor: default; }
+.dq-chip { align-self: flex-start; max-width: 100%; }
+.slim-chip-bar { display: block; }

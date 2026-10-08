@@ -26,17 +26,19 @@ function Stat({ label, value }: { label: string; value: string }) {
 export function WorkoutCard({
   workout, onOpen, onGuide, adjusted = false, compact = false,
 }: { workout: Workout; onOpen: () => void; onGuide: () => void; adjusted?: boolean; compact?: boolean }) {
+  const paused = workout.status === 'paused'
+  const stateCls = workout.status === 'skipped' ? 'is-skipped' : paused ? 'is-paused' : ''
   const isAdjusted = (adjusted || workout.adjusted_by === 'checkin' || workout.adjusted_by === 'auto') && workout.status === 'planned'
   // R14 §1: every day but today is one row + a slim step bar; Guide, load and the
   // adjustment reason are in the sheet (tap).
   if (compact) {
     return (
       <article
-        className={`card cal-card is-compact is-tappable ${workout.status === 'skipped' ? 'is-skipped' : ''}`}
+        className={`card cal-card is-compact is-tappable ${stateCls}`}
         onClick={onOpen}
         role="button"
         tabIndex={0}
-        aria-label={`${workout.title}, ${dur(workout.duration_s)}${workout.status === 'completed' ? ', done' : workout.status === 'skipped' ? ', skipped' : ''}`}
+        aria-label={`${workout.title}, ${dur(workout.duration_s)}${workout.status === 'completed' ? ', done' : workout.status === 'skipped' ? ', skipped' : paused ? ', paused while you’re unwell' : ''}`}
         onKeyDown={(e) => e.key === 'Enter' && onOpen()}
       >
         <div className="cal-compact-row">
@@ -44,17 +46,20 @@ export function WorkoutCard({
           <span className="cal-compact-title">{workout.title}</span>
           {workout.status === 'completed' && <span className="tag tag-ok"><CheckIcon size={14} /> Done</span>}
           {workout.status === 'skipped' && <span className="tag">Skipped</span>}
+          {paused && <span className="tag tag-paused">Paused</span>}
+          {workout.illness_return && workout.status === 'planned' && <span className="tag tag-return">Easing back</span>}
           {isAdjusted && <span className="tag tag-adjusted">Adjusted</span>}
           {workout.status === 'planned' && <EditedChip workout={workout} />}
           <span className="cal-compact-meta">{dur(workout.duration_s)}</span>
         </div>
+        {paused && <p className="muted small">Paused while you’re unwell</p>}
         <WorkoutBar steps={workout.steps} height={16} compact />
       </article>
     )
   }
   return (
     <article
-      className={`card cal-card is-tappable ${workout.status === 'skipped' ? 'is-skipped' : ''}`}
+      className={`card cal-card is-tappable ${stateCls}`}
       onClick={onOpen}
       role="button"
       tabIndex={0}
@@ -69,26 +74,31 @@ export function WorkoutCard({
           </span>
         )}
         {workout.status === 'skipped' && <span className="tag">Skipped</span>}
+        {paused && <span className="tag tag-paused">Paused</span>}
+        {workout.illness_return && workout.status === 'planned' && <span className="tag tag-return">Easing back</span>}
         {isAdjusted && <span className="tag tag-adjusted">Adjusted</span>}
         {workout.status === 'planned' && <EditedChip workout={workout} />}
       </header>
       <WorkoutBar steps={workout.steps} />
       <p className="cal-card-title">{workout.title}</p>
+      {paused && <p className="muted small">Paused while you’re unwell</p>}
       {workout.auto_adjustment && workout.status === 'planned' && <AdjustedChip adjustment={workout.auto_adjustment} compact />}
       <footer className="cal-card-foot">
         {workout.phase && <PhasePill kind={workout.phase.kind} />}
         <Stat label="Duration" value={dur(workout.duration_s)} />
         <Stat label="Load" value={String(Math.round(workout.load))} />
-        <button
-          type="button"
-          className="btn btn-primary btn-pill"
-          onClick={(e) => {
-            e.stopPropagation()
-            onGuide()
-          }}
-        >
-          <ReviewIcon size={18} /> Guide
-        </button>
+        {!paused && (
+          <button
+            type="button"
+            className="btn btn-primary btn-pill"
+            onClick={(e) => {
+              e.stopPropagation()
+              onGuide()
+            }}
+          >
+            <ReviewIcon size={18} /> Guide
+          </button>
+        )}
       </footer>
     </article>
   )

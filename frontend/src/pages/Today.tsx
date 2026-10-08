@@ -10,6 +10,8 @@ import { ExperimentChip } from '../components/experiments/ExperimentChip'
 import { RefreshIcon } from '../components/Icons'
 import { AvatarButton } from '../components/Kit'
 import { MoodCard } from '../components/mood/MoodCard'
+import { IllnessHero, TodayMore } from '../components/illness/IllnessEntry'
+import { RecoveryCard } from '../components/recovery/RecoveryEntry'
 import { ErrorState } from '../components/States'
 import { ForecastCard } from '../components/today/ForecastCard'
 import { FuelToday } from '../components/today/FuelToday'
@@ -26,6 +28,7 @@ import { parseDate, todayISO } from '../lib/format'
 import { preloadTabs } from '../lib/preload'
 import { errorText, useHabitSummary, useSync, useWeek } from '../lib/queries'
 import { SyncingPill } from '../lib/r16'
+import { useIllness } from '../lib/r17'
 import { useSyncing } from '../lib/syncFlag'
 
 function greeting(): string {
@@ -61,6 +64,8 @@ export default function Today() {
   const name = (athlete?.display_name || '').split(' ')[0]
   const dateLabel = parseDate(today).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
   const layout = resolveLayout(athlete?.today_layout)
+  // R17 §10: while unwell, a calm rest hero replaces readiness + workout.
+  const illness = useIllness().data?.active ?? null
 
   useEffect(() => { preloadTabs() }, [])
 
@@ -108,6 +113,7 @@ export default function Today() {
         <ChipButton label="Sync Garmin" onClick={runSync} disabled={syncing} className="chip-plain">
           <RefreshIcon className={syncing ? 'spin' : ''} />
         </ChipButton>
+        <TodayMore />
         <AvatarButton />
       </header>
       {toast && <div className="toast" role="status">{toast}</div>}
@@ -116,7 +122,8 @@ export default function Today() {
         <ErrorState message={errorText(week.error, 'Today’s plan did not load.')} onRetry={() => week.refetch()} />
       )}
       <StaleNotice onSync={runSync} />
-      <TodayHero day={day} loading={week.isPending} />
+      {illness ? <IllnessHero illness={illness} /> : <TodayHero day={day} loading={week.isPending} />}
+      <RecoveryCard />
       {layout.map((key) => <TodaySlot key={key}>{cards[key]}</TodaySlot>)}
     </div>
   )

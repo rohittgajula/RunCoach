@@ -8,6 +8,7 @@ import { SyncingPill, useAutoSync } from '../lib/r16'
 import { useAuth } from '../lib/AuthContext'
 import { CoachIcon, ForkIcon, HealthIcon, PlanIcon, TodayIcon } from './Icons'
 import { BadgeToast } from './me/Badges'
+import { GlobalToast } from './GlobalToast'
 import { SettingsSheet } from './SettingsSheet'
 
 const TABS = [
@@ -137,6 +138,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </div>
       {tab !== 'today' && <div className="sync-float"><SyncingPill /></div>}
       <BadgeToast />
+      <GlobalToast />
       <SettingsSheet open={settingsOpen} focus={focus} onClose={() => setSettingsOpen(false)} />
     </ShellContext.Provider>
   )

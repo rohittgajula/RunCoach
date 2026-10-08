@@ -83,7 +83,7 @@ export type Plan = PlanSummary & {
   weeks: PlanWeek[]
 }
 
-export type WorkoutStatus = 'planned' | 'completed' | 'skipped'
+export type WorkoutStatus = 'planned' | 'completed' | 'skipped' | 'paused'
 
 export type Workout = {
   id: number
@@ -99,6 +99,9 @@ export type Workout = {
   target_zone: string
   fueling: Fueling
   status: WorkoutStatus
+  /** R17 §10: illness id that paused it / return-to-run block it belongs to. */
+  paused_by_illness?: number | null
+  illness_return?: number | null
   completed_activity_id: number | null
   /** R6 §3 — present once a run is linked. */
   actual?: WorkoutActual | null

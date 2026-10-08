@@ -23,6 +23,7 @@ import { InsightChartSheet } from './InsightChartSheet'
 import { CHARTS, type ChartKey } from './charts'
 import { HabitsTeaser, ProgressTeaser } from './Teasers'
 import { DateSuffix } from '../../lib/r16'
+import { ReviewBadge } from '../quality/ReviewEntry'
 
 /** The metric's series, bucketed to the chosen frequency (R12). */
 const values = (data: Insights, key: ChartKey, freq: Freq = 'day') =>
@@ -58,6 +59,7 @@ export function OverviewSection() {
         <div className={`stack ${insights.isPlaceholderData ? 'is-stale' : ''}`}>
           <SummaryHero data={data} freq={period.freq} />
           <GoalChip />
+          <ReviewBadge />
           <Tiles data={data} freq={period.freq} onChart={setChart} />
           <WhatChanged data={data} period={period} />
           {/* R14 §1: everything else one tap away — same cards, in sheets or their sections. */}

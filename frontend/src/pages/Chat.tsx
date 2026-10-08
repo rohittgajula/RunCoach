@@ -33,6 +33,7 @@ const SUGGESTIONS = [
   'Build a plan for me to run 10k.',
   'How did my last week go?',
   'What should I eat before my long run?',
+  'I’m sick — pause my plan.',
 ]
 
 /** /chat → the most recent chat, or a new one when there are none. */

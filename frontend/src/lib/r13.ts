@@ -204,7 +204,7 @@ export type Strength = {
   duration_s: number
   level: number
   exercises: StrengthExercise[]
-  status: 'planned' | 'completed' | 'skipped'
+  status: 'planned' | 'completed' | 'skipped' | 'paused'
   completed_activity_id: number | null
   auto_completed: boolean
   after_run: boolean

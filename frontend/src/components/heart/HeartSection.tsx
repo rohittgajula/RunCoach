@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { ExcludedNote } from '../quality/ReviewEntry'
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from 'recharts'
 import { pace } from '../../lib/format'
 import { errorText } from '../../lib/queries'
@@ -134,6 +135,7 @@ function HeartChart({ d }: { d: HeartResponse }) {
         <span><i className="key-band" style={{ background: 'var(--fg)', height: 3, width: 16 }} />7-run trend</span>
         {metric === 'duration_under_cap_s' && <span>min:sec</span>}
       </div>
+      <ExcludedNote />
       {hotCount > 0 && (
         <div className="switch-row">
           <span className="grow">

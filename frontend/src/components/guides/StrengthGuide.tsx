@@ -1,14 +1,17 @@
 import { StepTimer, type TimerStep } from './StepTimer'
 
-type Pt = [number, number]
+export type Pt = [number, number]
 /** A stick-figure pose; limbs are polylines, `focus` marks the working muscle. */
-type Pose = { head: Pt; limbs: Pt[][]; back?: Pt[][]; focus: Pt; prop?: 'mat' }
+export type Pose = { head: Pt; limbs: Pt[][]; back?: Pt[][]; focus: Pt; prop?: 'mat'; roller?: Pt; wall?: number }
 
-export function Figure({ pose, label }: { pose: Pose; label: string }) {
+export function Figure({ pose, label, className = '' }: { pose: Pose; label: string; className?: string }) {
   const path = (pts: Pt[]) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' ')
   return (
-    <svg viewBox="0 0 120 90" className="ex-figure guide-anim" role="img" aria-label={label}>
+    <svg viewBox="0 0 120 90" className={`ex-figure guide-anim ${className}`} role="img" aria-label={label}>
       <line className="ex-ground" x1={4} y1={84} x2={116} y2={84} />
+      {/* R17: wall (calf stretch) and foam roller props. */}
+      {pose.wall != null && <line className="ex-ground" x1={pose.wall} y1={8} x2={pose.wall} y2={84} />}
+      {pose.roller && <circle className="ex-roller" cx={pose.roller[0]} cy={pose.roller[1]} r={6} />}
       <circle className="ex-focus" cx={pose.focus[0]} cy={pose.focus[1]} r={9} />
       {(pose.back ?? []).map((pts, i) => <path key={`b${i}`} className="ex-limb is-back" d={path(pts)} />)}
       {pose.limbs.map((pts, i) => <path key={i} className="ex-limb" d={path(pts)} />)}

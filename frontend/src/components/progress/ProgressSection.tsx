@@ -1,4 +1,5 @@
 import { Disclosure, Row, RowGroup } from '../Disclose'
+import { ExcludedNote } from '../quality/ReviewEntry'
 import { HealthIcon } from '../Icons'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -80,6 +81,7 @@ export function ProgressSection() {
   return (
     <div className="stack">
       <RangeSwitch value={mode} onChange={setMode} options={MODES} />
+      <ExcludedNote />
 
       {mode === 'dates' ? (
         <section className="card stack dates-card">

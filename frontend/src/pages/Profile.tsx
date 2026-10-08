@@ -5,7 +5,6 @@ import { Row, RowGroup } from '../components/Disclose'
 import { useShell } from '../components/Shell'
 import { ErrorState, Skeleton } from '../components/States'
 import { FitnessSheet, STATUS_LABEL, type FitnessView } from '../components/profile/FitnessSheet'
-import { MemorySheet } from '../components/profile/MemorySheet'
 import { MetricSheet } from '../components/profile/MetricSheet'
 import { PlanDetailSheet } from '../components/profile/PlanDetailSheet'
 import { dur, pace } from '../lib/format'
@@ -42,7 +41,6 @@ export function ProfileCards() {
   const [metric, setMetric] = useState<MetricKind | null>(null)
   const [fitnessView, setFitnessView] = useState<FitnessView | null>(null)
   const [planId, setPlanId] = useState<number | null>(null)
-  const [memoryOpen, setMemoryOpen] = useState(false)
   const [menu, setMenu] = useState(false)
   const [more, setMore] = useState(false)
   const s = summary.data
@@ -135,9 +133,9 @@ export function ProfileCards() {
             />
             <Row
               icon={<SparkIcon size={20} />}
-              title="Memory"
-              sub={s.memory_count ? `${s.memory_count} fact${s.memory_count === 1 ? '' : 's'} remembered from your chats` : 'Facts remembered from your chats'}
-              onClick={() => setMemoryOpen(true)}
+              title="What the coach knows"
+              sub={s.memory_count ? `${s.memory_count} fact${s.memory_count === 1 ? '' : 's'} · edit, pin or delete` : 'Facts remembered from your chats'}
+              onClick={() => navigate('/me/memory')}
             />
           </RowGroup>
         </>
@@ -146,7 +144,6 @@ export function ProfileCards() {
       <MetricSheet kind={metric} onClose={() => setMetric(null)} />
       <FitnessSheet view={fitnessView} onClose={() => setFitnessView(null)} />
       <PlanDetailSheet planId={planId} onClose={() => setPlanId(null)} />
-      <MemorySheet open={memoryOpen} onClose={() => setMemoryOpen(false)} />
     </>
   )
 }

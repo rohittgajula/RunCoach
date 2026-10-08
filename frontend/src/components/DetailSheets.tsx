@@ -22,6 +22,9 @@ import { AdjustedChip } from './adjust/AdjustedChip'
 import { RunReviewSection } from './review/RunReview'
 import { useCoachLaunch } from './useCoachLaunch'
 import { EditedChip, canEditWorkout } from './edit/EditedChip'
+import { ActivityMore } from './activity/ActivityMore'
+import { DataCheckChip } from './quality/DataCheckChip'
+import { RecoveryButton } from './recovery/RecoveryEntry'
 
 // R16 §A: the step editor is its own chunk, fetched on "Edit" (warmed on press).
 const loadEditor = () => import('./edit/WorkoutEditor')
@@ -195,6 +198,9 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
 
           {mode === 'idle' && w.status === 'planned' && w.date >= todayISO() && <GarminSendButton workout={w} />}
 
+          {w.status === 'paused' && (
+            <p className="muted">Paused while you’re unwell. When you tap “I’m better”, a short easing-back block replaces the first sessions and the rest of your plan comes back.</p>
+          )}
           {mode === 'idle' && (
             <div className="detail-actions">
               {w.status === 'planned' && (
@@ -256,7 +262,12 @@ export function ActivitySheet({ activity, onClose }: { activity: ActivityCard | 
       open={!!a}
       onClose={onClose}
       label="Activity"
-      actions={a && /run|walk|hik/i.test(a.sport) ? <RunShareButton activity={a} avgHr={detail.data?.avg_hr} /> : undefined}
+      actions={a ? (
+        <>
+          {/run|walk|hik/i.test(a.sport) && <RunShareButton activity={a} avgHr={detail.data?.avg_hr} />}
+          <ActivityMore activityId={a.id} sport={a.sport} onDeleted={onClose} />
+        </>
+      ) : undefined}
     >
       {a && (
         <div className="detail">
@@ -265,6 +276,7 @@ export function ActivitySheet({ activity, onClose }: { activity: ActivityCard | 
           </p>
           <h2 className="detail-title">{a.name || a.sport}</h2>
           <p className="muted small">{a.device ? `${a.device} via Garmin` : 'via Garmin'}</p>
+          <DataCheckChip activityId={a.id} quality={detail.data?.quality} />
           {(a.unplanned || detail.data?.unplanned) && (
             <div className="detail-tags"><span className="tag tag-extra">Extra</span><span className="muted small">Not in the plan — still counts.</span></div>
           )}
@@ -276,6 +288,7 @@ export function ActivitySheet({ activity, onClose }: { activity: ActivityCard | 
             <div className="stat"><span className="stat-label">Distance</span><span className="stat-value">{km(a.distance_m)}</span></div>
             <div className="stat"><span className="stat-label">Load</span><span className="stat-value">{Math.round(a.load)}</span></div>
           </div>
+          {/run/i.test(a.sport) && <RecoveryButton activityId={a.id} />}
 
           {!detail.data?.actual && (
           <section className="detail-section">

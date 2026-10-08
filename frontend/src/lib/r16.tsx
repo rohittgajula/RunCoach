@@ -39,7 +39,7 @@ export type PlanChange = { workout_id: number; date: ISODate; summary: string }
 
 export function invalidateAfterPlanChange(client: QueryClient) {
   invalidatePlanData(client)
-  for (const key of ['today', 'briefing', 'adjustments', 'weather-suggestions']) client.invalidateQueries({ queryKey: [key] })
+  for (const key of ['today', 'briefing', 'adjustments', 'weather-suggestions', 'illness']) client.invalidateQueries({ queryKey: [key] })
 }
 
 // --- §C dated day metrics ------------------------------------------------------------

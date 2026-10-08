@@ -1,13 +1,18 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { ExportSection } from '../components/account/ExportSection'
 import { WatchAlarmsCard } from '../components/alarm/AlarmCards'
 import { BadgesSection } from '../components/me/Badges'
+import { CoachMemory } from '../components/me/CoachMemory'
+import { DeletedActivities } from '../components/me/DeletedActivities'
+import { IllnessLauncher } from '../components/illness/IllnessLauncher'
+import { ReviewLauncher } from '../components/quality/ReviewEntry'
 import { RemindersSection } from '../components/me/Reminders'
 import { ShoesSection } from '../components/me/Shoes'
 import { Row, RowGroup } from '../components/Disclose'
 import {
-  BellIcon, CalendarIcon, ChevronRight, GearIcon, HelpIcon, LockIcon, MedalIcon, ShoeIcon, TodayIcon, WatchIcon,
+  BandageIcon, BellIcon, CalendarIcon, ChevronRight, GearIcon, HealthIcon, HelpIcon, LockIcon, MedalIcon, ShoeIcon, SparkIcon,
+  TodayIcon, TrashIcon, WatchIcon,
 } from '../components/Icons'
 import { initialOf } from '../components/Kit'
 import { PageHeader } from '../components/PageHeader'
@@ -16,6 +21,7 @@ import { useShell } from '../components/Shell'
 import { Skeleton } from '../components/States'
 import { useAuth } from '../lib/AuthContext'
 import { useAchievements, useGear, useReminders, useWatchAlarms } from '../lib/queries'
+import { useDataReview, useIllness } from '../lib/r17'
 import { ProfileCards } from './Profile'
 
 const CalendarSync = lazy(() => import('../components/calendar/CalendarSync').then((m) => ({ default: m.CalendarSync })))
@@ -32,6 +38,8 @@ export default function Me() {
       <Route path="badges" element={<SubPage title="Badges"><BadgesSection /></SubPage>} />
       <Route path="calendar" element={<SubPage title="Calendar sync"><Suspense fallback={<section className="card"><Skeleton lines={4} /></section>}><CalendarSync /></Suspense></SubPage>} />
       <Route path="account" element={<SubPage title="Account"><AccountPage /></SubPage>} />
+      <Route path="memory" element={<SubPage title="What the coach knows"><CoachMemory /></SubPage>} />
+      <Route path="deleted" element={<SubPage title="Deleted activities"><DeletedActivities /></SubPage>} />
       <Route path="*" element={<Navigate to="/me" replace />} />
     </Routes>
   )
@@ -66,6 +74,10 @@ function MeHome() {
   const badgeSub = ach.data ? `${earned.length} of ${ach.data.badges.length} earned` : 'Streaks and personal records'
   const alarmCount = (alarms.data?.alarms ?? []).filter((a) => a.enabled).length
   const alarmSub = alarms.data?.available ? `${alarmCount} on · read from your watch` : 'Read from Garmin'
+  // R17
+  const illness = useIllness().data?.active ?? null
+  const review = useDataReview()
+  const [sheet, setSheet] = useState<'' | 'illness' | 'review'>('')
 
   return (
     <div className="page me-page">
@@ -96,6 +108,29 @@ function MeHome() {
           aside={ach.data && ach.data.unseen > 0 ? <span className="row-badge">{ach.data.unseen} new</span> : undefined}
         />
       </RowGroup>
+
+      <RowGroup title="Health">
+        <Row
+          onClick={() => setSheet('illness')}
+          icon={<BandageIcon size={20} />}
+          title={illness ? 'I’m better' : 'I’m sick or injured'}
+          sub={illness ? `${illness.type_label} · day ${illness.days_so_far} — ease back in` : 'Pause your plan and switch to rest'}
+        />
+        <Row to="/health/experiments" icon={<SparkIcon size={20} />} title="Experiments" sub="Try one change and see what it does" />
+      </RowGroup>
+
+      <RowGroup title="Data">
+        <Row
+          onClick={() => setSheet('review')}
+          icon={<HealthIcon size={20} />}
+          title="Review data"
+          sub="Keep or exclude data that may be off"
+          aside={review.data?.pending ? <span className="row-badge">{review.data.pending}</span> : undefined}
+        />
+        <Row to="/me/deleted" icon={<TrashIcon size={20} />} title="Deleted activities" sub="Bring back an activity you deleted" />
+      </RowGroup>
+      <IllnessLauncher mode={illness ? 'recover' : 'start'} open={sheet === 'illness'} onClose={() => setSheet('')} />
+      <ReviewLauncher open={sheet === 'review'} onClose={() => setSheet('')} />
 
       <RowGroup title="App">
         <Row onClick={() => openSettings()} icon={<GearIcon size={20} />} title="Settings" sub="Garmin, training days, diet, habits, Customise Today" />

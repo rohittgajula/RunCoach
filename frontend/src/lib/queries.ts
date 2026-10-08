@@ -234,6 +234,8 @@ export function useWorkoutReview(workoutId: number) {
 
 /** Existing /activities/{id}/ detail (segments + metrics) for the activity sheet. */
 export type ActivityDetail = {
+  /** R17 §2 data check (null = not processed yet). */
+  quality?: import('./r17').ActivityQuality | null
   id: number
   avg_hr: number | null
   max_hr: number | null
