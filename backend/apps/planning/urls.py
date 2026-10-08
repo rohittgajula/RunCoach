@@ -8,7 +8,7 @@ from .plan_views import (
 from .checkin_views import today, today_apply, today_explain
 from .garmin_views import plan_garmin, workout_garmin
 from .month_views import calendar_month
-from . import calendar_feed, r13_views, r14_views
+from . import calendar_feed, edit_views, r13_views, r14_views
 from .views import (
     RaceDetail, RaceList, plan_weeks, predictions, today_mode, today_session_view,
 )
@@ -60,6 +60,11 @@ urlpatterns = [
     path("plan/weather-suggestions/<int:pk>/dismiss/", r14_views.weather_suggestion_dismiss,
          name="weather-suggestion-dismiss"),
     path("calendar-feed/", calendar_feed.feed_view, name="calendar-feed"),
+    # R16
+    path("workouts/<int:pk>/edit/", edit_views.workout_edit, name="workout-edit"),
+    path("workouts/<int:pk>/edit/undo/", edit_views.workout_edit_undo,
+         name="workout-edit-undo"),
+    path("plan/week-edit/", edit_views.week_edit, name="plan-week-edit"),
     re_path(r"^cal/(?P<token>[A-Za-z0-9_-]{20,100})\.ics$", calendar_feed.feed_ics,
             name="calendar-feed-ics"),
 ]

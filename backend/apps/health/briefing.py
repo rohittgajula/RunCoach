@@ -95,7 +95,9 @@ def compute(athlete) -> dict:
         "readiness": {"score": metrics.training_readiness if metrics else None,
                       "label": (metrics.training_readiness_level or None) if metrics else None,
                       "source": "garmin" if metrics and metrics.training_readiness is not None
-                      else None},
+                      else None,
+                      "date": today.isoformat() if metrics and metrics.training_readiness
+                      is not None else None},
         "checkin": {"verdict": verdict.verdict, "headline": verdict.headline},
         "session": {
             "workout": {"id": workout.pk, "title": workout.title, "kind": workout.kind,
@@ -178,9 +180,12 @@ def briefing_json(athlete, row: MorningBriefing | None) -> dict:
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def today(request):
+    from .freshness import freshness_json
+
     athlete = request.user.athlete
     row = build(athlete) if ready(athlete) else None
-    return Response(briefing_json(athlete, row))
+    fresh = freshness_json(athlete)
+    return Response({**briefing_json(athlete, row), "as_of": fresh["as_of"], "freshness": fresh})
 
 
 @api_view(["POST"])

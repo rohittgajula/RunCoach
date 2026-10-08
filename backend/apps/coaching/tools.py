@@ -3,6 +3,9 @@
 The model proposes; these functions decide. `propose_plan` runs the deterministic
 generator — the model may only name and describe phases. `move_workout`, `skip_workout`
 and `clear_day` can only make the week easier or shift it, never add load.
+`edit_workout` / `edit_week` (R16) call the same edit service as the app: same
+validation, warnings and watch re-send; more than +20 % running on a session comes back
+`needs_confirmation` until the athlete has said yes (`confirmed: true`).
 """
 
 from __future__ import annotations
@@ -30,6 +33,26 @@ def _fn(name: str, description: str, properties: dict, required: list[str]) -> d
 
 
 DATE = {"type": "string", "description": "YYYY-MM-DD"}
+EDIT_STEP = {"type": "object", "properties": {
+    "kind": {"type": "string",
+             "enum": ["warmup", "run", "walk", "recovery", "cooldown", "strides", "other"]},
+    "duration_s": {"type": "integer", "minimum": 10, "maximum": 5400},
+    "intensity": {"type": "string", "enum": ["walk", "easy", "moderate", "hard"]},
+    "target": {"type": "string", "enum": ["hr", "pace", "none", "auto"]},
+    "hr_low": {"type": "integer"}, "hr_high": {"type": "integer"},
+    "pace_low": {"type": "integer", "description": "s/km, the fast end"},
+    "pace_high": {"type": "integer", "description": "s/km, the slow end"},
+    "note": {"type": "string"},
+    "repeat": {"type": "integer", "minimum": 2, "maximum": 30,
+               "description": "Only on a repeat block: how many times `steps` repeat"},
+    "steps": {"type": "array", "description": "Only on a repeat block",
+              "items": {"type": "object", "properties": {
+                  "kind": {"type": "string"}, "duration_s": {"type": "integer"},
+                  "intensity": {"type": "string"}, "target": {"type": "string"},
+                  "hr_low": {"type": "integer"}, "hr_high": {"type": "integer"},
+                  "pace_low": {"type": "integer"}, "pace_high": {"type": "integer"},
+                  "note": {"type": "string"}}}},
+}}
 
 
 def upcoming_races(athlete: Athlete) -> list[dict]:
@@ -72,6 +95,40 @@ TOOLS = [
         []),
     _fn("move_workout", "Move a planned workout to another date (today or later).",
         {"id": {"type": "integer"}, "new_date": DATE}, ["id", "new_date"]),
+    _fn("edit_workout",
+        "Change one planned workout (today or later, not done) when the athlete asks: a new "
+        "total, ± minutes on the run or walk parts, walk breaks, an HR range, a full new step "
+        "list, or notes. Validated and sent to the watch if it was there. More than +20 % "
+        "running returns status needs_confirmation (nothing saved) — ask the athlete, then call "
+        "again with confirmed=true. Only status \"updated\" means it changed.",
+        {"id": {"type": "integer"},
+         "total_minutes": {"type": "number", "minimum": 5, "maximum": 240},
+         "add_minutes": {"type": "number", "minimum": -120, "maximum": 120},
+         "apply_to": {"type": "string", "enum": ["run", "walk", "both"]},
+         "add_walk_breaks": {"type": "integer", "minimum": 1, "maximum": 30,
+                             "description": "run minutes between 1-minute walk breaks"},
+         "hr_low": {"type": "integer"}, "hr_high": {"type": "integer"},
+         "steps": {"type": "array", "items": EDIT_STEP,
+                   "description": "Replaces every step. Durations in seconds."},
+         "notes": {"type": "string"},
+         "confirmed": {"type": "boolean",
+                       "description": "true only after the athlete agreed to a needs_confirmation change"}},
+        ["id"]),
+    _fn("edit_week",
+        "Apply one change to every planned workout (today or later) in a plan week: "
+        "add_minutes (value = ± minutes per session), scale (value = factor 0.5–1.5), "
+        "add_walk_breaks (value = run minutes between 1-minute walks) or set_hr_range "
+        "(hr_low + hr_high). Same rules as edit_workout, incl. needs_confirmation.",
+        {"week_start": DATE,
+         "action": {"type": "string",
+                    "enum": ["add_minutes", "scale", "add_walk_breaks", "set_hr_range"]},
+         "value": {"type": "number"},
+         "hr_low": {"type": "integer"}, "hr_high": {"type": "integer"},
+         "apply_to": {"type": "string", "enum": ["run", "walk", "both"]},
+         "kinds": {"type": "array", "items": {"type": "string"},
+                   "description": "Only these kinds, e.g. [\"EASY\", \"LONG\"]"},
+         "confirmed": {"type": "boolean"}},
+        ["week_start", "action"]),
     _fn("skip_workout", "Skip a planned workout.",
         {"id": {"type": "integer"}, "reason": {"type": "string"}}, ["id", "reason"]),
     _fn("clear_day", "Skip every planned workout on a date and log the reason in the journal.",
@@ -103,6 +160,15 @@ def _date(raw) -> dt.date:
     return dt.date.fromisoformat(str(raw)[:10])
 
 
+def _day(day) -> str:
+    return f"{day:%a} {day.day} {day:%b}"
+
+
+def _minutes(brief: dict) -> dict:
+    return {"total_min": round(brief["duration_s"] / 60, 1),
+            "run_min": round(brief["run_s"] / 60, 1)}
+
+
 class ToolRunner:
     """Dispatches tool calls for one athlete and collects attachments to show."""
 
@@ -110,6 +176,15 @@ class ToolRunner:
         self.athlete = athlete
         self.chat_message = chat_message
         self.attachments: list[dict] = []
+        # R16 §B: [{workout_id, date, summary}] for the "Plan updated" chip.
+        self.plan_changed: list[dict] = []
+        # R16 §B: the last edit that is waiting for the athlete's yes (or None).
+        self.needs_confirmation: dict | None = None
+
+    def _changed(self, workout_id: int, day, summary: str) -> None:
+        self.plan_changed = [c for c in self.plan_changed if c["workout_id"] != workout_id]
+        self.plan_changed.append({"workout_id": workout_id, "date": str(day),
+                                  "summary": summary[:200]})
 
     def __call__(self, name: str, args: dict):
         handler = getattr(self, f"t_{name}", None)
@@ -217,12 +292,15 @@ class ToolRunner:
         day = _date(new_date)
         if day < self.athlete.local_today:
             return {"error": "Cannot move a workout into the past."}
+        old = workout.date
         workout.moved_from = workout.moved_from or workout.date
         workout.date = day
         with transaction.atomic():
             workout.save(update_fields=["date", "moved_from"])
             resync_on_garmin(self.athlete, [workout.pk])
         self._attach("workout", workout.pk)
+        if old != day:
+            self._changed(workout.pk, day, f"{workout.title}: moved {_day(old)} → {_day(day)}")
         return workout_json(workout)
 
     def t_skip_workout(self, id, reason=""):
@@ -232,13 +310,15 @@ class ToolRunner:
             workout.save(update_fields=["status"])
             remove_from_garmin(self.athlete, [workout.pk])
         self._attach("workout", workout.pk)
+        self._changed(workout.pk, workout.date, f"{_day(workout.date)}: {workout.title} skipped")
         return {"skipped": workout.pk, "reason": reason}
 
     def t_clear_day(self, date, reason=""):
         day = _date(date)
-        skipped = list(PlannedWorkout.objects.filter(
+        rows = list(PlannedWorkout.objects.filter(
             athlete=self.athlete, date=day, status=PlannedWorkout.Status.PLANNED,
-        ).values_list("pk", flat=True))
+        ).values_list("pk", "title"))
+        skipped = [pk for pk, _ in rows]
         with transaction.atomic():
             PlannedWorkout.objects.filter(pk__in=skipped).update(
                 status=PlannedWorkout.Status.SKIPPED)
@@ -248,7 +328,92 @@ class ToolRunner:
             written_on=self.athlete.local_today, applies_to_date=day,
             source=JournalEntry.Source.CHAT,
         )
+        for pk, title in rows:
+            self._changed(pk, day, f"{_day(day)}: {title} skipped")
         return {"date": day, "skipped_workout_ids": skipped}
+
+    def t_edit_workout(self, id, total_minutes=None, add_minutes=None, apply_to=None,
+                       add_walk_breaks=None, hr_low=None, hr_high=None, steps=None,
+                       notes=None, confirmed=False):
+        from apps.planning import edit_service as service
+
+        data = {k: v for k, v in {
+            "total_minutes": total_minutes, "add_minutes": add_minutes, "apply_to": apply_to,
+            "add_walk_breaks": add_walk_breaks, "hr_low": hr_low, "hr_high": hr_high,
+            "steps": steps, "notes": notes}.items() if v is not None}
+        try:
+            outcome = service.edit_workout(self.athlete, int(id), data, via="chat",
+                                           cap=service.CHAT_CAP, confirmed=bool(confirmed))
+        except PlannedWorkout.DoesNotExist:
+            return {"error": "No such workout."}
+        except (service.NotEditable, service.EditError) as exc:
+            return {"error": str(exc)}
+        workout = outcome.workout
+        brief = {"workout_id": workout.pk, "date": workout.date, "title": workout.title,
+                 "before": _minutes(outcome.before), "after": _minutes(outcome.after),
+                 "summary": outcome.summary,
+                 "warnings": [w["text"] for w in outcome.warnings]}
+        if outcome.needs_confirmation:
+            self.needs_confirmation = {
+                "workout_id": workout.pk, "date": str(workout.date),
+                "summary": f"{outcome.summary} (+{outcome.increase_pct}%)",
+                "increase_pct": outcome.increase_pct}
+            return {"status": "needs_confirmation", **brief,
+                    "increase_pct": outcome.increase_pct,
+                    "message": f"This adds {outcome.increase_pct} % to the session — more than "
+                               "the 20 % allowed without asking. NOTHING WAS SAVED. Tell the "
+                               "athlete exactly what would change and ask; only if they agree, "
+                               "call edit_workout again with the same arguments and "
+                               "confirmed=true."}
+        if not outcome.changed:
+            return {"status": "unchanged", **brief,
+                    "message": "Nothing changed — the session already looks like that."}
+        self._attach("workout", workout.pk)
+        self._changed(workout.pk, workout.date, outcome.summary)
+        if (self.needs_confirmation or {}).get("workout_id") == workout.pk:
+            self.needs_confirmation = None
+        return {"status": "updated", **brief, "watch_status": outcome.watch.get("status")}
+
+    def t_edit_week(self, week_start, action, value=None, hr_low=None, hr_high=None,
+                    apply_to=None, kinds=None, confirmed=False):
+        from apps.planning import edit_service as service
+
+        if action == "set_hr_range" and hr_low is not None:
+            value = {"hr_low": hr_low, "hr_high": hr_high}
+        try:
+            result = service.edit_week(self.athlete, _date(week_start), action, value,
+                                       kinds=kinds, apply_to=apply_to, via="chat",
+                                       cap=service.CHAT_CAP, confirmed=bool(confirmed))
+        except service.NoActivePlan:
+            return {"error": "There is no active plan."}
+        except (ValueError, service.EditError) as exc:
+            return {"error": str(exc)}
+        changed = [{"workout_id": o.workout.pk, "date": o.workout.date,
+                    "title": o.workout.title, "summary": o.summary,
+                    "increase_pct": o.increase_pct} for o in result.outcomes]
+        warnings = [f"{w['date']}: {w['text']}" for w in result.warnings]
+        if result.needs_confirmation:
+            top = max((o.increase_pct or 0 for o in result.outcomes), default=0)
+            self.needs_confirmation = {
+                "week_start": str(result.week_start),
+                "summary": "; ".join(o.summary for o in result.outcomes)[:300]
+                           + f" (up to +{top}%)",
+                "increase_pct": top}
+            return {"status": "needs_confirmation", "would_change": changed,
+                    "warnings": warnings,
+                    "message": "At least one session would get more than 20 % harder. NOTHING "
+                               "WAS SAVED. Tell the athlete what would change and ask; only if "
+                               "they agree, call edit_week again with confirmed=true."}
+        if not result.outcomes:
+            return {"status": "unchanged", "skipped": result.skipped,
+                    "message": "No session in that week could be changed."}
+        for o in result.outcomes:
+            self._attach("workout", o.workout.pk)
+            self._changed(o.workout.pk, o.workout.date, o.summary)
+        if (self.needs_confirmation or {}).get("week_start") == str(result.week_start):
+            self.needs_confirmation = None
+        return {"status": "updated", "changed": changed, "skipped": result.skipped,
+                "warnings": warnings, "watch": result.watch}
 
     def t_log_journal(self, text, applies_to_date):
         from .client import AIUnavailable

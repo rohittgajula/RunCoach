@@ -48,8 +48,13 @@ def sync_one(self, athlete_id: int) -> dict:
     if athlete is None:
         return {"skipped": "not_connected"}
 
+    from .sync_status import AlreadyRunning, sync_lock
+
     try:
-        result = sync_athlete(athlete).as_dict()
+        with sync_lock(athlete):
+            result = sync_athlete(athlete).as_dict()
+    except AlreadyRunning:
+        return {"skipped": "running"}       # R16: the athlete's own sync is on it
     except GarminRateLimited as exc:
         trip_breaker(str(exc))
         return {"skipped": "rate_limited"}

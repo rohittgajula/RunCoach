@@ -25,6 +25,9 @@ copied here so this module needs neither Django nor the library.
   The athlete numbers come in `workout["hr"]` ({resting_hr, hr_easy_min, hr_easy_max,
   hr_ceiling}); without them the walk band is derived from the run steps alone (low
   90) and a step with nothing to derive from gets no target.
+* R16: a step the athlete edited carries `target`: "hr" -> its own band (walk steps
+  too), "pace" -> a pace.zone target (id 6) in m/s, slow edge first, "none" -> no
+  target, "auto" -> the rules above. Generated steps have no `target` and are unchanged.
 * Consecutive identical blocks (e.g. run 4:00 + walk 2:00, five times) become one
   RepeatGroupDTO with numberOfIterations; labels are ignored when comparing.
 """
@@ -55,6 +58,7 @@ NO_TARGET = {"workoutTargetTypeId": 1, "workoutTargetTypeKey": "no.target",
              "displayOrder": 1}
 HEART_RATE = {"workoutTargetTypeId": 4, "workoutTargetTypeKey": "heart.rate.zone",
               "displayOrder": 4}
+PACE = {"workoutTargetTypeId": 6, "workoutTargetTypeKey": "pace.zone", "displayOrder": 6}
 
 MAX_NAME = 60
 GENTLE_FLOOR = 90          # bpm: a walk band never starts below this
@@ -64,9 +68,14 @@ MAX_PATTERN = 4
 
 
 def _key(step: dict) -> tuple:
-    """What makes two steps the same block on the watch (label excluded)."""
-    return (step.get("kind"), step.get("duration_s"), step.get("intensity"),
-            step.get("hr_min"), step.get("hr_max"))
+    """What makes two steps the same block on the watch (label excluded). Steps edited
+    by the athlete (R16, they carry `target`) also compare target and pace — generated
+    steps keep their old key, so their payloads (and hashes) do not change."""
+    key = (step.get("kind"), step.get("duration_s"), step.get("intensity"),
+           step.get("hr_min"), step.get("hr_max"))
+    if "target" in step:
+        key += (step.get("target"), step.get("pace_min_s"), step.get("pace_max_s"))
+    return key
 
 
 def group_repeats(steps: list[dict]) -> list[tuple[int, list[dict]]]:
@@ -95,7 +104,7 @@ def group_repeats(steps: list[dict]) -> list[tuple[int, list[dict]]]:
 
 def _banded(step: dict) -> bool:
     return step.get("intensity") != "walk" and bool(step.get("hr_min")) \
-        and bool(step.get("hr_max"))
+        and bool(step.get("hr_max")) and step.get("target") not in ("none", "pace")
 
 
 def gentle_band(hr: dict | None, steps: list[dict]) -> tuple[int, int] | None:
@@ -128,11 +137,25 @@ def _fallback_band(step: dict, hr: dict | None) -> tuple[int, int] | None:
 def step_band(step: dict, gentle: tuple[int, int] | None,
               hr: dict | None) -> tuple[int, int] | None:
     """The (low, high) bpm target the watch shows for one step."""
+    target = step.get("target")
+    if target in ("none", "pace"):
+        return None
+    if target == "hr" and step.get("hr_min") and step.get("hr_max"):
+        return int(step["hr_min"]), int(step["hr_max"])
     if step.get("intensity") == "walk":
         return gentle
     if _banded(step):
         return int(step["hr_min"]), int(step["hr_max"])
     return _fallback_band(step, hr)
+
+
+def pace_speeds(step: dict) -> tuple[float, float] | None:
+    """R16: an edited step with a pace target -> (slow, fast) in m/s, as Garmin wants
+    (targetValueOne = the slow edge). Pace is s/km, pace_min_s the fast edge."""
+    if step.get("target") != "pace" or not step.get("pace_min_s") or not step.get("pace_max_s"):
+        return None
+    fast, slow = int(step["pace_min_s"]), int(step["pace_max_s"])
+    return round(1000 / slow, 4), round(1000 / fast, 4)
 
 
 def _executable(step: dict, order: int, child_id: int | None,
@@ -147,7 +170,12 @@ def _executable(step: dict, order: int, child_id: int | None,
     }
     if child_id is not None:
         out["childStepId"] = child_id
-    if band:
+    speeds = pace_speeds(step)
+    if speeds:
+        out["targetType"] = dict(PACE)
+        out["targetValueOne"] = speeds[0]
+        out["targetValueTwo"] = speeds[1]
+    elif band:
         out["targetType"] = dict(HEART_RATE)
         out["targetValueOne"] = float(band[0])
         out["targetValueTwo"] = float(band[1])

@@ -68,15 +68,18 @@ def garmin_forget_task(athlete_id: int, refs: list[list], attempt: int = 0) -> d
 GARMIN_PUSH_WAIT_S = 90
 
 
-def run_garmin_push(athlete_id: int, workout_ids: list[int], action: str) -> dict:
-    """Run the push on the garmin queue and wait for its per-workout results."""
+def run_garmin_push(athlete_id: int, workout_ids: list[int], action: str,
+                    wait_s: float = GARMIN_PUSH_WAIT_S) -> dict:
+    """Run the push on the garmin queue and wait for its per-workout results.
+
+    On a timeout the job stays queued and still runs; the caller gets code "queue"."""
     from django.conf import settings
 
     if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
         return garmin_push_task.apply(args=(athlete_id, workout_ids, action)).get()
     try:
         async_result = garmin_push_task.apply_async(args=(athlete_id, workout_ids, action))
-        return async_result.get(timeout=GARMIN_PUSH_WAIT_S, disable_sync_subtasks=False)
+        return async_result.get(timeout=wait_s, disable_sync_subtasks=False)
     except Exception as exc:  # noqa: BLE001 — timeout, broker down, worker down
         return {"ok": False, "code": "queue", "results": [],
                 "detail": f"The Garmin queue did not answer in time ({type(exc).__name__}). "

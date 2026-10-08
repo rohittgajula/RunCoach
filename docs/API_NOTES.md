@@ -2455,7 +2455,8 @@ step except strides); walk parts = walk-intensity steps.
 - **Protected**: an edited workout is never changed by auto-adjust (R13 §1), the weekly
   adaptation (R6 §2) or weather swaps (R14 §3, neither moved nor swapped with). Re-flow
   (training days changed) may move its date but never drops it; re-layout (runs per week)
-  keeps it as it is (content and date) and re-splits only the other runs of that week. The
+  leaves a week that holds an edited session exactly as it is (content and dates; a
+  `notes` line says so) and re-splits the other weeks. The
   morning check-in "Use this" is the athlete's own action and still applies.
 
 **`POST /workouts/{id}/edit/undo/`** → 200 `EditResponse` (warnings `[]`) with the generated
@@ -2509,6 +2510,18 @@ filled from mutating tools that succeeded in that turn (edit_workout, edit_week,
 move_workout, skip_workout, clear_day). The POST reply also has top-level `plan_changed`
 (same list). UI: "Plan updated" chip → the workout; invalidate Plan/Today/calendar queries.
 
+Also (added after the first contract commit):
+```
+needs_confirmation: null | {workout_id: int, date: date,      # edit_workout, or …
+                            week_start: date,                  # … edit_week (one of the two)
+                            summary: str,                      # "Thu 8 Oct: 40 → 55 min (+38%)"
+                            increase_pct: int}
+```
+on the message JSON and top-level in the POST reply: set when an edit tool answered
+`needs_confirmation` in that turn and no later call in the same turn applied it; else null.
+UI: "Yes, do it / No" buttons — they just send a chat message ("Yes, do it." / "No, leave
+it."); the coach then calls the tool again with `confirmed: true` (or doesn't).
+
 **Honesty guard** (server side, every chat turn): if the final reply claims a change ("I've
 updated/increased/changed/moved/extended/shortened/added/adjusted/rescheduled/skipped…" next
 to a plan word — workout, run, session, plan, week, minutes, watch …, or "… has been
@@ -2535,7 +2548,8 @@ Freshness = { as_of: datetime, today: date, stale: bool, stale_reason, stale_tex
 ```
 - `GET /today/` gains top-level `as_of`, `freshness: Freshness`, and every `reasons[]` item
   gains `date: date|null` — the day the value is from (sleep, HRV, readiness: today; resting
-  HR, body battery: today or yesterday; rpe: yesterday; load, habits, weather, pain: today).
+  HR, body battery: today or yesterday; rpe, alcohol: yesterday; load, heat, air, pain,
+  illness: today).
 - `GET /briefing/today/` gains `as_of`, `freshness`, and `readiness.date` (today or null).
 - `GET /insights/` gains `as_of`, `freshness`; `readiness.date`, `hrv.last_night_date`,
   `resting_hr.current_date`, `vo2max.date` (when vo2max is present), `body_battery.date`
@@ -2576,5 +2590,5 @@ frontend should call it when `auto_sync_due` is true (still counts against the `
 - Chat `+20 %` is measured against the generated version, so repeated small edits can't
   ratchet past it without confirmation.
 - Deploy: migrations `planning.0008_r16` (PlannedWorkout `edited_by, edited_at, edited_via,
-  notes, pre_edit`), `coaching.0011_r16` (ChatMessage `plan_changed, guard`). No new env,
+  notes, pre_edit`), `coaching.0011_r16` (ChatMessage `plan_changed, guard, needs_confirmation`). No new env,
   tasks or dependencies.

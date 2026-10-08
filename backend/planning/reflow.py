@@ -15,9 +15,11 @@ Rules (per ISO week, Monday–Sunday):
   the long run on the long-run day, hard sessions away from each other and from the
   long run where possible, everything else in its original order.
 - Too many runs for the days: the shortest easy / run-walk sessions are dropped. A
-  long run, a hard session or a race is never dropped, and nothing gets longer — the
-  "only ever easier" rule. Runs that still do not fit stay in the week on a free day.
-- Walks (optional, light) fill free days; a walk with no free day left is dropped.
+  long run, a hard session, a race or a session the athlete edited (R16) is never
+  dropped, and nothing gets longer — the "only ever easier" rule. Runs that still do
+  not fit stay in the week on a free day.
+- Walks (optional, light) fill free days; a walk with no free day left is dropped
+  (an edited one stays on its day).
 - More days than runs: the runs are spread; nothing is ever added.
 
 Pure: no Django.
@@ -45,6 +47,7 @@ class Item:
     kind: str
     duration_s: int = 0
     status: str = "planned"           # planned | completed (skipped are left out)
+    edited: bool = False              # R16: the athlete edited it — may move, never dropped
 
 
 @dataclass
@@ -118,7 +121,7 @@ def _reflow_week(monday, runs_and_walks, fixed, available, long_wd, limit, today
 
     n_slots = min(cap, len(avail_free))
     # Too many runs: drop the shortest easy ones (never long, hard or race).
-    droppable = sorted((r for r in runs if r.kind in DROPPABLE),
+    droppable = sorted((r for r in runs if r.kind in DROPPABLE and not r.edited),
                        key=lambda r: (r.duration_s, r.date, r.id))
     while len(runs) > n_slots and droppable:
         gone = droppable.pop(0)
@@ -149,6 +152,8 @@ def _reflow_week(monday, runs_and_walks, fixed, available, long_wd, limit, today
             spot = walk.date
         else:
             spot = next((d for d in free if d not in used), None)
+        if spot is None and walk.edited:
+            spot = walk.date              # the athlete's own walk stays where it is
         if spot is None:
             result.drops.append(walk.id)
             continue

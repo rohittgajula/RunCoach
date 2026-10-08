@@ -253,6 +253,13 @@ class ChatMessage(models.Model):
     # Every tool the model called and what it got back. For audit: when the coach
     # moves a workout, this is how you find out why.
     tool_calls = models.JSONField(default=list, blank=True)
+    # R16 §B: workouts a tool changed in this turn ([{workout_id, date, summary}]) and,
+    # when the honesty guard fired, what it saw and did.
+    plan_changed = models.JSONField(default=list, blank=True)
+    guard = models.JSONField(null=True, blank=True)
+    # R16 §B: an edit tool answered needs_confirmation in this turn — the UI shows
+    # "Yes, do it / No" ({workout_id | week_start, date?, summary, increase_pct}).
+    needs_confirmation = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:

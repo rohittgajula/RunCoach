@@ -7,7 +7,8 @@ can undo. Changed workouts already on the watch are re-sent (garmin_sync).
 
 Runs only when the athlete has "Auto-adjust plan" on. Never touches completed, skipped,
 past or RACE sessions, sessions the athlete edited (moved, check-in applied, an auto
-change undone → `adjusted_by="kept"`), or sessions already auto-adjusted — except that an
+change undone → `adjusted_by="kept"`, R16 edits → `edited_by="user"`), or sessions
+already auto-adjusted — except that an
 auto *extension* is reverted before easing that session, so a later strain signal always
 wins over the +5 % rule.
 """
@@ -161,7 +162,9 @@ def upcoming(athlete, plan: TrainingPlan, today: dt.date, for_easing: bool) -> l
     out = []
     for w in rows:
         adjusted_by = w.adjusted_by or ""
-        if for_easing and adjusted_by == AUTO:
+        if w.edited_by == "user":
+            adjusted_by = "user"          # R16: the athlete's own edit is never touched
+        elif for_easing and adjusted_by == AUTO:
             latest = _latest_applied(w)
             if latest is not None and latest.action == "extend":
                 adjusted_by = ""          # an extension never blocks easing
@@ -286,6 +289,8 @@ def _apply_change(athlete, workout: PlannedWorkout, change: adapt.Change) -> Non
 
 
 def _eligible_now(workout: PlannedWorkout, today: dt.date, allow_extended: bool) -> bool:
+    if workout.edited_by == "user":
+        return False
     if workout.adjusted_by == AUTO and allow_extended:
         latest = _latest_applied(workout)
         if latest is None or latest.action != "extend":

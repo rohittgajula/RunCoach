@@ -424,7 +424,7 @@ def test_forecast_endpoint(api, athlete):
     log(athlete, "private", 5) if athlete.private_habit_enabled else None
     body = api.get("/api/health/readiness-forecast/").json()
     assert body["date"] == str(ago(athlete, -1)) and body["is_estimate"] is True
-    assert body["today"] == {"score": 70, "source": "garmin"}
+    assert body["today"] == {"score": 70, "source": "garmin", "date": str(athlete.local_today)}
     keys = [f["key"] for f in body["factors"]]
     assert "sleep_debt" in keys and "alcohol" in keys and "hrv_trend" in keys
     assert [l["key"] for l in body["levers"]] == ["bedtime", "no_alcohol"]
@@ -434,7 +434,7 @@ def test_forecast_endpoint(api, athlete):
 
 def test_forecast_without_data(api):
     body = api.get("/api/health/readiness-forecast/").json()
-    assert body["estimate"] is None and body["today"] == {"score": None, "source": None}
+    assert body["estimate"] is None and body["today"] == {"score": None, "source": None, "date": None}
 
 
 def test_forecast_ignores_private_habit(api, athlete):
@@ -444,6 +444,7 @@ def test_forecast_ignores_private_habit(api, athlete):
     before = api.get("/api/health/readiness-forecast/").json()
     log(athlete, "private", 9)
     after = api.get("/api/health/readiness-forecast/").json()
+    before.pop("as_of"), after.pop("as_of")          # R16 §C: a timestamp, differs per call
     assert before == after
 
 

@@ -116,7 +116,7 @@ def test_briefing_builds_after_4am(api, other_api, athlete, monkeypatch):
     body = api.get("/api/briefing/today/").json()
     assert set(body) == {"date", "ready", "built_at", "dismissed", "wake_time", "greeting",
                          "readiness", "checkin", "session", "weather", "fuel", "focus",
-                         "notes", "ai"}
+                         "notes", "ai", "as_of", "freshness"}   # R16 §C
     assert body["ready"] and body["greeting"] == "Good morning, Tester"
     assert body["readiness"]["score"] == 40 and body["focus"]["key"] == "sleep"
     assert any(n["kind"] == "sleep" for n in body["notes"])

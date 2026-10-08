@@ -76,22 +76,47 @@ def garmin_disconnect_view(request):
 @permission_classes([IsAuthenticated])
 @throttle_classes([GarminThrottle])
 def garmin_sync_view(request):
+    from .sync_status import AlreadyRunning, auto_skip_reason, status_json, sync_lock
+
+    athlete = request.user.athlete
+    data = request.data if isinstance(request.data, dict) else {}
     try:
-        limit = min(int(request.data.get("limit", 20)), 50)
+        limit = min(int(data.get("limit", 20)), 50)
     except (TypeError, ValueError):
         limit = 20
+    # R16 §C: the app's auto-sync. Never calls Garmin when it shouldn't; always 200.
+    auto = data.get("auto") is True or str(data.get("auto")).lower() in ("1", "true")
+    if auto:
+        reason = auto_skip_reason(athlete)
+        if reason:
+            return Response({"skipped": reason, "status": status_json(athlete)})
 
     try:
-        result = sync_athlete(request.user.athlete, limit=limit).as_dict()
+        with sync_lock(athlete):
+            result = sync_athlete(athlete, limit=limit).as_dict()
         if not any("rate-limited" in e for e in result.get("errors", [])):
             from .tasks import queue_slow
 
-            queue_slow(request.user.athlete)          # R10 §B: on the garmin queue
-        return Response(result)
+            queue_slow(athlete)          # R10 §B: on the garmin queue
+        athlete.refresh_from_db(fields=["garmin_last_sync", "garmin_connected"])
+        return Response({**result, "status": status_json(athlete)})
+    except AlreadyRunning as exc:
+        if auto:
+            return Response({"skipped": "running", "status": status_json(athlete)})
+        return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
     except GarminRateLimited as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
     except GarminAuthError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def sync_status_view(request):
+    """R16 §C: GET /sync/status/ — cheap (no Garmin call)."""
+    from .sync_status import status_json
+
+    return Response(status_json(request.user.athlete))
 
 
 class DailyMetricsList(AthleteScopedMixin, generics.ListAPIView):

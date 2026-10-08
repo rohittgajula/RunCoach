@@ -105,7 +105,8 @@ def test_day_summary(api, athlete):
     assert body["available"] is True and body["stress"] == 30 and body["stress_at"] == "23:57"
     assert body["body_battery"] == 35 and body["steps"] == 6800
     assert set(body) == {"date", "available", "steps", "step_goal", "goal_source", "pct", "stress",
-                         "stress_at", "body_battery", "body_battery_at", "data_as_of", "fetched_at"}
+                         "stress_at", "body_battery", "body_battery_at", "data_as_of", "fetched_at",
+                         "as_of", "freshness"}   # R16 §C
 
 
 # --- F3 trends -------------------------------------------------------------------------

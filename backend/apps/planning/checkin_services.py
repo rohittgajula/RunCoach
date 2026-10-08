@@ -72,7 +72,10 @@ def today_payload(athlete: Athlete) -> dict:
 
     from .presenters import workout_json
 
+    from apps.health.freshness import freshness_json, reason_dates
+
     verdict, workout = compute(athlete)
+    fresh = freshness_json(athlete)
     payload = {
         "date": athlete.local_today,
         "verdict": verdict.verdict,
@@ -91,6 +94,10 @@ def today_payload(athlete: Athlete) -> dict:
     text = cached_checkin_explanation(athlete, checkin_explain_payload(payload))
     if text:
         payload["explanation"] = {"status": "ready", "text": text}
+    # R16 §C — added after the explanation key is built, so its cache key is unchanged.
+    payload["reasons"] = reason_dates(athlete, athlete.local_today, payload["reasons"])
+    payload["as_of"] = fresh["as_of"]
+    payload["freshness"] = fresh
     return payload
 
 

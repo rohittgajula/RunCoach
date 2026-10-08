@@ -236,8 +236,14 @@ def sleep_payload(athlete, period) -> dict:
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def sleep(request):
+    from django.utils import timezone
+
     athlete = request.user.athlete
-    return Response(sleep_payload(athlete, parse_period(request, athlete, "4w")))
+    body = sleep_payload(athlete, parse_period(request, athlete, "4w"))
+    nights = body.get("nights") or []
+    # R16 §C: when the newest night is not last night, the UI says so.
+    return Response({**body, "as_of": timezone.now(),
+                     "last_night_date": nights[-1]["date"] if nights else None})
 
 
 # --- B5 running form --------------------------------------------------------------------

@@ -44,8 +44,13 @@ def _garmin_source(workout: PlannedWorkout) -> dict:
     walk / warm-up / cool-down bands come from (profile fields only: no query whose
     answer drifts day to day, so a synced workout does not flip to "changed")."""
     athlete = workout.athlete
+    description = workout.description
+    if (workout.notes or "").strip():
+        # R16: the athlete's own notes ride along (only when there are some, so a
+        # generated workout's payload — and hash — is unchanged).
+        description = f"{description}\n\nNotes: {workout.notes.strip()}".strip()
     return {"title": workout.title, "duration_s": workout.duration_s,
-            "steps": workout.steps or [], "description": workout.description,
+            "steps": workout.steps or [], "description": description,
             "hr": {"resting_hr": athlete.resting_hr, "hr_easy_min": athlete.hr_easy_min,
                    "hr_easy_max": athlete.hr_easy_max, "hr_ceiling": athlete.hr_ceiling}}
 
@@ -85,7 +90,33 @@ def workout_json(workout: PlannedWorkout, guard_inputs: dict | None = None) -> d
         "garmin_workout_id": workout.garmin_workout_id,
         "garmin_synced_at": workout.garmin_synced_at,
         "garmin_status": garmin_status(workout),
+        # R16 §A: the athlete's edits.
+        **edit_fields(workout),
     }
+
+
+def edit_fields(workout: PlannedWorkout, today: dt.date | None = None) -> dict:
+    from .edit_service import editable_reason
+
+    reason = editable_reason(workout, today)
+    edited = workout.edited_by == "user"
+    pre = workout.pre_edit if edited else None
+    return {
+        "edited_by": workout.edited_by or None,
+        "edited_at": workout.edited_at,
+        "edited_via": workout.edited_via or None,
+        "notes": workout.notes or "",
+        "can_edit": reason is None or reason == "notes_only",
+        "can_undo_edit": edited and pre is not None and reason in (None, "notes_only"),
+        "planned": _planned_brief(pre) if pre else None,
+    }
+
+
+def _planned_brief(pre: dict) -> dict:
+    from planning.edit import run_s
+
+    return {"title": pre.get("title"), "kind": pre.get("kind"),
+            "duration_s": pre.get("duration_s"), "run_s": run_s(pre.get("steps"))}
 
 
 def _auto_adjustment(workout: PlannedWorkout) -> dict | None:

@@ -42,7 +42,11 @@ def day(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def day_summary(request):
-    return Response(summary_json(request.user.athlete))
+    from .freshness import freshness_json
+
+    athlete = request.user.athlete
+    fresh = freshness_json(athlete)
+    return Response({**summary_json(athlete), "as_of": fresh["as_of"], "freshness": fresh})
 
 
 @api_view(["GET"])

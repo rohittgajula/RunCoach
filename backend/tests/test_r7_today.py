@@ -11,7 +11,9 @@ from tests.r7_helpers import make_workout, wellness
 TODAY_KEYS = {"date", "verdict", "headline", "reasons", "signals_missing", "note", "workout",
               "adjusted", "applied", "explanation",
               # R13 §3 / §10
-              "injury", "mood"}
+              "injury", "mood",
+              # R16 §C
+              "as_of", "freshness"}
 HOURS = 3600
 
 

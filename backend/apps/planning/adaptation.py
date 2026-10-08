@@ -118,9 +118,11 @@ def adapt_week(athlete: Athlete, today: dt.date | None = None) -> PlanAdjustment
             if decision.factor < 1.0:
                 for workout in upcoming:
                     # Only future, not-completed workouts; the race is never resized.
+                    # R16: a session the athlete edited keeps their version.
                     if (workout.date >= today and workout.kind != "RACE"
                             and workout.status == PlannedWorkout.Status.PLANNED
-                            and workout.completed_activity_id is None):
+                            and workout.completed_activity_id is None
+                            and workout.edited_by != "user"):
                         rescale(workout, decision.factor, athlete)
     except IntegrityError:
         # Another worker adapted this week between the check and the insert.

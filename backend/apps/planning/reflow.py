@@ -66,7 +66,8 @@ def reflow_active_plan(athlete) -> dict | None:
     last_date = plan.race.date - dt.timedelta(days=1) if plan.race else None
 
     workouts = {w.pk: w for w in plan.workouts.exclude(status=PlannedWorkout.Status.SKIPPED)}
-    items = [Item(id=w.pk, date=w.date, kind=w.kind, duration_s=w.duration_s, status=w.status)
+    items = [Item(id=w.pk, date=w.date, kind=w.kind, duration_s=w.duration_s, status=w.status,
+                  edited=w.edited_by == "user")
              for w in workouts.values()]
     result = reflow(items, available=available, long_day=athlete.long_run_day,
                     limit=_limit(plan, athlete), today=today, last_date=last_date)

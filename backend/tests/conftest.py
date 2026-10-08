@@ -180,3 +180,17 @@ def no_real_r13_queue(monkeypatch):
         monkeypatch.setattr(task, "delay", delay)
         monkeypatch.setattr(task, "apply_async", apply_async)
     return queued
+
+
+@pytest.fixture(autouse=True)
+def isolated_sync_cache(monkeypatch):
+    """R16 §C: the per-athlete sync lock / last-attempt keys live in a fresh in-memory
+    cache per test, never the shared Redis the dev stack's athletes use."""
+    from django.core.cache.backends.locmem import LocMemCache
+
+    from apps.ingest import sync_status
+
+    cache = LocMemCache("sync-status-tests", {})
+    cache.clear()
+    monkeypatch.setattr(sync_status, "cache", cache)
+    return cache

@@ -59,7 +59,7 @@ def expire_stale(athlete, today: dt.date) -> int:
             .select_related("workout"):
         w = s.workout
         if (s.from_date <= today or w is None or w.date != s.from_date
-                or w.status != PlannedWorkout.Status.PLANNED):
+                or w.status != PlannedWorkout.Status.PLANNED or w.edited_by == "user"):
             s.status = WeatherSuggestion.Status.EXPIRED
             s.decided_at = timezone.now()
             s.save(update_fields=["status", "decided_at"])
@@ -77,7 +77,7 @@ def check(athlete, hourly: list[dict] | None = None) -> list[WeatherSuggestion]:
     horizon = today + dt.timedelta(days=wp.LOOKAHEAD_DAYS)
     candidates = PlannedWorkout.objects.filter(
         plan=plan, status=PlannedWorkout.Status.PLANNED, date__gt=today, date__lte=horizon,
-        kind__in=wp.RUN_KINDS)
+        kind__in=wp.RUN_KINDS).exclude(edited_by="user")
     if not candidates.exists():
         return []
     if hourly is None:
@@ -95,8 +95,14 @@ def check(athlete, hourly: list[dict] | None = None) -> list[WeatherSuggestion]:
     sessions = _sessions(plan, first_week, last_week)
     skip = set(WeatherSuggestion.objects.filter(athlete=athlete, workout__isnull=False)
                .values_list("workout_id", "from_date"))
-    proposals = wp.propose(sessions, checks, today=today, available=_available(athlete),
-                           last_date=_last_date(plan), skip=skip)
+    # R16: sessions the athlete edited are never moved (nor swapped with).
+    edited = set(PlannedWorkout.objects.filter(plan=plan, edited_by="user")
+                 .values_list("pk", flat=True))
+    skip |= {(s.id, s.date) for s in sessions if s.id in edited}
+    proposals = [p for p in wp.propose(sessions, checks, today=today,
+                                       available=_available(athlete),
+                                       last_date=_last_date(plan), skip=skip)
+                 if p.swap_with not in edited]
     created = []
     workouts = {w.pk: w for w in PlannedWorkout.objects.filter(
         pk__in=[p.workout_id for p in proposals])}
@@ -146,11 +152,13 @@ def apply(athlete, suggestion: WeatherSuggestion, auto: bool = False) -> Weather
         w = locked.get(s.workout_id)
         if (plan is None or w is None or w.plan_id != plan.pk or w.date != s.from_date
                 or w.status != PlannedWorkout.Status.PLANNED or w.completed_activity_id
-                or w.date <= today or s.to_date <= today or w.kind not in wp.RUN_KINDS):
+                or w.date <= today or s.to_date <= today or w.kind not in wp.RUN_KINDS
+                or w.edited_by == "user"):
             raise NotApplicable("The session has changed since — nothing was moved.")
         walk = locked.get(s.swap_workout_id) if s.swap_workout_id else None
         if s.swap_workout_id and (walk is None or walk.date != s.to_date
-                                  or walk.status != PlannedWorkout.Status.PLANNED):
+                                  or walk.status != PlannedWorkout.Status.PLANNED
+                                  or walk.edited_by == "user"):
             raise NotApplicable("The day it would swap with has changed — nothing was moved.")
         start, end = _week(s.from_date)
         sessions = _sessions(plan, start, end)

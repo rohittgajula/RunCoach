@@ -21,11 +21,17 @@ LATE_MARGIN_MIN = 30
 
 def _today_score(rows) -> tuple[int | None, str | None]:
     """Newest readiness within the last 3 days: Garmin's, else the computed stand-in."""
+    score, source, _ = _today_score_dated(rows)
+    return score, source
+
+
+def _today_score_dated(rows):
+    """(score, source, date the score is from) — R16 §C."""
     if not rows:
-        return None, None
+        return None, None, None
     for row in reversed(rows[-READINESS_DAYS:]):
         if row.training_readiness is not None:
-            return row.training_readiness, "garmin"
+            return row.training_readiness, "garmin", row.metric_date
     last = rows[-1]
     resting = [r.resting_hr for r in rows[:-1] if r.resting_hr]
     score, _ = insight_maths.computed_readiness(
@@ -35,7 +41,8 @@ def _today_score(rows) -> tuple[int | None, str | None]:
         resting_hr=last.resting_hr,
         resting_baseline=insight_maths.mean(resting[-28:]) if resting else None,
         form=None)
-    return score, ("computed" if score is not None else None)
+    return score, ("computed" if score is not None else None), \
+        (last.metric_date if score is not None else None)
 
 
 def forecast_payload(athlete) -> dict:
@@ -46,7 +53,7 @@ def forecast_payload(athlete) -> dict:
     today = athlete.local_today
     rows = metrics_rows(athlete, today - dt.timedelta(days=30), today)
     recent3 = [r for r in rows if r.metric_date >= today - dt.timedelta(days=READINESS_DAYS - 1)]
-    score, source = _today_score(recent3)
+    score, source, score_date = _today_score_dated(recent3)
     scores14 = [r.training_readiness for r in rows
                 if r.metric_date >= today - dt.timedelta(days=13) and r.training_readiness is not None]
 
@@ -87,7 +94,8 @@ def forecast_payload(athlete) -> dict:
     result = maths.forecast(inputs)
     return {"date": today + dt.timedelta(days=1), "estimate": result["estimate"],
             "low": result["low"], "high": result["high"], "label": result["label"],
-            "is_estimate": True, "today": {"score": score, "source": source},
+            "is_estimate": True,
+            "today": {"score": score, "source": source, "date": score_date},
             "factors": result["factors"], "levers": result["levers"],
             "best_case": result["best_case"], "sentence": result["sentence"],
             "note": result["note"]}
@@ -96,4 +104,6 @@ def forecast_payload(athlete) -> dict:
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def readiness_forecast(request):
-    return Response(forecast_payload(request.user.athlete))
+    from django.utils import timezone
+
+    return Response({**forecast_payload(request.user.athlete), "as_of": timezone.now()})

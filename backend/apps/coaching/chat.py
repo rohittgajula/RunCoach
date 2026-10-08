@@ -49,8 +49,17 @@ plan for the A race (is_target) by passing its race_id unless they name a differ
 Never invent or assume a race date. If there are no saved races, ask for the date and \
 distance. Ask only what you cannot derive: how many days a week, injuries. The plan is a PROPOSAL until the athlete \
 accepts it — say so.
-- You may make the week easier (skip, move, clear a day). Never add load or progress a \
-plan after reported pain or illness.
+- You may make the week easier (skip, move, clear a day). Add load only when the athlete \
+asks for it, and never after reported pain or illness.
+- To change a session or a week the athlete asked about, call edit_workout or edit_week \
+(find ids in the context or with get_workouts). Up to +20 % more running per session \
+applies directly. If a tool returns needs_confirmation, NOTHING was saved: tell the athlete \
+exactly what would change and ask; call again with confirmed=true only after they agree.
+- Honesty rule: never say a workout or the plan was changed, moved, updated or sent to the \
+watch unless a tool call in THIS turn succeeded (status "updated", or move/skip/clear without \
+an error). If a tool returned an error or needs_confirmation, say plainly it was not changed. \
+After a change, state exactly what changed: the date and before → after, e.g. \
+"Sat 12 Oct: 40 → 45 min".
 - Do not diagnose. Persistent pain is a reason to see a professional.
 - "Distance" means distance run, not what the watch logged.
 - Meal numbers from log_meal are estimates; say so."""
@@ -101,6 +110,15 @@ def system_prompt(athlete: Athlete) -> str:
             {"id": w.pk, "date": w.date, "title": w.title, "kind": w.kind,
              "minutes": round(w.duration_s / 60), "status": w.status}
             for w in upcoming
+        ],
+        # R16: ids the edit tools need, without a get_workouts round trip.
+        "next_7_days": [
+            {"id": w.pk, "date": w.date, "title": w.title, "kind": w.kind,
+             "minutes": round(w.duration_s / 60), "status": w.status,
+             "edited_by_athlete": w.edited_by == "user"}
+            for w in PlannedWorkout.objects.filter(
+                athlete=athlete, date__gte=today, date__lte=today + dt.timedelta(days=6),
+                plan__status=TrainingPlan.Status.ACTIVE).order_by("date", "id")[:14]
         ],
         "diet_today": {"targets": diet["targets"], "eaten": diet["eaten"]},
     }
@@ -179,13 +197,18 @@ def run_turn(thread: ChatThread, content: str, attachments: list[dict]):
     })
 
     runner = ToolRunner(athlete, chat_message=assistant)
-    try:
-        text, audit = chat_with_tools(
-            operation=OPERATION, messages=messages, tools=TOOLS, dispatch=runner,
+
+    def call(conversation):
+        return chat_with_tools(
+            operation=OPERATION, messages=conversation, tools=TOOLS, dispatch=runner,
             max_iterations=MAX_TOOL_ITERATIONS,
             before_call=lambda model: check_budget(athlete, OPERATION, model),
             on_call=lambda stats, error: log_call(athlete, OPERATION, stats, error, PROMPT_VERSION),
         )
+
+    try:
+        text, audit = call(messages)
+        text, audit, assistant.guard = honesty_guard(athlete, messages, text, audit, call)
         assistant.content = text or "Done."
         assistant.status = ChatMessage.Status.DONE
         assistant.tool_calls = json.loads(json.dumps(audit, default=str))
@@ -200,6 +223,8 @@ def run_turn(thread: ChatThread, content: str, attachments: list[dict]):
     # Tool side effects (a proposed plan, a logged meal) stand even if the final answer
     # failed, so their cards are attached either way.
     assistant.attachments = runner.attachments
+    assistant.plan_changed = runner.plan_changed
+    assistant.needs_confirmation = runner.needs_confirmation
     assistant.save()
     thread.save(update_fields=["updated_at"])
 
@@ -211,6 +236,39 @@ def run_turn(thread: ChatThread, content: str, attachments: list[dict]):
         except Exception as exc:  # noqa: BLE001 — memory is a bonus; the reply is not lost
             logger.warning("could not queue memory extraction: %s", exc)
     return user, assistant
+
+
+def honesty_guard(athlete, messages, text, audit, call):
+    """R16 §B: a reply that claims a plan change no tool made gets one corrective
+    re-prompt; still dishonest (or the re-prompt fails) → a correction line is appended.
+    Returns (text, audit, guard record | None)."""
+    from . import honesty
+
+    claim = honesty.claimed_change(text)
+    if not claim or honesty.mutation_succeeded(audit):
+        return text, audit, None
+    guard = {"fired": True, "claim": claim, "tools": [a.get("name") for a in audit],
+             "outcome": None}
+    logger.warning("honesty guard: athlete %s, reply claims a change no tool made: %r",
+                   athlete.pk, claim)
+    conversation = [*messages, {"role": "assistant", "content": text},
+                    {"role": "user", "content": honesty.reprompt(audit)}]
+    try:
+        second, more = call(conversation)
+    except Exception as exc:  # noqa: BLE001 — the first answer is kept, made honest
+        guard.update(outcome="note_appended", reprompt_error=type(exc).__name__)
+        logger.warning("honesty guard re-prompt failed for athlete %s: %s", athlete.pk, exc)
+        return f"{text}\n\n{honesty.CORRECTION_NOTE}", audit, guard
+    audit = [*audit, *more]
+    if honesty.mutation_succeeded(more):
+        guard["outcome"] = "tool_succeeded"
+    elif honesty.claimed_change(second):
+        guard["outcome"] = "note_appended"
+        second = f"{second}\n\n{honesty.CORRECTION_NOTE}"
+    else:
+        guard["outcome"] = "corrected"
+    logger.warning("honesty guard outcome for athlete %s: %s", athlete.pk, guard["outcome"])
+    return second or text, audit, guard
 
 
 def start_thread_with(athlete: Athlete, *, title: str, content: str, attachments: list[dict]):

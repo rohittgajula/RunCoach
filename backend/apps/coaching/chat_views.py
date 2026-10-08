@@ -55,6 +55,9 @@ def message_json(athlete, message: ChatMessage) -> dict:
         "id": message.pk, "role": message.role, "content": message.content,
         "attachments": attachments_json(athlete, message.attachments),
         "status": message.status, "created_at": message.created_at,
+        # R16 §B: the "Plan updated" chip.
+        "plan_changed": message.plan_changed or [],
+        "needs_confirmation": message.needs_confirmation,
     }
 
 
@@ -121,7 +124,9 @@ def messages(request, pk: int):
     attachments = clean_attachments(athlete, request.data.get("attachments"))
     user, assistant = run_turn(thread, content, attachments)
     return Response({"user": message_json(athlete, user),
-                     "assistant": message_json(athlete, assistant)})
+                     "assistant": message_json(athlete, assistant),
+                     "plan_changed": assistant.plan_changed or [],
+                     "needs_confirmation": assistant.needs_confirmation})
 
 
 def fact_json(fact: MemoryFact) -> dict:

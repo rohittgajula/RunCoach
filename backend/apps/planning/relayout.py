@@ -4,8 +4,9 @@
 re-splits every fully-future week of the active plan whose run count differs from the
 athlete's effective choice. Week volume (prescribed run seconds — adaptation already
 included, because it was applied to these rows) and phase are kept; today, past,
-completed, skipped and the race week are untouched. Rows are rewritten in place where
-possible so a workout that is on the watch is re-sent rather than orphaned.
+completed, skipped and the race week are untouched, and so is a week holding a session
+the athlete edited (R16). Rows are rewritten in place where possible so a workout that
+is on the watch is re-sent rather than orphaned.
 """
 
 from __future__ import annotations
@@ -141,6 +142,13 @@ def relayout_active_plan(athlete) -> dict | None:
             continue
         run_rows = sorted((w for w in rows if w.kind in RUN_KINDS), key=lambda w: (w.date, w.pk))
         if not run_rows:
+            continue
+        if any(w.edited_by == "user" for w in rows):
+            # R16: a week holding a session the athlete edited keeps its layout — the
+            # edited session's content and date stay exactly as they made them.
+            if len(run_rows) != runs:
+                notes.append(f"The week of {week_start:%-d %b} kept its sessions: it has "
+                             "a session you edited.")
             continue
         long_row = next((w for w in run_rows if w.kind == "LONG"), None)
         phase_obj = next((w.phase for w in run_rows if w.phase), None)

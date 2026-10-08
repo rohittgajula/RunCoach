@@ -11,7 +11,8 @@ from tests.r6_helpers import make_activity
 TOP_KEYS = {"range", "today", "readiness", "hrv", "sleep", "resting_hr", "body_battery",
             "stress", "respiration", "vo2max", "race_predictions", "running", "load",
             "focus", "summary",
-            "start", "end", "period"}      # R12 §A
+            "start", "end", "period",      # R12 §A
+            "as_of", "freshness"}          # R16 §C
 
 
 def keys(items):
@@ -79,16 +80,17 @@ def test_insights_endpoint_shape(api, athlete):
     assert r.status_code == 200
     body = r.json()
     assert set(body) == TOP_KEYS
-    assert set(body["readiness"]) == {"score", "label", "drivers", "source"}
+    assert set(body["readiness"]) == {"score", "label", "drivers", "source", "date"}
     assert body["readiness"]["source"] == "garmin" and body["readiness"]["score"] == 55
     assert set(body["hrv"]) == {"last_night_ms", "weekly_avg_ms", "baseline_low",
-                                "baseline_high", "status", "series"}
+                                "baseline_high", "status", "series", "last_night_date"}
     assert body["hrv"]["status"] == "unbalanced"
     assert set(body["hrv"]["series"][0]) == {"date", "ms"}
     assert set(body["sleep"]) == {"avg_s", "avg_score", "series"}
     assert set(body["sleep"]["series"][0]) == {"date", "s", "score"}
-    assert set(body["resting_hr"]) == {"current", "trend_bpm_per_week", "series"}
-    assert set(body["body_battery"]) == {"avg", "series"} == set(body["stress"])
+    assert set(body["resting_hr"]) == {"current", "trend_bpm_per_week", "series",
+                                      "current_date"}
+    assert set(body["body_battery"]) == {"avg", "series", "date"} == set(body["stress"])
     assert set(body["respiration"]) == {"avg_rpm", "sleep_avg_rpm", "series"}
     assert body["vo2max"]["value"] == 42.0
     assert set(body["race_predictions"]) >= {"5k_s", "10k_s", "half_s"}

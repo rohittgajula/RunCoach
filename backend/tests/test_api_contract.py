@@ -16,7 +16,10 @@ WORKOUT_KEYS = {"id", "date", "title", "kind", "phase", "duration_s", "load", "s
                 "guard", "adjusted_by", "original_steps", "original",
                 "garmin_workout_id", "garmin_synced_at", "garmin_status",
                 # R13 §1
-                "auto_adjustment"}
+                "auto_adjustment",
+                # R16 §A
+                "edited_by", "edited_at", "edited_via", "notes", "can_edit",
+                "can_undo_edit", "planned"}
 STEP_KEYS = {"kind", "duration_s", "intensity", "label", "pace_min_s", "pace_max_s",
              "hr_min", "hr_max"}
 FUEL_KEYS = {"before", "during", "after", "carbs_g_during_per_h"}

@@ -164,6 +164,15 @@ class PlannedWorkout(OwnedByAthlete):
     garmin_schedule_id = models.BigIntegerField(null=True, blank=True)
     garmin_synced_at = models.DateTimeField(null=True, blank=True)
     garmin_payload_hash = models.CharField(max_length=64, blank=True, default="")
+    # R16 §A: the athlete edited it (app or chat). Auto-adjust, the weekly adaptation,
+    # weather swaps and re-layout leave an edited workout's content alone. `pre_edit` is
+    # the generated version ({title, kind, duration_s, load, steps, target_zone,
+    # description, fueling, notes}) kept for "Undo my edits".
+    edited_by = models.CharField(max_length=8, blank=True, default="")
+    edited_at = models.DateTimeField(null=True, blank=True)
+    edited_via = models.CharField(max_length=8, blank=True, default="")
+    pre_edit = models.JSONField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -171,6 +180,10 @@ class PlannedWorkout(OwnedByAthlete):
 
     def __str__(self):
         return f"{self.date} {self.title}"
+
+    @property
+    def user_edited(self) -> bool:
+        return self.edited_by == "user"
 
 
 class PlanAdjustment(OwnedByAthlete):

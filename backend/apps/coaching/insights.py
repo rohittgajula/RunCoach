@@ -44,6 +44,14 @@ def _latest(rows, attr):
     return None
 
 
+def _latest_date(rows, attr):
+    """R16 §C: the day `_latest(rows, attr)` comes from."""
+    for row in reversed(rows):
+        if getattr(row, attr) not in (None, ""):
+            return row.metric_date
+    return None
+
+
 def _wellness(athlete: Athlete, rows: list[DailyMetrics], today: dt.date, form) -> dict:
     hrv_low = _latest(rows, "hrv_baseline_low")
     hrv_high = _latest(rows, "hrv_baseline_high")
@@ -63,10 +71,12 @@ def _wellness(athlete: Athlete, rows: list[DailyMetrics], today: dt.date, form) 
         garmin_score = today_row.training_readiness
         level = (today_row.training_readiness_level or "").replace("_", " ").title()
         readiness = {"score": garmin_score, "label": level or maths.readiness_label(garmin_score),
-                     "drivers": drivers, "source": "garmin"}
+                     "drivers": drivers, "source": "garmin",
+                     "date": today_row.metric_date}
     else:
         readiness = {"score": score, "label": maths.readiness_label(score),
-                     "drivers": drivers, "source": "computed"}
+                     "drivers": drivers, "source": "computed",
+                     "date": today_row.metric_date if today_row and score is not None else None}
 
     resting = [(r.metric_date, r.resting_hr) for r in rows if r.resting_hr]
     slope = maths.slope_per_week(resting)
@@ -77,6 +87,7 @@ def _wellness(athlete: Athlete, rows: list[DailyMetrics], today: dt.date, form) 
         "readiness": readiness,
         "hrv": {
             "last_night_ms": _latest(rows, "hrv_overnight_avg"),
+            "last_night_date": _latest_date(rows, "hrv_overnight_avg"),
             "weekly_avg_ms": _latest(rows, "hrv_weekly_avg"),
             "baseline_low": hrv_low,
             "baseline_high": hrv_high,
@@ -92,15 +103,18 @@ def _wellness(athlete: Athlete, rows: list[DailyMetrics], today: dt.date, form) 
         },
         "resting_hr": {
             "current": _latest(rows, "resting_hr"),
+            "current_date": _latest_date(rows, "resting_hr"),
             "trend_bpm_per_week": round(slope, 2) if slope is not None else None,
             "series": _series(rows, "resting_hr", digits=0),
         },
         "body_battery": {
             "avg": _avg(rows, "body_battery_high", 0),
+            "date": _latest_date(rows, "body_battery_high"),
             "series": [{"date": r.metric_date, "value": r.body_battery_high,
                         "low": r.body_battery_low} for r in rows if r.body_battery_high is not None],
         },
-        "stress": {"avg": _avg(rows, "stress_avg", 0), "series": _series(rows, "stress_avg", digits=0)},
+        "stress": {"avg": _avg(rows, "stress_avg", 0), "date": _latest_date(rows, "stress_avg"),
+                   "series": _series(rows, "stress_avg", digits=0)},
         "respiration": {
             "avg_rpm": _avg(rows, "respiration_avg"),
             "sleep_avg_rpm": _avg(rows, "respiration_sleep_avg"),
@@ -108,7 +122,8 @@ def _wellness(athlete: Athlete, rows: list[DailyMetrics], today: dt.date, form) 
                         "sleep_value": r.respiration_sleep_avg}
                        for r in rows if r.respiration_avg or r.respiration_sleep_avg],
         },
-        "vo2max": {"value": vo2[-1].vo2max, "series": _series(vo2, "vo2max")} if vo2 else None,
+        "vo2max": {"value": vo2[-1].vo2max, "date": vo2[-1].metric_date,
+                   "series": _series(vo2, "vo2max")} if vo2 else None,
         "race_predictions": {
             "5k_s": prediction.race_pred_5k_s, "10k_s": prediction.race_pred_10k_s,
             "half_s": prediction.race_pred_half_s, "marathon_s": prediction.race_pred_marathon_s,
@@ -323,7 +338,12 @@ def _period(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def insights(request):
-    return Response(insights_payload(request.user.athlete, _period(request)))
+    from apps.health.freshness import freshness_json
+
+    athlete = request.user.athlete
+    fresh = freshness_json(athlete)
+    return Response({**insights_payload(athlete, _period(request)), "as_of": fresh["as_of"],
+                     "freshness": fresh})
 
 
 @api_view(["POST"])
