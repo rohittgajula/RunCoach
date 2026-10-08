@@ -2972,3 +2972,192 @@ Fact = { id, text: str (≤ 300), category: "health"|"schedule"|"goals"|"other",
 - New Celery task `ingest.reimport_one` (garmin queue) — restart the workers. The daily
   slow sync makes one extra `get_activities(0, 100)` call (deletion check). No new env or
   dependencies.
+
+## R18 — contract for full refresh, profile as the single source of truth, data_version, a coach that acts
+
+Conventions as R10–R17 (paths under `/api/`, signed-in athlete, own rows only — another
+athlete's id → 404; dates `YYYY-MM-DD`; datetimes ISO 8601 with offset; errors
+`400 {detail}` unless noted). Additive except where marked **changed**. **Rohit's rule for
+R18: user-controlled.** Memory and chat never change a setting silently — they propose,
+the athlete confirms.
+
+### Root causes fixed (prod: intraday 11:01 IST vs DailyMetrics 21:02 IST, stale steps)
+1. **Intraday was only refreshed by the scheduled morning sync.** `ingest.sync_one` (beat,
+   05:30 UTC = 11:00 IST) queued `sync_intraday_one`, but the manual/auto sync endpoint
+   (`POST /garmin/sync/`) only queued the slow fetch — so every sync after the first of the
+   day refreshed `DailyMetrics` and never `IntradayDay`. Every successful sync (legacy,
+   full, auto) now refreshes intraday for today + yesterday.
+2. **Today's totals were read from stale aggregates.** `IntradayDay.steps_total` (and the
+   other aggregates) were computed only when intraday was stored, from the `DailyMetrics`
+   of that moment; later wellness syncs updated `DailyMetrics` but not the aggregates, and
+   `day_rows`/step history prefer the aggregate. Aggregates are now recomputed after every
+   wellness write (today + yesterday), and a day's steps are the larger of Garmin's daily
+   total and the 15-minute buckets.
+
+### §A Full refresh = full sync
+
+**`POST /garmin/sync/ {full: true}`** (Refresh button, pull-to-refresh, "Sync now") → **202**
+```
+{ job_id: str, deduped: bool,            # true: a job was already running/just started — that one is returned
+  mode: "full",
+  status: SyncStatus }
+```
+Runs on the garmin queue (one job per athlete at a time). Phases, in order:
+`activities` (recent page, new runs downloaded) → `wellness` (daily summary, sleep, HRV,
+stress, Body Battery, readiness … for today + yesterday, re-fetched and overwritten) →
+`intraday` (today + yesterday, forced; then the slow-changing fetch if not done today) →
+`derived` (segmentation/derivation of new runs inline, post-run work queued, achievements,
+day aggregates; everything read-time — readiness, briefing, forecast, day summary, heart
+stats, insights, wake plan — recomputes because `data_version` changed) → `done`.
+Errors: 400 `{detail}` not connected; 429 `{detail, status}` breaker open (nothing queued);
+409 `{detail}` when a legacy (non-job) sync holds the lock.
+Dedupe: a second `full` POST while a job is queued/running, or within 60 s of the last job's
+start, returns that job (`deduped: true`) — never a second job. Breaker checked before every
+phase; the first 429 stops the job (`phase: "failed"`, part `status: "rate_limited"`) and
+trips the breaker. Calls stay `GARMIN_SLOW_PAUSE_S` apart inside phases and between phases.
+
+**`POST /garmin/sync/ {auto: true}`** (**changed**: runs the same job path, throttled): when
+`auto_skip_reason` says no → 200 `{skipped: "recent"|"running"|"breaker_open"|
+"not_connected"|"too_early", status}` (unchanged). Otherwise → 200
+`{job_id, deduped: false, mode: "full"|"run_check", status}` (the R16 inline sync body keys
+`imported/skipped/failed/errors/activity_ids/wellness_days` are no longer returned for
+auto). `mode: "run_check"` (run-aware window, last full job < 30 min ago): only the activity
+listing (1 call); if a new run arrives the job continues through wellness/intraday/derived.
+Auto POSTs are no longer counted by the `garmin` 10/hour throttle (the server guard above
+limits them).
+
+**`POST /garmin/sync/ {}` / `{limit}`** (legacy inline sync): unchanged body + `status`, and
+now also queues the intraday refresh (root cause 1) and returns `data_version`.
+
+**`GET /sync/status/`** → R16 SyncStatus plus:
+```
+{ …R16 keys…,
+  min_interval_s: 1800 | 300,           # changed: the current auto interval (300 in the run-aware window)
+  auto_sync_due: bool,                  # changed: can_sync_now, ≥ 05:00 local, last sync and last
+                                        #   attempt both older than min_interval_s (30 min, or 5 min run-aware)
+  job_id: str|null,                     # the athlete's latest job (null: none in the last 2 days)
+  phase: "idle"|"queued"|"activities"|"wellness"|"intraday"|"derived"|"done"|"failed",
+  progress: int,                        # 0–100 (queued 0, activities 10, wellness 35, intraday 60, derived 85, done 100)
+  started_at: datetime|null,
+  finished_at: datetime|null,           # set when phase is done|failed
+  error: str|null,
+  parts: { activities: null | {status, imported: int, skipped: int, failed: int, activity_ids: [int]},
+           wellness:   null | {status, days: int, written: int},
+           intraday:   null | {status, days: int, calls: int},
+           slow:       null | {status},                    # "not_due" when already done today
+           derived:    null | {status, derived: int, achievements: int} },
+                                        # part status: "ok"|"skipped"|"error"|"rate_limited"|"not_due"
+  run_aware: { active: bool,            # a run is planned today, not arrived, now inside the window
+               waiting_for_run: bool,   # same as active (UI: "Waiting for today's run…")
+               workout_id: int|null, title: str|null,
+               run_time: "HH:MM"|null, run_time_source: "workout"|"usual"|"alarm"|"history"|null,
+               window_start: datetime|null,   # run time − 15 min
+               window_end: datetime|null,     # run time + 3 h
+               arrived: bool },               # a run activity for today is already here
+  data_version: int }
+```
+Run-aware rule: from (run time − 15 min) to (run time + 3 h), while today's planned run
+(not REST/STRENGTH, not done/skipped) has no run activity today, auto-sync is allowed every
+5 min (`run_check` mode unless a full sync is due). Outside it: every 30 min. `running` is true
+while a job is queued or running.
+
+### §B Profile = single source of truth
+
+**`GET/PATCH /athlete/`** gains
+```
+sleep_need_minutes: int|null,        # writable; 240–720; null = use Garmin's
+usual_run_time: "HH:MM"|null,        # writable
+loop_distance_km: float|null,        # writable; 0.1–50 (one lap of the athlete's usual loop)
+injury_note: str,                    # writable; ≤ 200 chars ("" = none) — shown by injury watch
+sleep_need: { minutes: int,          # read-only: the effective need used everywhere
+              source: "user"|"garmin"|"default",   # override > Garmin (median of last 7 nights) > 8 h
+              garmin_minutes: int|null,
+              label: str },          # "7 h (set by you)" | "8 h (Garmin)" | "8 h (default)"
+data_version: int                    # read-only
+```
+Effective sleep need (one helper, `apps.athletes.effective.sleep_need`) is used by: sleep
+debt and tiles (`/health/sleep/`), wake planner + bedtime reminders (`/health/wake/…`),
+readiness forecast levers, morning briefing, auto-adjust's sleep signal and the coach context.
+- `GET /health/sleep/` gains `need: SleepNeed` (the object above); every night's `need_s` is the
+  effective need (the override when set) and gains `garmin_need_s` (Garmin's value that night).
+- Wake plan `need_source` gains `"user"`; `run.run_time_source` gains `"usual"` (athlete
+  `usual_run_time`, preferred over the alarm's run time and history).
+- `GET /health/injury/` gains `athlete_note: str` (= `injury_note`).
+
+**Workout JSON** (everywhere) gains
+```
+distance_estimate: null | { km: float,           # run time at the middle of the easy pace band + walk time at 10:00/km
+                            loops: float|null,   # km / loop_distance_km, 1 decimal (null without a loop distance)
+                            loop_km: float|null }
+```
+null for REST/STRENGTH or a workout without steps.
+
+**`data_version`** (per athlete, opaque increasing int):
+- Bumped on every write to the athlete's data (settings, memory, data-review decisions,
+  illness, workouts and edits, chat tool changes, journal, habits, every sync write) and on
+  every successful mutating request (POST/PUT/PATCH/DELETE).
+- Returned: header `X-Data-Version` on every authenticated `/api/` response; key
+  `data_version` in every 2xx JSON-object body of a mutating request (lists / 204 → header
+  only); in `GET /athlete/` and `GET /sync/status/`.
+- Frontend: when a mutation (or a sync status poll) returns a `data_version` different from
+  the last one seen → invalidate all athlete queries.
+- Server caches keyed on it (plus the local date): insights, day summary, readiness
+  forecast, wake plan, heart stats. AI summaries: `POST /insights/summary/` body and the
+  briefing `ai` object gain `stale: bool` (data changed after the text was generated).
+
+**Memory → settings (propose, never apply silently).** Fact JSON (`/memory/` all forms) gains
+```
+settings_proposal: null | { field: "sleep_need_minutes"|"usual_run_time"|"loop_distance_km"|
+                                   "available_days"|"runs_per_week"|"long_run_day"|"injury_note",
+                            label: str,               # "Sleep need"
+                            value: int|str|float|object,   # in the field's API format
+                            display: str,             # "7 h"
+                            current: same type|null,
+                            current_display: str,     # "8 h (Garmin)"
+                            summary: str }            # "Sleep need: 8 h (Garmin) → 7 h"
+```
+null when nothing maps, or the setting already has that value. UI: "Apply to settings?".
+**`POST /memory/{id}/apply/`** `{field}` (must equal the proposal's field) → 200
+`{applied: true, field, before, after, display, data_version, fact: Fact}`; 400 `{detail}`
+when the fact has no (or a different) proposal or the value fails validation (same rules as
+PATCH /athlete/); 404 another athlete's fact.
+
+### §C Coach acts on explicit requests
+
+New chat tool:
+```
+update_profile(field, value, confirmed?)
+  field: "sleep_need_minutes"|"usual_run_time"|"loop_distance_km"|"available_days"|
+         "runs_per_week"|"long_run_day"|"injury_note"
+  value: sleep_need_minutes → minutes (or hours ≤ 12, converted) | null (= Garmin's);
+         usual_run_time "HH:MM"; loop_distance_km number; available_days [0–6 weekdays] or
+         {"0".."6": bool}; runs_per_week 2–6 | null; long_run_day 0–6; injury_note str
+```
+Results: `{status: "needs_confirmation", field, label, current_display, display, summary,
+warnings: [str], message}` (nothing saved) unless `confirmed: true` **and** the previous
+assistant message in the thread asked to confirm the same field and value (server-enforced —
+a same-turn self-confirmation is refused with needs_confirmation again);
+`{status: "updated", field, before, after, display, summary, warnings, data_version}`;
+`{status: "unchanged", …}`; `{error}`.
+
+Chat message JSON (and the POST reply top level) gains
+```
+profile_changed: [{field, label, before_display, after_display, summary}]   # [] when none
+```
+and `needs_confirmation` may now be the profile variant
+`{field, value, label, summary, increase_pct: null}` (alongside R16's workout/week variants).
+UI: same "Yes, do it / No" buttons.
+
+Coach behaviour (system prompt): the athlete is in charge — on an explicit change request
+(plan, workout, settings) call the tool; warnings or needs_confirmation → explain the risk
+briefly and ask "Do it anyway?"; never refuse outright. Increases still follow R16 (+20 %
+direct, more → confirmation).
+
+**Refusal guard** (server side, next to the R16 honesty guard): if the athlete's message is an
+explicit change request ("make/change/set/increase … to 30 min", "move … to Sunday",
+"set my sleep need to 7 h") and the reply declines it ("I can't / won't / wouldn't
+recommend / let's keep …") without calling any change tool (edit_workout, edit_week,
+move_workout, skip_workout, clear_day, update_profile, set_illness, recover_illness,
+propose_plan — a needs_confirmation result counts as a call), the model is re-prompted once
+to call the tool and present warnings + a confirmation instead. Logged and stored on
+`ChatMessage.guard` (`{"refusal": {...}}`, not in the API).
