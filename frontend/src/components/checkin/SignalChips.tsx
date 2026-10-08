@@ -1,4 +1,5 @@
 import type { SignalReason, Verdict } from '../../lib/types'
+import { DateSuffix } from '../../lib/r16'
 import { VERDICT, signalName, signalValue } from './checkinUtil'
 
 export function VerdictPill({ verdict }: { verdict: Verdict }) {
@@ -25,6 +26,7 @@ export function SignalChips({ reasons, max = 5, skip = 0 }: { reasons: SignalRea
             <span>
               {r.label || signalName(r.signal)}
               {value && <b> {value}</b>}
+              <DateSuffix date={r.date} />
             </span>
             <span className="sr-only"> — {WORD[r.status] ?? r.status}</span>
           </li>

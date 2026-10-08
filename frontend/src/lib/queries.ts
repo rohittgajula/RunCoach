@@ -3,6 +3,7 @@ import {
 } from '@tanstack/react-query'
 import { ApiError, api, json } from './auth'
 import { addDays, todayISO } from './format'
+import { setSyncing } from './syncFlag'
 import type {
   ActivityCard, CalendarResponse, DietDay, DietTrend, FitnessResponse, GarminStatus,
   Meal, MealEstimate, MemoryFact, Message, MetricEntriesResponse, MetricEntry, MetricKind,
@@ -170,8 +171,17 @@ export const startReview = (activityId: number) =>
 export function useSync() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: () => api<SyncResult>('/garmin/sync/', { method: 'POST', ...json({ limit: 20 }) }),
+    mutationFn: async () => {
+      setSyncing(true)
+      try {
+        return await api<SyncResult>('/garmin/sync/', { method: 'POST', ...json({ limit: 20 }) })
+      } finally {
+        setSyncing(false)
+      }
+    },
     onSuccess: () => {
+      // R16 §C: the dated day metrics and the auto-sync gate read these.
+      for (const key of ['sync-status', 'briefing', 'health-day', 'health-day-summary', 'health-body', 'adjustments']) client.invalidateQueries({ queryKey: [key] })
       client.invalidateQueries({ queryKey: ['garmin-status'] })
       client.invalidateQueries({ queryKey: ['calendar'] })
       client.invalidateQueries({ queryKey: ['profile-summary'] })

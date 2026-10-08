@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ActivityCardView, WorkoutCard } from '../components/Cards'
 import { ChipButton } from '../components/ChipButton'
@@ -8,7 +8,7 @@ import { UpcomingAdjustments } from '../components/adjust/UpcomingAdjustments'
 import { WeatherSwapChips } from '../components/weather/WeatherSwapChip'
 import { WeekGarminMenu } from '../components/workout/WeekGarminMenu'
 import { StrengthCard } from '../components/strength/StrengthCard'
-import { CalendarIcon, ChevronDown, ChevronRight, RefreshIcon } from '../components/Icons'
+import { CalendarIcon, ChevronDown, ChevronRight, EditIcon, RefreshIcon } from '../components/Icons'
 import { PageHeader } from '../components/PageHeader'
 import { PhasePill } from '../components/PhasePill'
 import { PlanDetailSheet } from '../components/profile/PlanDetailSheet'
@@ -19,7 +19,12 @@ import { errorText, useActivePlan, useCalendar, useSync, useToday } from '../lib
 import type { ActivityCard, CalDay, CalWeek, Workout } from '../lib/types'
 
 import { BUILD_PLAN_PROMPT } from '../lib/prompts'
+import { canEditWorkout } from '../components/edit/EditedChip'
 export { BUILD_PLAN_PROMPT }
+
+// R16 §A: "Edit week" is its own chunk (shares the editor's styles and steppers).
+const loadWeekEdit = () => import('../components/edit/WeekEditSheet')
+const WeekEditSheet = lazy(loadWeekEdit)
 
 /** Plan tab: the month/week calendar and the plan (the pre-R10 Calendar minus today). */
 export default function Calendar() {
@@ -42,6 +47,7 @@ export default function Calendar() {
   const [toast, setToast] = useState('')
   const [view, setView] = useState<'list' | 'month'>('list')
   const [planOpen, setPlanOpen] = useState(false)
+  const [weekEdit, setWeekEdit] = useState<{ week: CalWeek; open: boolean } | null>(null)
   const listScroll = useRef<number | null>(null)
 
   const pages = calendar.data?.pages
@@ -63,6 +69,12 @@ export default function Calendar() {
   }, [pages])
 
   const weekOf = (date: string) => weeks.find((w) => w.start <= date && date <= w.end)
+
+  /** The week's sessions that can still be edited (R16 §A week tools). */
+  const editableIn = (week: CalWeek): Workout[] =>
+    days
+      .filter((d) => week.start <= d.date && d.date <= week.end && d.date >= today)
+      .flatMap((d) => d.items.flatMap((i) => (i.type === 'workout' && canEditWorkout(i.workout) && i.workout.kind?.toLowerCase() !== 'race' ? [i.workout] : [])))
 
   // Open on today, once.
   useLayoutEffect(() => {
@@ -243,6 +255,7 @@ export default function Calendar() {
                     collapsed={collapsed.has(week.start)}
                     onToggle={() => toggleWeek(week.start)}
                     canSend={!!activePlan.data && week.end >= today && week.start <= addDays(today, 7)}
+                    onEdit={activePlan.data && week.end >= today && editableIn(week).length ? () => setWeekEdit({ week, open: true }) : undefined}
                   />
                 )}
                 {day.date === today && (
@@ -278,13 +291,24 @@ export default function Calendar() {
       <WorkoutSheet workout={openWorkout} onClose={() => setOpenWorkout(null)} />
       <PlanDetailSheet planId={planOpen && activePlan.data ? activePlan.data.id : null} onClose={() => setPlanOpen(false)} />
       <ActivitySheet activity={openActivity} onClose={() => setOpenActivity(null)} />
+      {weekEdit && (
+        <Suspense fallback={null}>
+          <WeekEditSheet
+            week={weekEdit.week}
+            workouts={editableIn(weekEdit.week)}
+            open={weekEdit.open}
+            onClose={() => setWeekEdit({ ...weekEdit, open: false })}
+            onDone={(message) => { setWeekEdit({ ...weekEdit, open: false }); setToast(message) }}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }
 
 function WeekHeader({
-  week, collapsed, onToggle, today, canSend,
-}: { week: CalWeek; collapsed: boolean; onToggle: () => void; today: string; canSend: boolean }) {
+  week, collapsed, onToggle, today, canSend, onEdit,
+}: { week: CalWeek; collapsed: boolean; onToggle: () => void; today: string; canSend: boolean; onEdit?: () => void }) {
   const planned = week.planned_s > 0
   const seconds = planned ? week.planned_s : week.actual_s
   const load = planned ? week.planned_load : week.actual_load
@@ -310,6 +334,11 @@ function WeekHeader({
               {planned ? <>Done {dur(week.actual_s)} of {dur(week.planned_s)}</> : <>Done {dur(week.actual_s)} · no plan</>}
             </span>
           </div>
+        )}
+        {onEdit && (
+          <button type="button" className="week-edit-btn" onClick={onEdit} onPointerDown={() => { void loadWeekEdit() }}>
+            <EditIcon size={15} /> Edit week
+          </button>
         )}
       </div>
       {canSend && <WeekGarminMenu week={week} today={today} />}

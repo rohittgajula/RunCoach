@@ -14,6 +14,7 @@ import { ErrorState } from '../components/States'
 import { ForecastCard } from '../components/today/ForecastCard'
 import { FuelToday } from '../components/today/FuelToday'
 import { TodayHero } from '../components/today/TodayHero'
+import { StaleNotice } from '../components/today/StaleNotice'
 import { resolveLayout, type TodayCardKey } from '../components/today/todayLayout'
 import { TodaySoFar } from '../components/today/TodaySoFar'
 import { ThisWeek } from '../components/today/ThisWeek'
@@ -24,6 +25,8 @@ import { useAuth } from '../lib/AuthContext'
 import { parseDate, todayISO } from '../lib/format'
 import { preloadTabs } from '../lib/preload'
 import { errorText, useHabitSummary, useSync, useWeek } from '../lib/queries'
+import { SyncingPill } from '../lib/r16'
+import { useSyncing } from '../lib/syncFlag'
 
 function greeting(): string {
   const h = new Date().getHours()
@@ -52,6 +55,7 @@ export default function Today() {
   const today = todayISO()
   const week = useWeek(today)
   const sync = useSync()
+  const syncing = useSyncing()
   const [toast, setToast] = useState('')
   const day = week.data?.days.find((d) => d.date === today)
   const name = (athlete?.display_name || '').split(' ')[0]
@@ -98,11 +102,11 @@ export default function Today() {
     <div className="page today-page">
       <header className="today-header">
         <div className="grow">
-          <span className="lbl">{dateLabel}</span>
+          <span className="lbl today-date-line">{dateLabel}<SyncingPill /></span>
           <h1 className="today-greeting">{greeting()}{name ? `, ${name}` : ''}</h1>
         </div>
-        <ChipButton label="Sync Garmin" onClick={runSync} disabled={sync.isPending} className="chip-plain">
-          <RefreshIcon className={sync.isPending ? 'spin' : ''} />
+        <ChipButton label="Sync Garmin" onClick={runSync} disabled={syncing} className="chip-plain">
+          <RefreshIcon className={syncing ? 'spin' : ''} />
         </ChipButton>
         <AvatarButton />
       </header>
@@ -111,6 +115,7 @@ export default function Today() {
       {week.isError && !week.data && (
         <ErrorState message={errorText(week.error, 'Today’s plan did not load.')} onRetry={() => week.refetch()} />
       )}
+      <StaleNotice onSync={runSync} />
       <TodayHero day={day} loading={week.isPending} />
       {layout.map((key) => <TodaySlot key={key}>{cards[key]}</TodaySlot>)}
     </div>

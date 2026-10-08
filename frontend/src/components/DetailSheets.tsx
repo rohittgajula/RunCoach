@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { dur, km, pace, parseDate, timeOfDay, todayISO } from '../lib/format'
 import { errorText, useActivityAiReview, useActivityDetail, usePatchWorkout, useWorkout } from '../lib/queries'
 import type { ActivityCard, Workout } from '../lib/types'
@@ -21,6 +21,11 @@ import { RunShareButton } from './share/RunShareButton'
 import { AdjustedChip } from './adjust/AdjustedChip'
 import { RunReviewSection } from './review/RunReview'
 import { useCoachLaunch } from './useCoachLaunch'
+import { EditedChip, canEditWorkout } from './edit/EditedChip'
+
+// R16 §A: the step editor is its own chunk, fetched on "Edit" (warmed on press).
+const loadEditor = () => import('./edit/WorkoutEditor')
+const WorkoutEditor = lazy(loadEditor)
 
 export { StepsList }
 
@@ -52,6 +57,14 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
   const [mode, setMode] = useState<'idle' | 'move' | 'skip'>('idle')
   const [moveTo, setMoveTo] = useState('')
   const [current, setCurrent] = useState<Workout | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editorMounted, setEditorMounted] = useState(false)
+  const [toast, setToast] = useState('')
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(''), 3500)
+    return () => clearTimeout(t)
+  }, [toast])
 
   // The calendar copy may predate the actual/compliance/review blocks; refetch on open.
   const fresh = useWorkout(workout?.id ?? null, workout ?? undefined).data
@@ -63,12 +76,16 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
   const close = () => {
     setMode('idle')
     setCurrent(null)
+    setEditing(false)
+    setEditorMounted(false)
     patch.reset()
     onClose()
   }
+  const openEditor = () => { setEditorMounted(true); setEditing(true) }
 
   return (
-    <BottomSheet open={!!w} onClose={close} title={w ? undefined : ''} label="Workout">
+    <>
+    <BottomSheet open={!!w && !editing} onClose={close} title={w ? undefined : ''} label="Workout">
       {w && (
         <div className="detail">
           <p className="muted">{longDate(w.date)}</p>
@@ -77,7 +94,9 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
             {w.phase && <PhasePill kind={w.phase.kind} name={w.phase.name} />}
             {w.status !== 'planned' && <span className={`tag ${w.status === 'completed' ? 'tag-ok' : ''}`}>{w.status}</span>}
             {w.adjusted_by === 'checkin' && <span className="tag tag-adjusted">Adjusted by check-in</span>}
+            <EditedChip workout={w} />
           </div>
+          {w.notes && <p className="workout-note">{w.notes}</p>}
           {w.auto_adjustment && w.status === 'planned' && <AdjustedChip adjustment={w.auto_adjustment} />}
 
           {done ? (
@@ -180,6 +199,9 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
             <div className="detail-actions">
               {w.status === 'planned' && (
                 <>
+                  {canEditWorkout(w) && (
+                    <button type="button" className="btn btn-secondary" onPointerDown={() => { void loadEditor() }} onClick={openEditor}>Edit</button>
+                  )}
                   <button type="button" className="btn btn-secondary" onClick={() => { setMoveTo(w.date); setMode('move') }}>Move</button>
                   <button type="button" className="btn btn-secondary" onClick={() => setMode('skip')}>Skip</button>
                 </>
@@ -202,6 +224,23 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
         </div>
       )}
     </BottomSheet>
+    {toast && <div className="toast" role="status">{toast}</div>}
+    {w && editorMounted && (
+      <Suspense fallback={null}>
+        <WorkoutEditor
+          workoutId={w.id}
+          open={editing}
+          onClose={() => setEditing(false)}
+          onSaved={(r, how) => {
+            const { warnings: _w, edit: _e, watch: _x, ...saved } = r
+            setCurrent(saved)
+            setEditing(false)
+            import('../lib/r16edit').then((m) => setToast(m.watchToast(r, how === 'restored')))
+          }}
+        />
+      </Suspense>
+    )}
+    </>
   )
 }
 

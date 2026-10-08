@@ -1,0 +1,55 @@
+/* R16 (main chunk): edited chip, week "Edit week", dated metrics, stale notice,
+   syncing pill, chat plan-changed chips + quick replies. Editor styles: r16edit.css (lazy). */
+
+.tag-edited { background: var(--run-tint); color: var(--run-ink); text-transform: none; white-space: nowrap; }
+.workout-note { font-size: 14px; color: var(--muted); background: var(--card-2); border-radius: var(--radius-sm); padding: 8px 12px; white-space: pre-wrap; }
+
+.week-edit-btn {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+  min-height: 44px; padding: 0 16px; border: none; border-radius: 999px;
+  background: var(--card); box-shadow: var(--shadow); color: var(--fg);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.week-edit-btn:active { transform: scale(0.97); }
+
+/* "· yesterday" — tiny and muted, never louder than the value. */
+.date-suffix { color: var(--faint); font-size: 0.82em; font-weight: 600; white-space: nowrap; }
+
+.stale-note {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border-radius: var(--radius-sm); box-shadow: var(--shadow);
+  padding: 6px 6px 6px 14px; font-size: 13px; color: var(--muted); line-height: 1.35;
+}
+.stale-note p { flex: 1; min-width: 0; }
+.stale-note .btn { flex: none; min-height: 40px; padding: 8px 14px; font-size: 13px; }
+
+.syncing-pill {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  background: var(--card-2); border-radius: 999px; padding: 4px 10px;
+}
+.syncing-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--run); animation: syncing-pulse 1s ease-in-out infinite alternate; }
+@keyframes syncing-pulse { from { opacity: 0.35; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .syncing-dot { animation: none; } }
+
+/* Chat */
+.plan-changed { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.plan-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  min-height: 36px; padding: 6px 12px 6px 8px; border-radius: 999px; border: none; cursor: pointer;
+  background: var(--good-bg); color: var(--good-fg); font: inherit; font-size: 13px; font-weight: 600; text-align: left;
+}
+.plan-chip > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-chip-ic { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--good-fg); color: var(--card); flex: none; }
+.plan-chip b { font-weight: 800; }
+.quick-replies { display: flex; gap: 8px; margin-top: 10px; }
+.quick-replies .btn { min-height: 44px; }
+
+.today-date-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.today-date-line .syncing-pill { text-transform: none; letter-spacing: 0; }
+.sync-float {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 50%; transform: translateX(-50%);
+  z-index: 45; pointer-events: none;
+}
+.sync-float:empty { display: none; }
+.sync-float .syncing-pill { box-shadow: var(--shadow); background: var(--card); }

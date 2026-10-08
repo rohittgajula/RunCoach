@@ -4,6 +4,7 @@ import { ActivityIcon, CheckIcon, ReviewIcon, RunIcon, WalkIcon } from './Icons'
 import { PhasePill } from './PhasePill'
 import { WorkoutBar } from './WorkoutBar'
 import { AdjustedChip } from './adjust/AdjustedChip'
+import { EditedChip } from './edit/EditedChip'
 
 export function SportIcon({ sport, size = 20 }: { sport: string; size?: number }) {
   const s = sport.toLowerCase()
@@ -44,6 +45,7 @@ export function WorkoutCard({
           {workout.status === 'completed' && <span className="tag tag-ok"><CheckIcon size={14} /> Done</span>}
           {workout.status === 'skipped' && <span className="tag">Skipped</span>}
           {isAdjusted && <span className="tag tag-adjusted">Adjusted</span>}
+          {workout.status === 'planned' && <EditedChip workout={workout} />}
           <span className="cal-compact-meta">{dur(workout.duration_s)}</span>
         </div>
         <WorkoutBar steps={workout.steps} height={16} compact />
@@ -68,6 +70,7 @@ export function WorkoutCard({
         )}
         {workout.status === 'skipped' && <span className="tag">Skipped</span>}
         {isAdjusted && <span className="tag tag-adjusted">Adjusted</span>}
+        {workout.status === 'planned' && <EditedChip workout={workout} />}
       </header>
       <WorkoutBar steps={workout.steps} />
       <p className="cal-card-title">{workout.title}</p>

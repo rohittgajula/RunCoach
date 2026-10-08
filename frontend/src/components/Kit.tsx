@@ -149,9 +149,11 @@ export function Pill({ topic, solid = false, children }: { topic?: Topic | 'ok' 
  * full-size button underneath it, so the two buttons are never nested.
  */
 export function MetricTile({
-  label, value, unit, chip, sub, children, onClick, className = '', info,
+  label, value, unit, chip, sub, children, onClick, className = '', info, labelSuffix,
 }: {
   label: string
+  /** R16 §C: "· yesterday" when the value isn't today's. */
+  labelSuffix?: ReactNode
   value: ReactNode
   unit?: string
   chip?: ReactNode
@@ -165,7 +167,7 @@ export function MetricTile({
     <>
       <span className="mt-head">
         <span className="mt-label">
-          <span className="lbl">{label}</span>
+          <span className="lbl">{label}{labelSuffix}</span>
           {info}
         </span>
         {chip}

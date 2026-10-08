@@ -116,6 +116,14 @@ export type Workout = {
   garmin_synced_at?: ISODateTime | null
   /** none | synced | changed — whether the watch copy matches the steps now. */
   garmin_status?: 'none' | 'synced' | 'changed'
+  /** R16 §A — the athlete's own edits (app or chat). */
+  edited_by?: 'user' | null
+  edited_at?: ISODateTime | null
+  edited_via?: 'app' | 'chat' | null
+  notes?: string
+  can_edit?: boolean
+  can_undo_edit?: boolean
+  planned?: { title: string; kind: string; duration_s: number; run_s: number } | null
 }
 
 // --- R6 §3: actual vs planned ------------------------------------------------------
@@ -303,9 +311,11 @@ export type Message = {
   attachments: Attachment[]
   status: MessageStatus
   created_at: ISODateTime
+  /** R16 §B — workouts a tool changed in this turn ([] when nothing changed). */
+  plan_changed?: import('./r16').PlanChange[]
 }
 
-export type SendResult = { user: Message; assistant: Message }
+export type SendResult = { user: Message; assistant: Message; plan_changed?: import('./r16').PlanChange[] }
 
 export type MemoryFact = { id: number; text: string; source: 'chat' | 'manual'; created_at: ISODateTime }
 
@@ -409,9 +419,13 @@ export type SeriesPoint = { date: ISODate } & Record<string, number | string | n
 export type Insights = {
   /** R12: the period the server used (absent before R12). */
   period?: ResponsePeriod | null
-  readiness: { score: number | null; label: string; drivers: string[]; source: 'garmin' | 'computed' } | null
+  readiness: { score: number | null; label: string; drivers: string[]; source: 'garmin' | 'computed'; date?: ISODate | null } | null
+  /** R16 §C */
+  as_of?: ISODateTime
+  freshness?: import('./r16').Freshness | null
   hrv: {
     last_night_ms: number | null
+    last_night_date?: ISODate | null
     weekly_avg_ms: number | null
     baseline_low: number | null
     baseline_high: number | null
@@ -419,11 +433,11 @@ export type Insights = {
     series: Array<{ date: ISODate; ms: number | null }>
   } | null
   sleep: { avg_s: number | null; avg_score: number | null; series: Array<{ date: ISODate; s: number | null; score: number | null }> } | null
-  resting_hr: { current: number | null; trend_bpm_per_week: number | null; series: SeriesPoint[] } | null
-  body_battery: { avg: number | null; series: SeriesPoint[] } | null
-  stress: { avg: number | null; series: SeriesPoint[] } | null
+  resting_hr: { current: number | null; trend_bpm_per_week: number | null; series: SeriesPoint[]; current_date?: ISODate | null } | null
+  body_battery: { avg: number | null; series: SeriesPoint[]; date?: ISODate | null } | null
+  stress: { avg: number | null; series: SeriesPoint[]; date?: ISODate | null } | null
   respiration: { avg_rpm: number | null; sleep_avg_rpm: number | null; series: SeriesPoint[] } | null
-  vo2max: { value: number | null; series: SeriesPoint[] } | null
+  vo2max: { value: number | null; series: SeriesPoint[]; date?: ISODate | null } | null
   race_predictions: { '5k_s': number | null; '10k_s': number | null; half_s: number | null; marathon_s?: number | null } | null
   running: {
     runs: number
@@ -454,6 +468,8 @@ export type SignalReason = {
   label: string
   value: string | number | boolean | null
   baseline: string | number | null
+  /** R16 §C — the day the value is from. */
+  date?: ISODate | null
 }
 
 /** What the verdict turns today's workout into — not saved until "Use this". */
@@ -474,6 +490,9 @@ export type TodayCheckin = {
   /** R13 §3 / §10 */
   injury?: { risk: import('./r13').InjuryRisk; flags: import('./r13').InjuryFlag[] } | null
   mood?: import('./r13').Mood | null
+  /** R16 §C */
+  as_of?: ISODateTime
+  freshness?: import('./r16').Freshness | null
 }
 
 export type WorkoutGuard = {

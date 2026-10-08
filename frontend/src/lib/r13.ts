@@ -253,7 +253,10 @@ export type Briefing = {
   dismissed: boolean
   wake_time: string | null
   greeting: string
-  readiness: { score: number | null; label: string | null; source: 'garmin' | null | (string & {}) } | null
+  readiness: { score: number | null; label: string | null; source: 'garmin' | null | (string & {}); date?: ISODate | null } | null
+  /** R16 §C */
+  as_of?: ISODateTime
+  freshness?: import('./r16').Freshness | null
   checkin: { verdict: string; headline: string } | null
   session: {
     workout: { id: number; title: string; kind: string; duration_s: number } | null

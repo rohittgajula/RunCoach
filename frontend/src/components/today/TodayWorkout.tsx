@@ -113,7 +113,8 @@ export function TodayWorkout({ day, loading, embedded = false }: { day: CalDay |
             <button type="button" className="hero-top" onClick={() => setOpenWorkout(w)}>
               <span className="hero-eyebrow">
                 Today's run{weekText ? ` · ${weekText}` : w.phase ? ` · ${w.phase.name}` : ''}
-                {(w.adjusted_by === 'checkin' || w.adjusted_by === 'auto') && w.status === 'planned' && <span className="hero-tag">Adjusted</span>}
+                {(w.adjusted_by === 'checkin' || w.adjusted_by === 'auto') && w.status === 'planned' && w.edited_by !== 'user' && <span className="hero-tag">Adjusted</span>}
+                {w.edited_by === 'user' && w.status === 'planned' && <span className="hero-tag">Edited by you</span>}
               </span>
               <span className="hero-title">{w.title} · {dur(w.duration_s)}</span>
               <span className="hero-stats">

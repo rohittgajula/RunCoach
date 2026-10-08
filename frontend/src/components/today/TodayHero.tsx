@@ -1,5 +1,6 @@
 import { useBriefing } from '../../lib/r13'
-import { useToday } from '../../lib/queries'
+import { useInsights, useToday } from '../../lib/queries'
+import { DateSuffix } from '../../lib/r16'
 import type { CalDay } from '../../lib/types'
 import { BriefingDetails } from '../briefing/BriefingCard'
 import { CheckinDecision, TodayCard, useReadinessScore } from '../checkin/TodayCard'
@@ -21,7 +22,12 @@ export function TodayHero({ day, loading }: { day: CalDay | undefined; loading: 
   const t = today.data
   const b = briefing.data
   const score = useReadinessScore(t)
+  const insights = useInsights('4w').data
   const ringScore = score ?? b?.readiness?.score ?? null
+  // R16 §C: the day the ring's number is from (shown only when it isn't today).
+  const ringDate = insights?.readiness?.score != null ? insights.readiness.date
+    : score != null ? t?.reasons.find((r) => r.signal === 'readiness')?.date
+      : b?.readiness?.date
   const headline = t?.headline || b?.checkin?.headline || (b?.readiness?.label ? `Readiness ${b.readiness.label.toLowerCase()}` : '')
   const focus = b?.ready ? b.focus?.text : null
 
@@ -32,7 +38,7 @@ export function TodayHero({ day, loading }: { day: CalDay | undefined; loading: 
           <TopicRing value={ringScore} topic="recovery" size={72} stroke={12} label="Readiness" />
           <div className="grow">
             <div className="today-head">
-              <span className="lbl title-info">Readiness<InfoButton k="readiness" /></span>
+              <span className="lbl title-info">Readiness<DateSuffix date={ringDate} /><InfoButton k="readiness" /></span>
               {t && <VerdictPill verdict={t.verdict} />}
             </div>
             {headline && <h2 className="today-headline">{headline}</h2>}

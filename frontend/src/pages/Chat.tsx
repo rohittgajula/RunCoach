@@ -5,7 +5,7 @@ import { ActivityAttachment, WorkoutAttachment } from '../components/Cards'
 import { ChatListSheet } from '../components/ChatListSheet'
 import { ChipButton, ChipGroup } from '../components/ChipButton'
 import { ActivitySheet, WorkoutSheet } from '../components/DetailSheets'
-import { ArrowUpIcon, ChevronDown, CloseIcon, ListIcon, NewChatIcon, PlusIcon } from '../components/Icons'
+import { ArrowUpIcon, CheckIcon, ChevronDown, CloseIcon, ListIcon, NewChatIcon, PlusIcon } from '../components/Icons'
 import { LogMealSheet } from '../components/LogMealSheet'
 import { Markdown } from '../components/Markdown'
 import { MealSummary } from '../components/MealCard'
@@ -13,8 +13,21 @@ import { PageHeader } from '../components/PageHeader'
 import { PlanProposalCard } from '../components/PlanProposalCard'
 import { ErrorState, Loading } from '../components/States'
 import { clearPendingChat, getPendingChat } from '../lib/pending'
+import { api } from '../lib/auth'
 import { createThread, errorText, sendMessage, useMessages, useThreads } from '../lib/queries'
+import { invalidateAfterPlanChange, type PlanChange } from '../lib/r16'
 import type { ActivityCard, Attachment, AttachmentRef, Meal, Message, Workout } from '../lib/types'
+
+/**
+ * R16 §B: the coach asks before a big change ("needs_confirmation" stays server-side),
+ * so a question that asks for a go-ahead gets "Yes, do it" / "No" quick replies.
+ */
+const ASKS = /\b(shall i|should i|do you want me to|want me to|would you like me to|ok(ay)? to|happy for me to|go ahead|confirm|are you sure)\b/i
+function asksConfirmation(m: Message): boolean {
+  if (m.role !== 'assistant' || m.status === 'error' || m.plan_changed?.length) return false
+  const tail = m.content.trim().split(/\n+/).slice(-2).join(' ')
+  return tail.includes('?') && ASKS.test(tail)
+}
 
 const SUGGESTIONS = [
   'Build a plan for me to run 10k.',
@@ -131,6 +144,12 @@ export default function Chat() {
       const result = await sendMessage(id, payload.content, payload.attachments.map(refOf))
       client.setQueryData<Message[]>(['messages', id], (prev) => [...(prev ?? []), result.user, result.assistant])
       client.invalidateQueries({ queryKey: ['threads'] })
+      // R16 §B: a tool changed the plan — Plan, Today and the calendar show it at once.
+      const changed = result.plan_changed ?? result.assistant.plan_changed ?? []
+      if (changed.length) {
+        invalidateAfterPlanChange(client)
+        for (const c of changed) client.invalidateQueries({ queryKey: ['workout', c.workout_id] })
+      }
       // Tools may have moved workouts, logged meals or remembered facts.
       for (const key of ['calendar', 'plan-active', 'profile-summary', 'diet-day', 'memory']) {
         client.invalidateQueries({ queryKey: [key] })
@@ -164,6 +183,13 @@ export default function Chat() {
   }, [draft])
 
   const busy = !!outgoing || (!!pending && !pendingError)
+
+  const openChanged = (c: PlanChange) => {
+    client
+      .fetchQuery({ queryKey: ['workout', c.workout_id], queryFn: () => api<Workout>(`/workouts/${c.workout_id}/`), staleTime: 0 })
+      .then(setOpenWorkout)
+      .catch(() => navigate('/plan'))
+  }
   const list = messages.data?.filter((m) => m.role !== 'tool') ?? []
   const lastUser = [...list].reverse().find((m) => m.role === 'user')
   const isEmpty = threadId == null && !pending && !outgoing
@@ -233,6 +259,22 @@ export default function Chat() {
                 {m.status === 'pending' && <p className="thinking">Thinking…</p>}
                 {m.content && <Markdown text={m.content} />}
                 {m.attachments.map((a, i) => renderAttachment(a, `${m.id}-${i}`))}
+                {!!m.plan_changed?.length && (
+                  <div className="plan-changed">
+                    {m.plan_changed.map((c, i) => (
+                      <button key={`${c.workout_id}-${i}`} type="button" className="plan-chip" onClick={() => openChanged(c)} aria-label={`Plan updated: ${c.summary}. Open the workout`}>
+                        <span className="plan-chip-ic" aria-hidden="true"><CheckIcon size={12} /></span>
+                        <span><b>Plan updated</b> · {c.summary}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {m.id === list[list.length - 1]?.id && !busy && asksConfirmation(m) && (
+                  <div className="quick-replies" role="group" aria-label="Quick replies">
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => send({ content: 'Yes, do it', attachments: [] })}>Yes, do it</button>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => send({ content: 'No', attachments: [] })}>No</button>
+                  </div>
+                )}
                 {m.status === 'error' && lastUser && m.id === list[list.length - 1]?.id && (
                   <button
                     type="button"

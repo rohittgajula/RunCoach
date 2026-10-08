@@ -4,6 +4,8 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { intentHandlers, isPlainClick, navigateSmooth, reducedMotion, routeCommitted } from '../lib/navMotion'
 import { prefetchHealth, preloadTabs, whenIdle } from '../lib/preload'
 import { prefetchTab } from '../lib/queries'
+import { SyncingPill, useAutoSync } from '../lib/r16'
+import { useAuth } from '../lib/AuthContext'
 import { CoachIcon, ForkIcon, HealthIcon, PlanIcon, TodayIcon } from './Icons'
 import { BadgeToast } from './me/Badges'
 import { SettingsSheet } from './SettingsSheet'
@@ -34,6 +36,9 @@ export function Shell({ children }: { children: ReactNode }) {
   const { pathname } = location
   const navigate = useNavigate()
   const tab = pathname.split('/')[1]
+  // R16 §C: sync Garmin on open / focus when the server says it's due.
+  const { athlete } = useAuth()
+  useAutoSync(!!athlete?.garmin_connected)
 
   // Smooth UI: warm every tab and Health section once the first screen has painted,
   // whichever screen that is (a deep link to /health needs it as much as Today).
@@ -130,6 +135,7 @@ export function Shell({ children }: { children: ReactNode }) {
           ))}
         </nav>
       </div>
+      {tab !== 'today' && <div className="sync-float"><SyncingPill /></div>}
       <BadgeToast />
       <SettingsSheet open={settingsOpen} focus={focus} onClose={() => setSettingsOpen(false)} />
     </ShellContext.Provider>

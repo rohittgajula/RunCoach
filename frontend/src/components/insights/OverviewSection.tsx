@@ -22,6 +22,7 @@ import { FocusCard, LoadCard, SummaryCard } from './AdviceCards'
 import { InsightChartSheet } from './InsightChartSheet'
 import { CHARTS, type ChartKey } from './charts'
 import { HabitsTeaser, ProgressTeaser } from './Teasers'
+import { DateSuffix } from '../../lib/r16'
 
 /** The metric's series, bucketed to the chosen frequency (R12). */
 const values = (data: Insights, key: ChartKey, freq: Freq = 'day') =>
@@ -131,8 +132,8 @@ function SummaryHero({ data, freq }: { data: Insights; freq: Freq }) {
   const sleepScore = trendOf(bucket((data.sleep?.series ?? []).map((p) => ({ date: p.date, value: p.score ?? null })), freq).map((p) => p.value), 'higher')
   const share = values(data, 'run_fraction', freq)
   const shareTrend = trendOf(share, 'higher')
-  const rings: Array<{ key: string; g: GlossaryKey; name: string; caption?: string; topic: 'recovery' | 'sleep' | 'run'; value: number | null; trend: Trend | null; better: 'higher' | 'lower' }> = [
-    { key: 'r', g: 'readiness', name: 'Readiness', topic: 'recovery', value: data.readiness?.score ?? null, trend: null, better: 'higher' },
+  const rings: Array<{ key: string; g: GlossaryKey; name: string; caption?: string; topic: 'recovery' | 'sleep' | 'run'; value: number | null; trend: Trend | null; better: 'higher' | 'lower'; date?: string | null }> = [
+    { key: 'r', g: 'readiness', name: 'Readiness', topic: 'recovery', value: data.readiness?.score ?? null, trend: null, better: 'higher', date: data.readiness?.date },
     { key: 's', g: 'sleep_score', name: 'Sleep score', topic: 'sleep', value: data.sleep?.avg_score ?? null, trend: sleepScore, better: 'higher' },
     { key: 'f', g: 'run_fraction', name: 'Run vs walk', caption: 'share of time running', topic: 'run', value: lastOf(share), trend: shareTrend, better: 'higher' },
   ]
@@ -147,7 +148,7 @@ function SummaryHero({ data, freq }: { data: Insights; freq: Freq }) {
           {shown.map((r) => (
             <div key={r.key}>
               <TopicRing value={r.value} topic={r.topic} size={84} label={r.name} />
-              <span className="ring-name title-info">{r.name}<InfoButton k={r.g} /></span>
+              <span className="ring-name title-info">{r.name}<DateSuffix date={r.date} /><InfoButton k={r.g} /></span>
               {r.caption && <span className="ring-caption">{r.caption}</span>}
               {r.trend && r.trend.tone !== 'flat' ? (
                 <span className="arrow-line">
@@ -163,16 +164,16 @@ function SummaryHero({ data, freq }: { data: Insights; freq: Freq }) {
 }
 
 function Tiles({ data, freq, onChart }: { data: Insights; freq: Freq; onChart: (k: ChartKey) => void }) {
-  type Def = { key: ChartKey; label: string; value: string | null; unit?: string; bars?: boolean }
+  type Def = { key: ChartKey; label: string; value: string | null; unit?: string; bars?: boolean; date?: string | null }
   const v = (k: ChartKey) => lastOf(values(data, k))
   const sleepAvg = data.sleep?.avg_s ?? null
   const defs: Def[] = [
-    { key: 'hrv', label: 'HRV', value: data.hrv?.last_night_ms != null ? String(Math.round(data.hrv.last_night_ms)) : v('hrv') != null ? String(Math.round(v('hrv')!)) : null, unit: 'ms' },
-    { key: 'rhr', label: 'Resting HR', value: data.resting_hr?.current != null ? String(Math.round(data.resting_hr.current)) : null, unit: 'bpm' },
+    { key: 'hrv', label: 'HRV', value: data.hrv?.last_night_ms != null ? String(Math.round(data.hrv.last_night_ms)) : v('hrv') != null ? String(Math.round(v('hrv')!)) : null, unit: 'ms', date: data.hrv?.last_night_ms != null ? data.hrv.last_night_date : null },
+    { key: 'rhr', label: 'Resting HR', value: data.resting_hr?.current != null ? String(Math.round(data.resting_hr.current)) : null, unit: 'bpm', date: data.resting_hr?.current_date },
     { key: 'sleep', label: 'Sleep', value: sleepAvg ? `${Math.floor(sleepAvg / 3600)}:${String(Math.round((sleepAvg % 3600) / 60)).padStart(2, '0')}` : null, unit: 'h', bars: true },
     { key: 'stress', label: 'Stress', value: data.stress?.avg != null ? String(Math.round(data.stress.avg)) : null },
     { key: 'body_battery', label: 'Body battery', value: data.body_battery?.avg != null ? String(Math.round(data.body_battery.avg)) : null, unit: 'avg' },
-    { key: 'vo2max', label: 'VO2max', value: data.vo2max?.value != null ? String(Math.round(data.vo2max.value)) : null },
+    { key: 'vo2max', label: 'VO2max', value: data.vo2max?.value != null ? String(Math.round(data.vo2max.value)) : null, date: data.vo2max?.date },
     { key: 'respiration', label: 'Breathing', value: data.respiration?.sleep_avg_rpm != null ? data.respiration.sleep_avg_rpm.toFixed(1) : null, unit: '/min' },
     { key: 'easy_pace', label: 'Easy pace', value: v('easy_pace') != null ? pace(v('easy_pace')) : null, unit: '/km' },
     { key: 'run_fraction', label: 'Running share', value: v('run_fraction') != null ? String(Math.round(v('run_fraction')!)) : null, unit: '%' },
@@ -194,6 +195,7 @@ function Tiles({ data, freq, onChart }: { data: Insights; freq: Freq; onChart: (
       <MetricTile
         key={d.key}
         label={d.label}
+        labelSuffix={<DateSuffix date={d.date} />}
         value={d.value}
         unit={d.unit}
         info={<InfoButton k={gk} normal={normal} />}
