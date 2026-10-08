@@ -94,6 +94,8 @@ export type Workout = {
   duration_s: number
   load: number
   steps: Step[]
+  /** R18 §B: estimated km (+ loops when the athlete set a loop distance). */
+  distance_estimate?: { km: number; loops: number | null; loop_km: number | null } | null
   description: string
   purpose: string
   target_zone: string
@@ -316,9 +318,14 @@ export type Message = {
   created_at: ISODateTime
   /** R16 §B — workouts a tool changed in this turn ([] when nothing changed). */
   plan_changed?: import('./r16').PlanChange[]
+  /** R18 §C — settings a tool changed in this turn. */
+  profile_changed?: ProfileChange[]
+  /** R16/R18 — the coach is waiting for a Yes/No (workout, week or profile variant). */
+  needs_confirmation?: { field?: string; summary?: string } | null
 }
+export type ProfileChange = { field: string; label: string; before_display?: string | null; after_display?: string | null; summary: string }
 
-export type SendResult = { user: Message; assistant: Message; plan_changed?: import('./r16').PlanChange[] }
+export type SendResult = { user: Message; assistant: Message; plan_changed?: import('./r16').PlanChange[]; profile_changed?: ProfileChange[] }
 
 export type MemoryFact = { id: number; text: string; source: 'chat' | 'manual'; created_at: ISODateTime }
 
@@ -909,6 +916,8 @@ export type SleepAvg = {
 }
 
 export type HealthSleep = {
+  /** R18: the effective sleep need (override > memory > Garmin > 8 h). */
+  need?: { minutes: number; source: string; garmin_minutes?: number | null; label?: string } | null
   /** R12: the period the server used (absent before R12). */
   period?: ResponsePeriod | null
   range: string
@@ -1278,7 +1287,7 @@ export type WakePlan = {
     run_time: string | null; run_time_source: 'setting' | 'history' | null
   } | null
   need_s: number | null
-  need_source: 'garmin' | 'default' | null
+  need_source: 'garmin' | 'default' | 'athlete' | 'user' | null
   wake_time: string | null
   wake_source: 'run' | 'habit' | 'default' | null
   bedtime: string | null

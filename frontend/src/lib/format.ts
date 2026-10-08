@@ -110,3 +110,10 @@ export const relativeStamp = (iso: string): string => {
 /** datetime-local input value for a Date (local clock). */
 export const localInputValue = (d: Date): string =>
   `${isoDate(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+
+/** R18: "≈ 5.2 km · ≈ 2.5 loops" for a planned workout ('' without an estimate). */
+export function estimateText(e: { km: number; loops: number | null } | null | undefined): string {
+  if (!e || !(e.km > 0)) return ''
+  const n = (v: number) => (Math.round(v * 10) / 10).toString()
+  return `≈ ${n(e.km)} km${e.loops ? ` · ≈ ${n(e.loops)} ${e.loops === 1 ? 'loop' : 'loops'}` : ''}`
+}

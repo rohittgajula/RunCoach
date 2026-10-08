@@ -1,4 +1,4 @@
-import { dur, km, parseDate } from '../lib/format'
+import { dur, estimateText, km, parseDate } from '../lib/format'
 import type { ActivityCard, Workout } from '../lib/types'
 import { ActivityIcon, CheckIcon, ReviewIcon, RunIcon, WalkIcon } from './Icons'
 import { PhasePill } from './PhasePill'
@@ -81,6 +81,7 @@ export function WorkoutCard({
       </header>
       <WorkoutBar steps={workout.steps} />
       <p className="cal-card-title">{workout.title}</p>
+      {workout.status === 'planned' && estimateText(workout.distance_estimate) && <p className="wk-loops">{estimateText(workout.distance_estimate)}</p>}
       {paused && <p className="muted small">Paused while you’re unwell</p>}
       {workout.auto_adjustment && workout.status === 'planned' && <AdjustedChip adjustment={workout.auto_adjustment} compact />}
       <footer className="cal-card-foot">
@@ -167,6 +168,7 @@ export function WorkoutAttachment({ workout, onOpen }: { workout: Workout; onOpe
           <span className="attach-title">{workout.title}</span>
           <span className="attach-sub">
             {shortDate(workout.date)} {workout.status === 'planned' ? 'Planned' : workout.status === 'completed' ? 'Completed' : 'Skipped'}
+            {workout.status === 'planned' && estimateText(workout.distance_estimate) ? ` · ${estimateText(workout.distance_estimate)}` : ''}
           </span>
         </span>
       </span>

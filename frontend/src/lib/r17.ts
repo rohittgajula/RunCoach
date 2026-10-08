@@ -229,4 +229,21 @@ export type CoachFact = {
   created_at: ISODateTime
   updated_at?: ISODateTime | null
   edited?: boolean
+  /** R18: what this fact drives (sleep need, run time, loop…) — memory is the live source. */
+  parameters?: FactParameter[] | null
+  parse_pending?: boolean
+}
+export type FactParameter = {
+  id: number
+  key: string
+  label: string
+  value: unknown
+  value_display: string
+  unit?: string
+  confidence?: number
+  source?: 'parser' | 'ai'
+  needs_review: boolean
+  status: 'active' | 'needs_review' | 'rejected'
+  conflict?: string | null
+  applied: boolean
 }

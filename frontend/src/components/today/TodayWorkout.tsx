@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { dur, km, parseDate } from '../../lib/format'
+import { dur, estimateText, km, parseDate } from '../../lib/format'
 import { useActivePlan } from '../../lib/queries'
 import type { ActivityCard, CalDay, Step, Workout } from '../../lib/types'
 import { ActivityCardView } from '../Cards'
@@ -122,6 +122,7 @@ export function TodayWorkout({ day, loading, embedded = false }: { day: CalDay |
                 {hr && <span>{hr}</span>}
                 {w.target_zone && <span>{w.target_zone}</span>}
                 {!hr && !w.target_zone && <span>Load {Math.round(w.load)}</span>}
+                {!done && estimateText(w.distance_estimate) && <span>{estimateText(w.distance_estimate)}</span>}
               </span>
             </button>
             <div className="hero-body">

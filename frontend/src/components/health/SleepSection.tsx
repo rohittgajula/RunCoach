@@ -1,4 +1,5 @@
 import { Disclosure } from '../Disclose'
+import { useAuth } from '../../lib/AuthContext'
 import { Link } from 'react-router-dom'
 import { dur, parseDate } from '../../lib/format'
 import { errorText, useHealthSleep, useWakePlan } from '../../lib/queries'
@@ -67,6 +68,18 @@ export function SleepSection() {
   )
 }
 
+const NEED_FROM: Record<string, string> = { user: 'set by you', setting: 'set by you', memory: 'from your memory', garmin: 'Garmin’s estimate', default: 'default' }
+
+/** R18 §B: "Your target: 7 h (from your memory)" — the effective need every number uses. */
+export function SleepTarget({ need, fallback }: { need?: { minutes: number; source: string } | null; fallback: number | null }) {
+  const { athlete } = useAuth()
+  const n = need ?? athlete?.sleep_need ?? null
+  const s = n?.minutes ? n.minutes * 60 : fallback
+  if (!s) return null
+  const from = n ? NEED_FROM[n.source] : ''
+  return <span className="sleep-target block">Your target: {hm(s)}{from ? ` (${from})` : ''}</span>
+}
+
 function SleepHero({ s }: { s: HealthSleep }) {
   const avg = s.averages
   const debt = s.debt
@@ -96,7 +109,7 @@ function SleepHero({ s }: { s: HealthSleep }) {
       </div>
       {(debt?.need_s || avg?.need_s) && (
         <p className="muted small">
-          You need about {hm(debt?.need_s ?? avg?.need_s)}.
+          <SleepTarget need={s.need} fallback={debt?.need_s ?? avg?.need_s ?? null} />
           {debt && debt.short_nights > 0 && debt.short_by_s ? ` Short by ~${hm(debt.short_by_s)} on ${debt.short_nights} of ${debt.nights} nights.` : ''}
         </p>
       )}
@@ -175,7 +188,7 @@ function SleepTrend({ nights, need, period }: { nights: Array<Pick<SleepNight, '
   return (
     <section className="card">
       <ChartFrame
-        info={<InfoButton k="sleep" normal={need ? `You need about ${h(need / 3600)} h (Garmin’s estimate)` : undefined} />}
+        info={<InfoButton k="sleep" normal={need ? `Your target: ${h(need / 3600)} h` : undefined} />}
         title={period.freq === 'day' ? 'Sleep per night' : `Sleep per night · ${FREQ_WORD[period.freq]} average`}
         caption={<>{need ? `Shaded band = within 30 min of the ${h(need / 3600)} h you need.` : 'Dashed line = your average.'}<span className="block">{periodCaption(period)}</span></>}
       >

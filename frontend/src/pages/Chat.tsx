@@ -22,9 +22,10 @@ import type { ActivityCard, Attachment, AttachmentRef, Meal, Message, Workout } 
  * R16 §B: the coach asks before a big change ("needs_confirmation" stays server-side),
  * so a question that asks for a go-ahead gets "Yes, do it" / "No" quick replies.
  */
-const ASKS = /\b(shall i|should i|do you want me to|want me to|would you like me to|ok(ay)? to|happy for me to|go ahead|confirm|are you sure)\b/i
+const ASKS = /\b(do it anyway|shall i|should i|do you want me to|want me to|would you like me to|ok(ay)? to|happy for me to|go ahead|confirm|are you sure)\b/i
 function asksConfirmation(m: Message): boolean {
-  if (m.role !== 'assistant' || m.status === 'error' || m.plan_changed?.length) return false
+  if (m.role !== 'assistant' || m.status === 'error' || m.plan_changed?.length || m.profile_changed?.length) return false
+  if (m.needs_confirmation) return true
   const tail = m.content.trim().split(/\n+/).slice(-2).join(' ')
   return tail.includes('?') && ASKS.test(tail)
 }
@@ -260,6 +261,16 @@ export default function Chat() {
                 {m.status === 'pending' && <p className="thinking">Thinking…</p>}
                 {m.content && <Markdown text={m.content} />}
                 {m.attachments.map((a, i) => renderAttachment(a, `${m.id}-${i}`))}
+                {!!m.profile_changed?.length && (
+                  <div className="plan-changed">
+                    {m.profile_changed.map((c, i) => (
+                      <span key={`${c.field}-${i}`} className="plan-chip" role="status">
+                        <span className="plan-chip-ic" aria-hidden="true"><CheckIcon size={12} /></span>
+                        <span><b>Settings updated</b> · {c.summary || `${c.label}: ${c.before_display ?? '—'} → ${c.after_display ?? '—'}`}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {!!m.plan_changed?.length && (
                   <div className="plan-changed">
                     {m.plan_changed.map((c, i) => (

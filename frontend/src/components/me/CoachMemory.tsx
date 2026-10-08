@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { useLocation } from 'react-router-dom'
 import { api, json } from '../../lib/auth'
 import { errorText } from '../../lib/queries'
-import type { CoachFact } from '../../lib/r17'
+import type { CoachFact, FactParameter } from '../../lib/r17'
 import { CardHead } from '../Kit'
 import { EditIcon, PlusIcon, TrashIcon } from '../Icons'
 import { Empty, ErrorState, Skeleton } from '../States'
@@ -27,15 +28,55 @@ function useFacts() {
 }
 function useFactMutations() {
   const client = useQueryClient()
-  const done = () => {
-    client.invalidateQueries({ queryKey: ['memory'] })
-    client.invalidateQueries({ queryKey: ['profile-summary'] })
-  }
+  // R18: facts drive sleep need, run time, loop, run days — every screen may change.
+  const done = () => { void client.invalidateQueries() }
   return {
     add: useMutation({ mutationFn: (b: { text: string; category: string; pinned?: boolean }) => api<CoachFact>('/memory/', { method: 'POST', ...json(b) }), onSuccess: done }),
     patch: useMutation({ mutationFn: ({ id, ...b }: FactPatch & { id: number }) => api<CoachFact>(`/memory/${id}/`, { method: 'PATCH', ...json(b) }), onSuccess: done }),
+    // R18: confirm / reject an ambiguous parse ("Use this as sleep target 7 h?").
+    param: useMutation({
+      mutationFn: ({ id, pid, action }: { id: number; pid: number; action: 'confirm' | 'reject' }) =>
+        api(`/memory/${id}/parameters/${pid}/`, { method: 'PATCH', ...json({ action }) }),
+      onSuccess: done,
+    }),
     remove: useMutation({ mutationFn: (id: number) => api(`/memory/${id}/`, { method: 'DELETE' }), onSuccess: done }),
   }
+}
+
+const SHORT: Record<string, string> = { sleep_need_minutes: 'Sleep target', usual_run_time: 'Run time', loop_distance_km: 'Loop', available_days: 'Run days', long_run_day: 'Long run', runs_per_week: 'Runs/week' }
+
+/** R18: what a fact drives — chips for live parameters, a Yes/No for ambiguous ones. */
+function FactParams({ fact, m }: { fact: CoachFact; m: ReturnType<typeof useFactMutations> }) {
+  const params = (fact.parameters ?? []).filter((p) => p.status !== 'rejected')
+  const live = params.filter((p) => !p.needs_review)
+  const review = params.filter((p) => p.needs_review)
+  if (!params.length && !fact.parse_pending) return null
+  const name = (p: FactParameter) => SHORT[p.key] ?? p.label
+  const act = (p: FactParameter, action: 'confirm' | 'reject') => m.param.mutate({ id: fact.id, pid: p.id, action })
+  return (
+    <>
+      {(live.length > 0 || fact.parse_pending) && (
+        <p className="cm-params">
+          {live.map((p) => (
+            <span key={p.id} className={`cm-param ${p.applied ? '' : 'is-off'}`} title={p.applied ? 'In use everywhere' : 'A newer setting overrides this'}>
+              {name(p)} · {p.value_display}{!p.applied && <small> · overridden</small>}
+            </span>
+          ))}
+          {fact.parse_pending && <span className="cm-param is-off">Reading…</span>}
+        </p>
+      )}
+      {review.map((p) => (
+        <div key={p.id} className="cm-apply" role="group" aria-label={`Use this as ${name(p).toLowerCase()} ${p.value_display}?`}>
+          <span className="grow">
+            Use this as {name(p).toLowerCase()} {p.value_display}?
+            {p.conflict && <small className="block">{p.conflict}</small>}
+          </span>
+          <button type="button" className="is-primary" disabled={m.param.isPending} onClick={() => act(p, 'confirm')}>Yes</button>
+          <button type="button" disabled={m.param.isPending} onClick={() => act(p, 'reject')}>No</button>
+        </div>
+      ))}
+    </>
+  )
 }
 
 const PinIcon = ({ on }: { on: boolean }) => (
@@ -56,7 +97,7 @@ function FactRow({ fact, m }: { fact: CoachFact; m: ReturnType<typeof useFactMut
     m.patch.mutate({ id: fact.id, text: t, category: category as CoachFact['category'] }, { onSuccess: () => setMode('view'), onError: (e) => setErr(errorText(e, 'Could not save.')) })
   }
   return (
-    <li className="cm-fact">
+    <li className="cm-fact" id={`fact-${fact.id}`}>
       {mode === 'edit' ? (
         <div className="cm-edit">
           <textarea aria-label="Fact" value={text} onChange={(e) => setText(e.target.value)} autoFocus maxLength={500} />
@@ -86,6 +127,7 @@ function FactRow({ fact, m }: { fact: CoachFact; m: ReturnType<typeof useFactMut
               <button type="button" aria-label="Delete" onClick={() => setMode('delete')}><TrashIcon size={18} /></button>
             </span>
           </div>
+          <FactParams fact={fact} m={m} />
           <p className="cm-meta">
             {fact.pinned && <span className="cm-pin-tag">Pinned ·</span>}
             <span>{SOURCE[fact.source] ?? 'Remembered'}{fact.created_at ? ` · ${when(fact.updated_at || fact.created_at)}` : ''}</span>
@@ -138,6 +180,15 @@ export function CoachMemory() {
   const facts = useFacts()
   const m = useFactMutations()
   const [adding, setAdding] = useState(false)
+  // Settings → "from your memory note" links here with #fact-ID.
+  const { hash } = useLocation()
+  const ready = !!facts.data
+  useEffect(() => {
+    if (!ready || !hash.startsWith('#fact-')) return
+    const el = document.getElementById(hash.slice(1))
+    el?.scrollIntoView?.({ block: 'center' })
+    el?.classList.add('is-target')
+  }, [ready, hash])
 
   if (facts.isPending) return <section className="card"><Skeleton lines={5} /></section>
   if (facts.isError) return <ErrorState message={errorText(facts.error, 'Couldn’t load what the coach knows.')} onRetry={() => facts.refetch()} />
@@ -148,7 +199,7 @@ export function CoachMemory() {
   return (
     <div className="stack">
       <p className="cm-intro">
-        The coach remembers these facts from your chats, check-ins and the app, and uses them in every chat. Changes apply from your next message. Your private habit log is never stored here.
+        The coach remembers these facts from your chats, check-ins and the app, and uses them in every chat. Facts about sleep, run time, your loop or run days drive those numbers everywhere — edit the fact and they change at once. Your private habit log is never stored here.
       </p>
       {adding ? <AddFact m={m} onDone={() => setAdding(false)} /> : (
         <button type="button" className="btn btn-secondary" onClick={() => setAdding(true)}><PlusIcon size={18} /> Add a fact</button>

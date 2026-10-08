@@ -102,7 +102,7 @@ export function WakePlannerCard({ variant = 'full' }: { variant?: 'full' | 'toda
           <div className="wake-time">
             <span className="lbl">In bed by</span>
             <b>{alarmClock(p.bedtime)}</b>
-            {p.need_s ? <span className="muted small">{dur(p.need_s)} sleep{p.need_source === 'garmin' ? ' (Garmin)' : ''} + 15 min</span> : null}
+            {p.need_s ? <span className="muted small">{dur(p.need_s)} sleep{p.need_source === 'garmin' ? ' (Garmin)' : p.need_source === 'athlete' || p.need_source === 'user' ? ' (set by you)' : ''} + 15 min</span> : null}
           </div>
         )}
         <div className="wake-time is-wake">

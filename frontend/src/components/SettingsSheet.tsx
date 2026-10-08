@@ -116,6 +116,7 @@ function MapPrivacy() {
  * tapped; all open while there are errors to show.
  */
 // R14: only loads when the group is opened.
+const RoutineSettings = lazy(() => import('./settings/RoutineSettings').then((m) => ({ default: m.RoutineSettings })))
 const CustomiseToday = lazy(() => import('./settings/CustomiseToday').then((m) => ({ default: m.CustomiseToday })))
 
 function Section({ title, sub, children, forceOpen = false, initialOpen = false }: { title: string; sub?: string; children: ReactNode; forceOpen?: boolean; initialOpen?: boolean }) {
@@ -295,6 +296,10 @@ export function SettingsSheet({ open, onClose, focus }: { open: boolean; onClose
           {errors.long_run_day && <p className="field-error">{errors.long_run_day}</p>}
           {athlete && <RunsPerWeek draft={draft} set={set} athlete={athlete} error={errors.runs_per_week} />}
           <TrainingExtras draft={draft} set={set} suggested={athlete?.strength_per_week_suggested ?? 2} errors={errors} />
+        </Section>
+
+        <Section title="Sleep & routine" sub="Sleep need, usual run time, loop distance" initialOpen={focus === 'routine'}>
+          <Suspense fallback={null}><RoutineSettings /></Suspense>
         </Section>
 
         <Section title="Diet goal" sub="Lose, maintain or gain — and how fast" forceOpen={hasErrors}>
