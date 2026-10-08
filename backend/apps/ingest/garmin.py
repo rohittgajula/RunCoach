@@ -161,7 +161,8 @@ def list_new_activities(client, known: set, *, backfill: bool, cutoff) -> tuple[
     return entries, True
 
 
-def sync_athlete(athlete: Athlete, limit: int | None = None) -> SyncResult:
+def sync_athlete(athlete: Athlete, limit: int | None = None, *, client=None,
+                 wellness: bool = True, queue_derive: bool = True) -> SyncResult:
     """Pull activities and ingest any that are new.
 
     Idempotent on two independent levels — Garmin's activity id and the file's content
@@ -179,7 +180,7 @@ def sync_athlete(athlete: Athlete, limit: int | None = None) -> SyncResult:
     from apps.activities.models import Activity
 
     result = SyncResult()
-    client = _client(athlete)
+    client = client or _client(athlete)
 
     known = set(
         Activity.objects.filter(athlete=athlete, garmin_activity_id__isnull=False)
@@ -246,12 +247,13 @@ def sync_athlete(athlete: Athlete, limit: int | None = None) -> SyncResult:
 
             # Hand straight to the metrics queue rather than waiting for the sweep.
             # Queued, not called: segmentation must not be able to fail a sync.
-            try:
-                from apps.activities.tasks import derive_one
+            if queue_derive:     # R18 full sync: derived inline in its "derived" phase
+                try:
+                    from apps.activities.tasks import derive_one
 
-                derive_one.delay(activity.pk)
-            except Exception:  # noqa: BLE001 — no broker in tests or a one-off script
-                logger.debug("could not queue derivation for %s", activity.pk)
+                    derive_one.delay(activity.pk)
+                except Exception:  # noqa: BLE001 — no broker in tests or a one-off script
+                    logger.debug("could not queue derivation for %s", activity.pk)
 
         except DuplicateActivity:
             result.skipped += 1
@@ -264,16 +266,18 @@ def sync_athlete(athlete: Athlete, limit: int | None = None) -> SyncResult:
             result.errors.append(f"{activity_id}: {exc}")
 
     # Wellness is pulled after activities so a rate limit costs the cheaper half.
-    try:
-        from .garmin_wellness import sync_wellness
+    rate_limited_early = any("rate-limited" in e for e in result.errors)
+    if wellness and not rate_limited_early:
+        try:
+            from .garmin_wellness import sync_wellness
 
-        wellness = sync_wellness(athlete, client)
-        result.wellness_days = wellness["days_written"]
-        if wellness.get("rate_limited"):
-            result.errors.append("Garmin rate-limited the wellness download; stopping early.")
-    except Exception as exc:  # noqa: BLE001 — activities already landed; keep them
-        logger.exception("wellness sync failed")
-        result.errors.append(f"wellness: {exc}")
+            well = sync_wellness(athlete, client)
+            result.wellness_days = well["days_written"]
+            if well.get("rate_limited"):
+                result.errors.append("Garmin rate-limited the wellness download; stopping early.")
+        except Exception as exc:  # noqa: BLE001 — activities already landed; keep them
+            logger.exception("wellness sync failed")
+            result.errors.append(f"wellness: {exc}")
 
     athlete.garmin_connected = True
     athlete.garmin_last_sync = timezone.now()

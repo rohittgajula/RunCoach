@@ -349,3 +349,14 @@ def run_reimport(athlete_id: int, garmin_activity_id: int) -> dict:
     except Exception as exc:  # noqa: BLE001
         return {"code": "queue", "detail": f"The Garmin queue did not answer in time "
                                            f"({type(exc).__name__}). Try again in a minute."}
+
+
+# --- R18 §A: full sync job ------------------------------------------------------------------
+
+@shared_task(name="ingest.full_sync")
+def full_sync(athlete_id: int, job_id: str) -> dict:
+    """One full (or run-check) sync job — see apps.ingest.sync_jobs."""
+    from .sync_jobs import run
+
+    result = run(athlete_id, job_id)
+    return {"athlete": athlete_id, "job": job_id, "phase": (result or {}).get("phase")}

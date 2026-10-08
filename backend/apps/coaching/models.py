@@ -186,6 +186,7 @@ class AIAnalysis(OwnedByAthlete):
         BRIEFING = "briefing", "Morning briefing"
         RUN_REVIEW = "run_review", "Post-run coach review"
         MONTHLY_CARD = "monthly_card", "Monthly report"
+        MEMORY_PARAM = "memory_param", "Memory fact parameters"
 
     kind = models.CharField(max_length=12, choices=Kind.choices, db_index=True)
     activity = models.ForeignKey(
@@ -260,6 +261,8 @@ class ChatMessage(models.Model):
     # R16 §B: an edit tool answered needs_confirmation in this turn — the UI shows
     # "Yes, do it / No" ({workout_id | week_start, date?, summary, increase_pct}).
     needs_confirmation = models.JSONField(null=True, blank=True)
+    # R18 §C: [{field, label, before_display, after_display, summary}] from update_profile.
+    profile_changed = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
@@ -292,9 +295,42 @@ class MemoryFact(OwnedByAthlete):
         ChatMessage, on_delete=models.SET_NULL, null=True, blank=True, related_name="memories"
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    # R18: the text the parameters were last parsed from ("" = never), and whether the
+    # AI fallback is still running for it.
+    params_text = models.CharField(max_length=300, blank=True, default="")
+    parse_pending = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
         return self.text[:60]
+
+
+class FactParameter(OwnedByAthlete):
+    """R18: one structured profile parameter read from a memory fact. The newest active
+    one (vs the explicit setting, by time) is the live value — apps.athletes.profile_params."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        REVIEW = "needs_review", "Needs review"
+        REJECTED = "rejected", "Rejected"
+
+    fact = models.ForeignKey(MemoryFact, on_delete=models.CASCADE, related_name="parameters")
+    key = models.CharField(max_length=24)
+    value = models.JSONField()
+    unit = models.CharField(max_length=10, blank=True, default="")
+    confidence = models.FloatField(default=1.0)
+    source = models.CharField(max_length=6, default="parser")      # parser|ai
+    needs_review = models.BooleanField(default=False)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
+    conflict = models.CharField(max_length=200, blank=True, default="")
+    effective_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-effective_at", "-id"]
+        indexes = [models.Index(fields=["athlete", "key"])]
+
+    def __str__(self):
+        return f"{self.key}={self.value}"

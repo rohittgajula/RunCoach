@@ -151,6 +151,22 @@ TOOLS = [
          "at": {"type": "string", "description": "ISO datetime, athlete local time; "
                 "omit for now"}},
         ["kind", "quantity"]),
+    # R18 §C: the athlete's settings (always confirmed by the athlete first).
+    _fn("update_profile",
+        "Change one of the athlete's settings when they explicitly ask: sleep_need_minutes "
+        "(minutes, or hours <= 12; null = Garmin's), usual_run_time (HH:MM), "
+        "loop_distance_km, available_days (weekdays 0=Monday), runs_per_week (2-6), "
+        "long_run_day (0-6) or injury_note. The first call returns needs_confirmation "
+        "(NOTHING saved): tell the athlete the change and any warnings and ask \"Do it "
+        "anyway?\"; only after they say yes in their next message call again with the same "
+        "field/value and confirmed=true.",
+        {"field": {"type": "string",
+                   "enum": ["sleep_need_minutes", "usual_run_time", "loop_distance_km",
+                            "available_days", "runs_per_week", "long_run_day", "injury_note"]},
+         "value": {"description": "The new value (see field)."},
+         "confirmed": {"type": "boolean",
+                       "description": "true only after the athlete agreed in their last message"}},
+        ["field", "value"]),
     _fn("add_memory", "Remember a durable fact about the athlete.",
         {"text": {"type": "string"}}, ["text"]),
     # R17 §10: illness mode.
@@ -198,6 +214,8 @@ class ToolRunner:
         self.plan_changed: list[dict] = []
         # R16 §B: the last edit that is waiting for the athlete's yes (or None).
         self.needs_confirmation: dict | None = None
+        # R18 §C: settings changed through update_profile in this turn.
+        self.profile_changed: list[dict] = []
 
     def _changed(self, workout_id: int, day, summary: str) -> None:
         self.plan_changed = [c for c in self.plan_changed if c["workout_id"] != workout_id]
@@ -549,9 +567,93 @@ class ToolRunner:
                                               for s in block.get("sessions", [])]},
                 "race_warning": (body.get("race_warning") or {}).get("text")}
 
+    def _previous_confirmation(self) -> dict | None:
+        """What the coach asked the athlete to confirm in its previous reply."""
+        from .models import ChatMessage
+
+        message = self.chat_message
+        if message is None or not getattr(message, "thread_id", None):
+            return None
+        previous = (ChatMessage.objects.filter(thread_id=message.thread_id,
+                                               role=ChatMessage.Role.ASSISTANT)
+                    .exclude(pk=message.pk).order_by("-created_at", "-id").first())
+        return previous.needs_confirmation if previous else None
+
+    def t_update_profile(self, field, value=None, confirmed=False):
+        from apps.athletes import profile_params as pp
+
+        if field not in pp.SETTING_KEYS:
+            return {"error": f"Unknown setting {field}."}
+        athlete = self.athlete
+        try:
+            value = pp.normalise_setting(field, value)
+            pp.validate_setting(athlete, field, value)
+        except (TypeError, ValueError) as exc:
+            return {"error": str(exc)}
+        label = pp.parser.LABELS.get(field, "Injury note")
+        current = pp.setting_display(athlete, field, current=True)
+        display = pp.setting_display(athlete, field, value)
+        summary = f"{label}: {current} \u2192 {display}"
+        warnings = _profile_warnings(athlete, field, value)
+        asked = self._previous_confirmation() or {}
+        agreed = (bool(confirmed) and asked.get("field") == field
+                  and asked.get("value") == value)
+        if not agreed:
+            self.needs_confirmation = {"field": field, "value": value, "label": label,
+                                       "summary": summary, "increase_pct": None}
+            return {"status": "needs_confirmation", "field": field, "label": label,
+                    "current_display": current, "display": display, "summary": summary,
+                    "warnings": warnings,
+                    "message": "NOTHING WAS SAVED. Tell the athlete exactly this change"
+                               + (" and the warnings" if warnings else "")
+                               + " and ask \"Do it anyway?\" (Yes/No). Only after they say yes "
+                               "in their next message, call update_profile again with the same "
+                               "field and value and confirmed=true."}
+        if current == display and field != "injury_note":
+            return {"status": "unchanged", "field": field, "display": display,
+                    "message": "That is already the setting."}
+        result = pp.apply_setting(athlete, field, value)
+        from apps.athletes.versioning import current as data_version
+
+        change = {"field": field, "label": label, "before_display": result["before"],
+                  "after_display": result["after"],
+                  "summary": f"{label}: {result['before']} \u2192 {result['after']}"}
+        self.profile_changed = [c for c in self.profile_changed if c["field"] != field]
+        self.profile_changed.append(change)
+        if (self.needs_confirmation or {}).get("field") == field:
+            self.needs_confirmation = None
+        return {"status": "updated", "field": field, "before": result["before"],
+                "after": result["after"], "display": display, "summary": change["summary"],
+                "warnings": warnings, "data_version": data_version(athlete.pk)}
+
     def t_add_memory(self, text):
         fact = add_fact(self.athlete, text, MemoryFact.Source.CHAT, self.chat_message)
         return {"saved": fact is not None}
+
+
+def _profile_warnings(athlete, field: str, value) -> list[str]:
+    from apps.athletes import profile_params as pp
+
+    out = []
+    if field == "sleep_need_minutes" and value and value < 7 * 60:
+        out.append("Most runners recover best with 7 h or more; a lower target hides real "
+                   "sleep debt.")
+    if field == "runs_per_week" and value:
+        now = athlete.runs_per_week or athlete.training_days_per_week
+        if now and value - now >= 2:
+            out.append(f"Going from {now} to {value} runs a week at once raises injury risk.")
+        days = sum(1 for v in (athlete.available_days or {}).values() if v)
+        if value > days:
+            out.append(f"You have only {days} run days set.")
+    if field == "available_days":
+        if not value.get(str(athlete.long_run_day)):
+            out.append("Your long-run day isn't one of these days — it will move.")
+    if field == "long_run_day" and not (athlete.available_days or {}).get(str(value)):
+        out.append("That day isn't one of your run days.")
+    if field in pp.KEYS and pp.resolve(athlete, field)["source"] == "memory":
+        out.append("Your coach memory also sets this; this change is newer, so it wins until "
+                   "that fact is edited.")
+    return out
 
 
 def add_fact(athlete, text: str, source: str, message=None, *, category: str | None = None,

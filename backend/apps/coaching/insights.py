@@ -244,8 +244,11 @@ def _summary(athlete: Athlete, today: dt.date) -> dict:
     tz = athlete.local_now.tzinfo
     if row is None or row.created_at.astimezone(tz).date() != today:
         return {"status": "none", "markdown": "", "generated_at": None}
+    from apps.athletes.versioning import is_stale
+
     return {"status": "ready", "markdown": (row.result or {}).get("markdown", ""),
-            "generated_at": row.created_at}
+            "generated_at": row.created_at,
+            "stale": is_stale(athlete.pk, row.created_at)}          # R18: data changed since
 
 
 def _bucket_series(payload: dict, freq: str) -> None:
@@ -342,8 +345,12 @@ def insights(request):
 
     athlete = request.user.athlete
     fresh = freshness_json(athlete)
-    return Response({**insights_payload(athlete, _period(request)), "as_of": fresh["as_of"],
-                     "freshness": fresh})
+    from apps.athletes.versioning import cached
+
+    period = _period(request)
+    payload = cached(athlete, "insights", lambda: insights_payload(athlete, period),
+                     request.query_params.urlencode())          # R18: keyed on data_version
+    return Response({**payload, "as_of": fresh["as_of"], "freshness": fresh})
 
 
 @api_view(["POST"])

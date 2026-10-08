@@ -234,9 +234,20 @@ class AthleteDetailView(generics.RetrieveUpdateAPIView):
         days_before = (athlete.available_days, athlete.long_run_day)
         runs_before = athlete.runs_per_week
         strength_before = athlete.strength_per_week
+        from .profile_params import SETTING_KEYS, _column, record_setting_change
+
+        settings_before = {k: _column(athlete, k) for k in SETTING_KEYS}
         with transaction.atomic():
             response = super().update(request, *args, **kwargs)
             athlete.refresh_from_db()
+            # R18: when an explicit setting changed (newer than a memory fact → it wins).
+            for key, before in settings_before.items():
+                after = _column(athlete, key)
+                if after != before:
+                    record_setting_change(athlete, key, after)
+            if any(_column(athlete, k) != v for k, v in settings_before.items()):
+                fresh = self.get_serializer(athlete).data
+                response.data.update({k: fresh[k] for k in ("sleep_need", "effective")})
             days_changed = (athlete.available_days, athlete.long_run_day) != days_before
             runs_changed = athlete.runs_per_week != runs_before
             reflowed = reflow_active_plan(athlete) if days_changed else None

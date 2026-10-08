@@ -161,8 +161,13 @@ def training_status(request):
 
 # --- B4 sleep -------------------------------------------------------------------------
 
-def _night(r) -> dict:
-    return {"date": r.metric_date, "sleep_s": r.sleep_seconds, "need_s": r.sleep_need_seconds,
+def _night(r, need: dict | None = None) -> dict:
+    from apps.athletes.effective import night_need_s
+
+    return {"date": r.metric_date, "sleep_s": r.sleep_seconds,
+            # R18: the athlete's own need (memory / setting) when set, else Garmin's.
+            "need_s": night_need_s(need, r.sleep_need_seconds) if need else r.sleep_need_seconds,
+            "garmin_need_s": r.sleep_need_seconds,
             "score": r.sleep_score, "deep_s": r.deep_sleep_seconds,
             "light_s": r.light_sleep_seconds, "rem_s": r.rem_sleep_seconds,
             "awake_s": r.awake_seconds,
@@ -207,16 +212,22 @@ def sleep_payload(athlete, period) -> dict:
     period = as_period(athlete, period)
     start, end = period.start, period.end
     prev_start, prev_end = period.compare_start, period.compare_end
-    nights = [_night(r) for r in metrics_rows(athlete, start, end) if _has_sleep(r)]
-    previous = [_night(r) for r in metrics_rows(athlete, prev_start, prev_end) if _has_sleep(r)]
-    recent = [_night(r) for r in metrics_rows(athlete, end - dt.timedelta(days=6), end)
+    from apps.athletes.effective import sleep_need
+
+    need_info = sleep_need(athlete)
+    nights = [_night(r, need_info) for r in metrics_rows(athlete, start, end) if _has_sleep(r)]
+    previous = [_night(r, need_info) for r in metrics_rows(athlete, prev_start, prev_end)
+                if _has_sleep(r)]
+    recent = [_night(r, need_info) for r in metrics_rows(athlete, end - dt.timedelta(days=6), end)
               if _has_sleep(r)]
 
     debt = sleep_maths.debt([(n["sleep_s"], n["need_s"]) for n in recent])
     hours = {n["date"]: n["sleep_s"] / 3600 for n in nights if n["sleep_s"]}
     runs = _runs(athlete, start, end)
     pairs = [(hours.get(day), values.get("easy_hr")) for day, values in runs.items()]
-    need = debt["need_s"] or sleep_maths.median([n["need_s"] for n in recent])
+    need = (need_info["seconds"] if need_info["source"] in ("memory", "user")
+            else debt["need_s"] or sleep_maths.median([n["need_s"] for n in recent])
+            or need_info["seconds"])
     digits = {"*": 0, "breathing_rate": 1, "spo2_avg": 1, "bedtime_h": 2, "wake_h": 2}
     return {
         **period.ranged(),
@@ -230,6 +241,7 @@ def sleep_payload(athlete, period) -> dict:
         "sleep_vs_runs": sleep_maths.sleep_vs_runs(pairs),
         "tonight": sleep_maths.tonight([n["wake_dt"] for n in recent],
                                        round(need) if need else None),
+        "need": need_info,                                   # R18
     }
 
 

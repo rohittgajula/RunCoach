@@ -60,6 +60,11 @@ def _planned(athlete, day: dt.date):
 
 
 def _run_time(athlete, row) -> tuple[int | None, str | None]:
+    from apps.athletes.effective import usual_run_minute
+
+    usual = usual_run_minute(athlete)                # R18: the profile (memory / setting)
+    if usual is not None:
+        return usual, "usual"
     if row.run_time:
         return maths.minutes(row.run_time), "setting"
     zone = zone_of(athlete)
@@ -76,7 +81,10 @@ def wake_plan(athlete, day: dt.date) -> dict:
     recent = list(DailyMetrics.objects.filter(
         athlete=athlete, metric_date__gt=today - dt.timedelta(days=7), metric_date__lte=today))
     habit = median([minutes_of_day(r.sleep_end_local) for r in recent if r.sleep_end_local])
-    need = median([r.sleep_need_seconds for r in recent if r.sleep_need_seconds])
+    from apps.athletes.effective import sleep_need
+
+    need_info = sleep_need(athlete)                  # R18: memory / setting > Garmin > 8 h
+    need = need_info["seconds"] if need_info["source"] != "default" else None
     workout = _planned(athlete, day)
     run_time, run_source = _run_time(athlete, row)
     planned = maths.plan(run_planned=workout is not None, run_time=run_time,
@@ -94,7 +102,9 @@ def wake_plan(athlete, day: dt.date) -> dict:
                 "title": workout.title if workout else None,
                 "kind": workout.kind if workout else None,
                 "run_time": maths.clock(run_time), "run_time_source": run_source},
-        "need_s": planned["need_s"], "need_source": planned["need_source"],
+        "need_s": planned["need_s"],
+        "need_source": {"memory": "user", "user": "user"}.get(need_info["source"],
+                                                              planned["need_source"]),
         "wake_time": maths.clock(planned["wake"]), "wake_source": planned["wake_source"],
         "bedtime": maths.clock(planned["bedtime"]),
         "bedtime_reminder_at": maths.clock(planned["reminder"]),
@@ -124,7 +134,9 @@ def wake_plan_view(request):
             raise BadRequest("date must be between today and 7 days ahead.")
     else:
         day = today + dt.timedelta(days=1)
-    return Response(wake_plan(athlete, day))
+    from apps.athletes.versioning import cached
+
+    return Response(cached(athlete, "wake_plan", lambda: wake_plan(athlete, day), day))  # R18
 
 
 @api_view(["GET"])

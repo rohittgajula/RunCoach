@@ -23,6 +23,17 @@ class GarminThrottle(FixedScopeThrottle):
     scope = "garmin"
 
 
+class GarminSyncThrottle(GarminThrottle):
+    """R18: auto POSTs are limited by the server-side guard (30 min, 5 min run-aware),
+    not by the 10/hour bucket — a run-aware poll would otherwise use it up."""
+
+    def allow_request(self, request, view):
+        data = request.data if isinstance(request.data, dict) else {}
+        if data.get("auto") is True or str(data.get("auto")).lower() in ("1", "true"):
+            return True
+        return super().allow_request(request, view)
+
+
 class GarminConnectThrottle(FixedScopeThrottle):
     """Per client IP, not per user: each attempt is a real Garmin login, and one
     person cycling through accounts should not get a fresh bucket per account."""
@@ -74,7 +85,7 @@ def garmin_disconnect_view(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@throttle_classes([GarminThrottle])
+@throttle_classes([GarminSyncThrottle])
 def garmin_sync_view(request):
     from .sync_status import AlreadyRunning, auto_skip_reason, status_json, sync_lock
 
@@ -86,18 +97,32 @@ def garmin_sync_view(request):
         limit = 20
     # R16 §C: the app's auto-sync. Never calls Garmin when it shouldn't; always 200.
     auto = data.get("auto") is True or str(data.get("auto")).lower() in ("1", "true")
+    full = data.get("full") is True or str(data.get("full")).lower() in ("1", "true")
     if auto:
         reason = auto_skip_reason(athlete)
         if reason:
             return Response({"skipped": reason, "status": status_json(athlete)})
+        # R18 §A: the same job path as a full refresh, throttled (and run-aware).
+        from .sync_jobs import start
+        from .sync_status import auto_mode
+
+        mode = auto_mode(athlete)
+        job, deduped = start(athlete, "run_check" if mode == "run_check" else "auto")
+        return Response({"job_id": job.get("id"), "deduped": deduped, "mode": mode,
+                         "status": status_json(athlete)})
+    if full:
+        return _full_sync(athlete)
 
     try:
         with sync_lock(athlete):
             result = sync_athlete(athlete, limit=limit).as_dict()
         if not any("rate-limited" in e for e in result.get("errors", [])):
-            from .tasks import queue_slow
+            from .tasks import queue_intraday, queue_slow
 
             queue_slow(athlete)          # R10 §B: on the garmin queue
+            # R18 root cause 1: intraday used to refresh only after the scheduled morning
+            # sync — every sync now refreshes today + yesterday.
+            queue_intraday(athlete)
         athlete.refresh_from_db(fields=["garmin_last_sync", "garmin_connected"])
         return Response({**result, "status": status_json(athlete)})
     except AlreadyRunning as exc:
@@ -108,6 +133,26 @@ def garmin_sync_view(request):
         return Response({"detail": str(exc)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
     except GarminAuthError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+def _full_sync(athlete):
+    """R18 §A: POST /garmin/sync/ {full: true} → 202 {job_id, deduped, mode, status}."""
+    from .sync_jobs import active_job_id, start
+    from .sync_status import is_running, status_json
+    from .tasks import garmin_blocked
+
+    if not athlete.garmin_connected:
+        return Response({"detail": "Connect your Garmin account first."},
+                        status=status.HTTP_400_BAD_REQUEST)
+    if garmin_blocked():
+        return Response({"detail": "Garmin is rate-limiting this server — try again later.",
+                         "status": status_json(athlete)},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS)
+    if is_running(athlete) and not active_job_id(athlete.pk):
+        return Response({"detail": "A sync is already running."}, status=status.HTTP_409_CONFLICT)
+    job, deduped = start(athlete, "full")
+    return Response({"job_id": job.get("id"), "deduped": deduped, "mode": "full",
+                     "status": status_json(athlete)}, status=status.HTTP_202_ACCEPTED)
 
 
 @api_view(["GET"])

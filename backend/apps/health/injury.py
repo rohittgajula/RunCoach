@@ -112,7 +112,8 @@ def pain_signal(athlete, day: dt.date | None = None) -> dict | None:
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def injury(request):
-    return Response(injury_payload(request.user.athlete))
+    athlete = request.user.athlete
+    return Response({**injury_payload(athlete), "athlete_note": athlete.injury_note or ""})
 
 
 def _bad(message: str) -> Response:

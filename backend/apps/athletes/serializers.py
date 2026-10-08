@@ -32,6 +32,33 @@ class AthleteSerializer(serializers.ModelSerializer):
     # R14
     today_layout = serializers.JSONField(allow_null=True, required=False)
 
+    # R18 §B
+    sleep_need_minutes = serializers.IntegerField(min_value=240, max_value=720, allow_null=True,
+                                                  required=False)
+    usual_run_time = serializers.TimeField(format="%H:%M", input_formats=["%H:%M", "%H:%M:%S"],
+                                           allow_null=True, required=False)
+    loop_distance_km = serializers.FloatField(min_value=0.1, max_value=50, allow_null=True,
+                                              required=False)
+    injury_note = serializers.CharField(max_length=200, allow_blank=True, required=False)
+    sleep_need = serializers.SerializerMethodField()
+    data_version = serializers.SerializerMethodField()
+    effective = serializers.SerializerMethodField()
+
+    def get_effective(self, athlete):
+        from .profile_params import all_effective
+
+        return {e["key"]: e["value"] for e in all_effective(athlete)}
+
+    def get_sleep_need(self, athlete):
+        from .effective import sleep_need
+
+        return sleep_need(athlete)
+
+    def get_data_version(self, athlete):
+        from .versioning import current
+
+        return current(athlete.pk)
+
     def validate_today_layout(self, value):
         import re
 
@@ -143,12 +170,16 @@ class AthleteSerializer(serializers.ModelSerializer):
             "caffeine_on_today", "pain_daily_check", "savings_goal_name", "savings_goal_amount",
             # R14
             "today_layout", "weather_auto_apply",
+            # R18
+            "sleep_need_minutes", "usual_run_time", "loop_distance_km", "injury_note",
+            "sleep_need", "data_version", "effective",
         ]
         # System-managed. A client that could PATCH garmin_connected=True could make
         # the UI claim sync works when it does not.
         read_only_fields = [
             "id", "garmin_connected", "garmin_last_sync", "created_at", "updated_at",
             "zones", "location_lat", "location_lon", "location_name", "location_source",
+            "sleep_need", "data_version", "effective",
         ]
 
     def validate_timezone(self, value):

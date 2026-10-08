@@ -58,6 +58,8 @@ def message_json(athlete, message: ChatMessage) -> dict:
         # R16 §B: the "Plan updated" chip.
         "plan_changed": message.plan_changed or [],
         "needs_confirmation": message.needs_confirmation,
+        # R18 §C: settings changed through update_profile.
+        "profile_changed": message.profile_changed or [],
     }
 
 
@@ -126,18 +128,25 @@ def messages(request, pk: int):
     return Response({"user": message_json(athlete, user),
                      "assistant": message_json(athlete, assistant),
                      "plan_changed": assistant.plan_changed or [],
-                     "needs_confirmation": assistant.needs_confirmation})
+                     "needs_confirmation": assistant.needs_confirmation,
+                     "profile_changed": assistant.profile_changed or []})
 
 
-def fact_json(fact: MemoryFact) -> dict:
+def fact_json(fact: MemoryFact, applied: set | None = None) -> dict:
     from analysis.memory_facts import CATEGORIES
+    from apps.athletes.profile_params import applied_parameter_ids, parameter_json
 
     category = fact.category if fact.category in CATEGORIES else "other"
+    if applied is None:
+        applied = applied_parameter_ids(fact.athlete)
     return {"id": fact.pk, "text": fact.text, "category": category,
             "category_label": CATEGORIES[category],
             "source": "app" if fact.source == MemoryFact.Source.MANUAL else fact.source,
             "pinned": fact.pinned, "created_at": fact.created_at,
-            "updated_at": fact.updated_at or fact.created_at, "edited": fact.edited}
+            "updated_at": fact.updated_at or fact.created_at, "edited": fact.edited,
+            # R18: what this fact sets (memory is the live source of these parameters).
+            "parameters": [parameter_json(p, applied) for p in fact.parameters.all()],
+            "parse_pending": fact.parse_pending}
 
 
 PRIVATE_DETAIL = "The private habit is never stored in the coach's memory."
@@ -196,7 +205,10 @@ def memory(request):
         fact = add_fact(athlete, fields["text"], MemoryFact.Source.MANUAL,
                         category=fields.get("category"), pinned=fields.get("pinned", False))
         return Response(fact_json(fact), status=status.HTTP_201_CREATED)
-    facts = [fact_json(f) for f in _ordered(athlete)]
+    from apps.athletes.profile_params import applied_parameter_ids
+
+    applied = applied_parameter_ids(athlete)        # also parses facts never parsed
+    facts = [fact_json(f, applied) for f in _ordered(athlete).prefetch_related("parameters")]
     if str(request.query_params.get("grouped", "")).lower() in ("1", "true"):
         return Response({"count": len(facts), "pinned": sum(1 for f in facts if f["pinned"]),
                          "groups": [{"key": key, "label": CATEGORIES[key],
@@ -232,3 +244,42 @@ def memory_delete(request, pk: int):
         return Response(fact_json(fact))
     fact.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def fact_parameter(request, pk: int, pid: int):
+    """R18: confirm or reject one parsed parameter of a memory fact."""
+    from apps.athletes.profile_params import parameter_json, resolve, sync_plan_fields
+    from django.utils import timezone
+
+    from .models import FactParameter
+
+    athlete = request.user.athlete
+    param = FactParameter.objects.filter(athlete=athlete, fact_id=pk, pk=pid).first()
+    if param is None:
+        return Response({"detail": "Not found."}, status=404)
+    action = (request.data or {}).get("action") if isinstance(request.data, dict) else None
+    if action not in ("confirm", "reject"):
+        return Response({"detail": "action must be confirm or reject."}, status=400)
+    if action == "confirm":
+        param.status, param.needs_review = FactParameter.Status.ACTIVE, False
+        param.conflict, param.effective_at = "", timezone.now()
+    else:
+        param.status, param.needs_review = FactParameter.Status.REJECTED, False
+    param.save()
+    sync_plan_fields(athlete, force_param_ids=(param.pk,) if action == "confirm" else ())
+    param.refresh_from_db()
+    athlete.refresh_from_db()
+    effective = resolve(athlete, param.key)
+    return Response({"parameter": parameter_json(param, {effective["parameter_id"]}),
+                     "effective": effective})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def profile_effective(request):
+    """R18: every profile parameter's effective value and where it comes from."""
+    from apps.athletes.profile_params import effective_json
+
+    return Response(effective_json(request.user.athlete))

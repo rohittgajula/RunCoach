@@ -102,6 +102,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # R18 §B: data_version on mutation responses + X-Data-Version.
+    "config.middleware.DataVersionMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -413,6 +415,8 @@ AI_MODEL_TIERS = {
     # pass after every reply; meal estimates need vision but not deep reasoning.
     "chat": "coach",
     "memory_extract": "lite",
+    # R18: structured parameters from a memory fact the parser could not read.
+    "memory_params": "lite",
     "meal_estimate": "fast",
     # R6: the per-workout review and the Insights overview are the coach's voice.
     "workout_review": "coach",

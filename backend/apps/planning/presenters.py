@@ -95,7 +95,31 @@ def workout_json(workout: PlannedWorkout, guard_inputs: dict | None = None) -> d
         # R17 §10: illness mode.
         "paused_by_illness": workout.paused_by_illness,
         "illness_return": workout.illness_return,
+        # R18 §B: estimated km and "≈ N loops" for time-based sessions.
+        "distance_estimate": distance_estimate(workout),
     }
+
+
+WALK_PACE_S_PER_KM = 600
+
+
+def distance_estimate(workout: PlannedWorkout) -> dict | None:
+    from apps.athletes.effective import loop_distance_km
+    from apps.athletes.versioning import cached
+    from planning import edit as rules
+
+    if workout.kind in ("REST", "STRENGTH") or not workout.steps:
+        return None
+    athlete = workout.athlete
+    run, walk = rules.run_s(workout.steps), rules.walk_s(workout.steps)
+    pace = ((athlete.easy_pace_min or 600) + (athlete.easy_pace_max or 645)) / 2
+    km = run / pace + walk / WALK_PACE_S_PER_KM
+    if km <= 0:
+        return None
+    loop = cached(athlete, "loop_km", lambda: loop_distance_km(athlete) or 0) or None
+    km = round(km, 1)
+    return {"km": km, "loops": round(km / loop, 1) if loop else None,
+            "loop_km": loop}
 
 
 def edit_fields(workout: PlannedWorkout, today: dt.date | None = None) -> dict:

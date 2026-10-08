@@ -146,7 +146,10 @@ def heart(request):
     athlete = request.user.athlete
     period = parse_period(request, athlete, "3m", extra={"all": 730})
     ref_hr, ref_pace = references(request, athlete)
-    return Response(payload(athlete, period, ref_hr, ref_pace))
+    from apps.athletes.versioning import cached
+
+    return Response(cached(athlete, "heart", lambda: payload(athlete, period, ref_hr, ref_pace),
+                           request.query_params.urlencode(), ref_hr, ref_pace))   # R18
 
 
 # --- weather at run time -------------------------------------------------------------------

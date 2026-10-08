@@ -127,7 +127,8 @@ def day_input(athlete, day: dt.date, *, row: IntradayDay | None = None,
         for d in sorted(set(intraday) | set(daily)):
             iv = intraday.get(d) or {}
             dm = daily.get(d)
-            inp.step_history[d] = iv.get("steps_total") or (dm.steps if dm else None)
+            totals = [v for v in (iv.get("steps_total"), dm.steps if dm else None) if v]
+            inp.step_history[d] = max(totals) if totals else None
             goal = iv.get("step_goal") or (stats_summary(dm).get("step_goal") if dm else None)
             inp.goal_history[d] = goal
             inp.awake_hr_history[d] = iv.get("awake_hr_avg")
@@ -212,7 +213,9 @@ def day_rows(athlete, start: dt.date, end: dt.date) -> list[dict]:
             row.update({k: getattr(r, k) for k in DAY_KEYS if k != "steps"})
             row["steps"] = r.steps_total
         if m is not None:
-            row["steps"] = row["steps"] if row["steps"] is not None else m.steps
+            # R18: Garmin's daily total can be newer than the stored aggregate.
+            row["steps"] = max((v for v in (row["steps"], m.steps) if v is not None),
+                               default=None)
             row["stress_avg"] = row["stress_avg"] if row["stress_avg"] is not None else m.stress_avg
         rows.append(row)
     return rows

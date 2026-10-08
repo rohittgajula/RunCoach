@@ -169,6 +169,18 @@ class Athlete(models.Model):
     # AI_MONTHLY_CALL_BUDGET). Never writable through the athlete API.
     ai_call_budget = models.PositiveIntegerField(null=True, blank=True)
 
+    # R18 §B: profile = the single source of truth. Read through apps.athletes.effective.
+    sleep_need_minutes = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Override of Garmin's sleep need (null = Garmin's).")
+    usual_run_time = models.TimeField(null=True, blank=True)
+    loop_distance_km = models.FloatField(null=True, blank=True,
+                                         help_text="One lap of the athlete's usual loop.")
+    injury_note = models.CharField(max_length=200, blank=True, default="")
+    # {field: {"value": ..., "at": iso|null}} — the explicit setting and when it changed
+    # (apps.athletes.profile_params). For available_days / long_run_day / runs_per_week the
+    # columns hold the effective value, so the explicit one is kept here.
+    profile_settings = models.JSONField(default=dict, blank=True)
+
     # Whether the athlete has been through onboarding. Needed as an explicit flag
     # rather than inferred: the router has to decide where a freshly-registered
     # athlete lands, and racing a redirect against a state update silently skipped

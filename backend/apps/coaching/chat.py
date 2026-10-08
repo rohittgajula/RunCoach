@@ -56,6 +56,15 @@ asks for it, and never after reported pain or illness.
 (find ids in the context or with get_workouts). Up to +20 % more running per session \
 applies directly. If a tool returns needs_confirmation, NOTHING was saved: tell the athlete \
 exactly what would change and ask; call again with confirmed=true only after they agree.
+- The athlete is in charge. When they explicitly ask to change their plan, a workout or \
+a setting, CALL THE TOOL (edit_workout, edit_week, move_workout, update_profile …) — never \
+refuse outright. If it returns warnings or needs_confirmation, explain the risk in a \
+sentence or two and ask "Do it anyway?" (Yes/No). Increases follow the same rule: up to \
++20 % applies directly, more needs their yes.
+- Settings (sleep need, usual run time, loop distance, run days, runs per week, long-run \
+day, injury note): change them only with update_profile, which always asks the athlete to \
+confirm first. Memory facts like "I need 7 h of sleep" already set the athlete's values \
+(see `athlete.settings`, with their source).
 - Honesty rule: never say a workout or the plan was changed, moved, updated or sent to the \
 watch unless a tool call in THIS turn succeeded (status "updated", or move/skip/clear without \
 an error). If a tool returned an error or needs_confirmation, say plainly it was not changed. \
@@ -71,6 +80,7 @@ def _fmt_pace(seconds) -> str | None:
 
 
 def system_prompt(athlete: Athlete) -> str:
+    from apps.athletes.profile_params import all_effective
     from apps.diet.services import diet_day
 
     from .context import history_summary
@@ -97,6 +107,10 @@ def system_prompt(athlete: Athlete) -> str:
             "available_days": [d for d in range(7) if athlete.is_available(d)],
             "long_run_day": athlete.long_run_day,
             "diet_goal": athlete.diet_goal,
+            # R18: effective settings (memory fact / app setting / Garmin / default).
+            "settings": {e["key"]: {"value": e["display"], "source": e["source"]}
+                         for e in all_effective(athlete)},
+            "injury_note": athlete.injury_note or None,
         },
         "races": upcoming_races(athlete),
         # R17 §16: pinned facts always, then the newest others (≤ 40 in all).
@@ -221,7 +235,10 @@ def run_turn(thread: ChatThread, content: str, attachments: list[dict]):
 
     try:
         text, audit = call(messages)
+        text, audit, refusal = refusal_guard(athlete, messages, content, text, audit, call)
         text, audit, assistant.guard = honesty_guard(athlete, messages, text, audit, call)
+        if refusal:
+            assistant.guard = {**(assistant.guard or {}), "refusal": refusal}
         assistant.content = text or "Done."
         assistant.status = ChatMessage.Status.DONE
         assistant.tool_calls = json.loads(json.dumps(audit, default=str))
@@ -238,6 +255,7 @@ def run_turn(thread: ChatThread, content: str, attachments: list[dict]):
     assistant.attachments = runner.attachments
     assistant.plan_changed = runner.plan_changed
     assistant.needs_confirmation = runner.needs_confirmation
+    assistant.profile_changed = runner.profile_changed
     assistant.save()
     thread.save(update_fields=["updated_at"])
 
@@ -249,6 +267,32 @@ def run_turn(thread: ChatThread, content: str, attachments: list[dict]):
         except Exception as exc:  # noqa: BLE001 — memory is a bonus; the reply is not lost
             logger.warning("could not queue memory extraction: %s", exc)
     return user, assistant
+
+
+def refusal_guard(athlete, messages, request: str, text, audit, call):
+    """R18 §C: an explicit change request turned down without a tool call gets one
+    re-prompt to call the tool and present warnings + a confirmation instead.
+    Returns (text, audit, record | None)."""
+    from . import honesty
+
+    if not honesty.explicit_change_request(request) or honesty.change_tool_called(audit):
+        return text, audit, None
+    sentence = honesty.declined(text)
+    if not sentence:
+        return text, audit, None
+    record = {"fired": True, "declined": sentence, "outcome": None}
+    logger.warning("refusal guard: athlete %s, reply declined an explicit request: %r",
+                   athlete.pk, sentence)
+    conversation = [*messages, {"role": "assistant", "content": text},
+                    {"role": "user", "content": honesty.refusal_reprompt()}]
+    try:
+        second, more = call(conversation)
+    except Exception as exc:  # noqa: BLE001 — keep the first answer
+        record.update(outcome="reprompt_failed", reprompt_error=type(exc).__name__)
+        return text, audit, record
+    record["outcome"] = "tool_called" if honesty.change_tool_called(more) else "still_declined"
+    logger.warning("refusal guard outcome for athlete %s: %s", athlete.pk, record["outcome"])
+    return second or text, [*audit, *more], record
 
 
 def honesty_guard(athlete, messages, text, audit, call):

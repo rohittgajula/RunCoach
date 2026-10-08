@@ -333,7 +333,26 @@ def sync_wellness(athlete: Athlete, client, days: int | None = None) -> dict:
             if len(fields) > 1:
                 _upsert(athlete, today, fields)
 
+    refresh_intraday_totals(athlete, [today - dt.timedelta(days=i) for i in range(min(days, 2))])
     return {"days_written": written, "days_empty": empty, "rate_limited": rate_limited}
+
+
+def refresh_intraday_totals(athlete: Athlete, days: list[dt.date]) -> int:
+    """R18 root cause 2: IntradayDay aggregates (steps_total, step goal, active minutes …)
+    were only computed when intraday was stored, from the DailyMetrics of that moment —
+    a later wellness sync left today's totals stale. Recompute them after every wellness
+    write."""
+    from .garmin_intraday import refresh_aggregates
+    from .models import IntradayDay
+
+    count = 0
+    for row in IntradayDay.objects.filter(athlete=athlete, day__in=days):
+        try:
+            refresh_aggregates(row)
+            count += 1
+        except Exception:  # noqa: BLE001 — totals are a convenience, never fail a sync
+            logger.exception("refreshing intraday totals failed for %s %s", athlete.pk, row.day)
+    return count
 
 
 def backfill_from_raw(athlete: Athlete | None = None) -> int:

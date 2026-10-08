@@ -46,7 +46,10 @@ def day_summary(request):
 
     athlete = request.user.athlete
     fresh = freshness_json(athlete)
-    return Response({**summary_json(athlete), "as_of": fresh["as_of"], "freshness": fresh})
+    from apps.athletes.versioning import cached
+
+    body = cached(athlete, "day_summary", lambda: summary_json(athlete))   # R18
+    return Response({**body, "as_of": fresh["as_of"], "freshness": fresh})
 
 
 @api_view(["GET"])

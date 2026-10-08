@@ -22,7 +22,7 @@ from apps.activities.models import Activity
 from apps.athletes.models import Athlete
 
 from .client import AIUnavailable
-from .models import AIAnalysis
+from .models import AIAnalysis, MemoryFact
 from .services import BudgetExceeded, analyse_run, weekly_review
 
 logger = logging.getLogger(__name__)
@@ -214,3 +214,29 @@ def check_models(provider: str, models: list[str]) -> dict:
     from .model_list import run_check
 
     return run_check(provider, list(models or []))
+
+
+@shared_task(name="coaching.parse_fact_params_ai")
+def parse_fact_params_ai(fact_id: int, text: str) -> dict:
+    """R18: the AI fallback for one memory fact (only when the parser found nothing)."""
+    from apps.athletes.profile_params import store_ai_params
+
+    from .client import AIUnavailable
+    from .services import BudgetExceeded, extract_fact_params
+
+    fact = MemoryFact.objects.filter(pk=fact_id).select_related("athlete").first()
+    if fact is None or fact.text != text:
+        return {"skipped": "changed"}
+    try:
+        result, _cached = extract_fact_params(fact.athlete, text)
+    except (AIUnavailable, BudgetExceeded) as exc:
+        MemoryFact.objects.filter(pk=fact_id).update(parse_pending=False)
+        return {"skipped": str(exc)[:100]}
+    items = []
+    for p in result.parameters:
+        value = (p.time if p.key == "usual_run_time" else p.days if p.key == "available_days"
+                 else p.number)
+        if value is not None:
+            items.append({"key": p.key, "value": value, "confidence": p.confidence})
+    rows = store_ai_params(fact, text, items)
+    return {"fact": fact_id, "parameters": len(rows)}

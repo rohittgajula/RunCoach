@@ -149,3 +149,26 @@ class ShortParagraph(BaseModel):
     morning briefing."""
 
     markdown: str = Field(description="One short markdown paragraph, as long as asked.")
+
+
+class FactParamItem(BaseModel):
+    """R18: one profile parameter stated in a memory fact."""
+
+    model_config = {"extra": "forbid"}
+
+    key: Literal["sleep_need_minutes", "usual_run_time", "loop_distance_km",
+                 "available_days", "long_run_day", "runs_per_week"]
+    number: float | None = Field(description="sleep_need_minutes (minutes), loop_distance_km "
+                                             "(km), long_run_day (0=Monday), runs_per_week; "
+                                             "else null.")
+    time: str | None = Field(description="usual_run_time as 24-hour HH:MM, else null.")
+    days: list[int] | None = Field(description="available_days as weekdays 0=Monday..6, "
+                                               "else null.")
+    confidence: float = Field(ge=0.0, le=1.0, description="How clearly the fact states a "
+                                                           "lasting setting (not a one-off).")
+
+
+class FactParams(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    parameters: list[FactParamItem]

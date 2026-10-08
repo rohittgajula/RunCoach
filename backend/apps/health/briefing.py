@@ -78,8 +78,9 @@ def compute(athlete) -> dict:
     injury = _safe(lambda: injury_payload(athlete), {"risk": "low", "flags": []})
     injury_text = injury["flags"][0]["text"] if injury["flags"] else None
     sleep_h = (metrics.sleep_seconds / 3600) if metrics and metrics.sleep_seconds else None
-    need_h = (metrics.sleep_need_seconds / 3600) if metrics and metrics.sleep_need_seconds \
-        else None
+    from apps.athletes.effective import sleep_need
+
+    need_h = sleep_need(athlete)["seconds"] / 3600        # R18: one helper everywhere
     drinks = sum(HabitLog.objects.filter(athlete=athlete, kind="alcohol",
                                          local_date=today - dt.timedelta(days=1))
                  .values_list("quantity", flat=True)) or None
@@ -176,7 +177,8 @@ def briefing_json(athlete, row: MorningBriefing | None) -> dict:
              "wake_time": f"{wake // 60:02d}:{wake % 60:02d}" if wake is not None else None,
              "greeting": maths.greeting(athlete.display_name), "readiness": None,
              "checkin": None, "session": None, "weather": None, "fuel": None, "focus": None,
-             "notes": [], "ai": {"status": "none", "text": "", "generated_at": None},
+             "notes": [], "ai": {"status": "none", "text": "", "generated_at": None,
+                    "stale": False},
              "illness": None}
     if row is None:
         return empty
@@ -186,8 +188,15 @@ def briefing_json(athlete, row: MorningBriefing | None) -> dict:
             "checkin": p.get("checkin"), "session": p.get("session"),
             "weather": p.get("weather"), "fuel": p.get("fuel"), "focus": p.get("focus"),
             "notes": p.get("notes", []), "illness": p.get("illness"),
-            "ai": ({"status": "ready", "text": row.ai_text, "generated_at": row.ai_generated_at}
+            "ai": ({"status": "ready", "text": row.ai_text, "generated_at": row.ai_generated_at,
+                    "stale": _ai_stale(athlete, row)}
                    if row.ai_text else empty["ai"])}
+
+
+def _ai_stale(athlete, row) -> bool:
+    from apps.athletes.versioning import is_stale
+
+    return is_stale(athlete.pk, row.ai_generated_at)
 
 
 @api_view(["GET"])

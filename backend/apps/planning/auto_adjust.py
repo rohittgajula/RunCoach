@@ -106,7 +106,11 @@ def context_for(athlete, today: dt.date, zones=None) -> adapt.Context:
         athlete=athlete, metric_date__gt=today - dt.timedelta(days=8), metric_date__lte=today,
     ).order_by("metric_date"))
     todays = next((r for r in rows if r.metric_date == today), None)
-    sleep = debt([(r.sleep_seconds, r.sleep_need_seconds) for r in rows])
+    from apps.athletes.effective import night_need_s, sleep_need
+
+    need_info = sleep_need(athlete)                  # R18: one helper everywhere
+    sleep = debt([(r.sleep_seconds, night_need_s(need_info, r.sleep_need_seconds))
+                  for r in rows])
     drinks = HabitLog.objects.filter(athlete=athlete, kind="alcohol",
                                      local_date=today - dt.timedelta(days=1)) \
         .aggregate(total=Sum("quantity"))["total"]

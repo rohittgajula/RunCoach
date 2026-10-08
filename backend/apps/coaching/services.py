@@ -367,3 +367,26 @@ def checkin_explanation(athlete: Athlete, payload: dict) -> str:
         schema=CheckinExplanation,
     )
     return result.text
+
+
+FACT_PARAMS_USER = (
+    "A runner's coach memory holds this fact:\n\"{text}\"\n\n"
+    "List the lasting profile settings it states, if any: sleep need, usual run time, "
+    "loop/route distance, the days they can run, their long-run day, runs per week. "
+    "Only what the fact says; nothing else. A one-off event (\"slept 5 h last night\") is "
+    "not a setting — give it confidence below 0.5. Empty list when nothing applies.")
+
+
+def extract_fact_params(athlete: Athlete, text: str):
+    """R18: AI fallback for memory facts the parser could not read (lite tier, cached per
+    fact text through AIAnalysis)."""
+    from .schemas import FactParams
+
+    return _run(
+        athlete,
+        kind=AIAnalysis.Kind.MEMORY_PARAM,
+        operation="memory_params",
+        payload={"fact": text},
+        user_prompt=FACT_PARAMS_USER.format(text=text),
+        schema=FactParams,
+    )

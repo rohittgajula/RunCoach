@@ -61,8 +61,13 @@ def forecast_payload(athlete) -> dict:
     chronic = sum(loads.get(today - dt.timedelta(days=i), 0.0) for i in range(28)) / 28
 
     week = [r for r in rows if r.metric_date >= today - dt.timedelta(days=6)]
-    debt = sleep_maths.debt([(r.sleep_seconds, r.sleep_need_seconds) for r in week])
-    need = debt["need_s"] or sleep_maths.median([r.sleep_need_seconds for r in week])
+    from apps.athletes.effective import night_need_s, override_s, sleep_need
+
+    need_info = sleep_need(athlete)                  # R18: one helper everywhere
+    debt = sleep_maths.debt([(r.sleep_seconds, night_need_s(need_info, r.sleep_need_seconds))
+                             for r in week])
+    need = (override_s(need_info) or debt["need_s"]
+            or sleep_maths.median([r.sleep_need_seconds for r in week]))
     tonight = sleep_maths.tonight([r.sleep_end_local for r in week], round(need) if need else None)
     late = False
     if tonight["bedtime"]:
@@ -106,4 +111,8 @@ def forecast_payload(athlete) -> dict:
 def readiness_forecast(request):
     from django.utils import timezone
 
-    return Response({**forecast_payload(request.user.athlete), "as_of": timezone.now()})
+    from apps.athletes.versioning import cached
+
+    athlete = request.user.athlete
+    body = cached(athlete, "forecast", lambda: forecast_payload(athlete))   # R18
+    return Response({**body, "as_of": timezone.now()})
