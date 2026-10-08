@@ -3206,3 +3206,34 @@ move_workout, skip_workout, clear_day, update_profile, set_illness, recover_illn
 propose_plan — a needs_confirmation result counts as a call), the model is re-prompted once
 to call the tool and present warnings + a confirmation instead. Logged and stored on
 `ChatMessage.guard` (`{"refusal": {...}}`, not in the API).
+
+### R18 backend choices
+- `data_version` lives in the shared cache (seeded from wall-clock ms, so a flushed Redis
+  never repeats an old value); bumped by a global post_save/post_delete signal on every
+  athlete-owned model (logs, AI outputs, briefings, reports and push bookkeeping excluded)
+  — immediately and again on commit — plus by the middleware on mutating requests (auth, AI
+  generation, admin and sync-trigger endpoints excluded). Derived caches use
+  `versioning.cached(athlete, name, fn, *parts)` (key: athlete, version, local date, name,
+  parts; 15-min TTL).
+- Full sync job state is in the cache (`garmin:sync_job:{id}`, 2 days); a job slot key
+  (20 min TTL) dedupes; the job holds the R16 sync lock while it runs, so the legacy inline
+  sync and the beat's `sync_one` never overlap it. Derivation of new runs happens inline
+  in the job (the sync doesn't queue `derive_one` there); post-run work is still queued.
+- `run_check` keeps run-aware polling to one `get_activities` call per 5 min; a full sync
+  (≈ 25 calls with pauses) runs at most every 30 min.
+- Memory parameters: a confidence < 0.75 parse is parked (`needs_review`). "Delete the
+  fact" restores the explicit setting; for plan-shaping keys that re-flows the plan again.
+  The R16 legacy `POST /garmin/sync/ {}` stays inline (and now refreshes intraday).
+- The coach can only apply `update_profile` with `confirmed: true` when its previous reply
+  asked about the same field and value — a same-turn self-confirmation is refused.
+
+### R18 deploy
+- Migrations: `athletes.0012_r18` (Athlete `sleep_need_minutes`, `usual_run_time`,
+  `loop_distance_km`, `injury_note`, `profile_settings`), `coaching.0013_r18`
+  (`FactParameter`, MemoryFact `params_text`/`parse_pending`, ChatMessage
+  `profile_changed`, AIAnalysis kind `memory_param`). Existing facts are parsed lazily on
+  the first memory/profile read (no command needed).
+- New Celery tasks `ingest.full_sync` (garmin queue) and `coaching.parse_fact_params_ai`
+  (ai queue) — restart worker + garmin worker. New middleware
+  `config.middleware.DataVersionMiddleware`. New AI operation `memory_params` (lite tier).
+  No new env or dependencies.
