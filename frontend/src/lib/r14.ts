@@ -221,7 +221,10 @@ export type Experiment = {
     series: Array<{ date: ISODate; kept: boolean | null; value: number | null }>
   } | null
   chip: string
+  /** R17: other experiments that ran on some of the same days. */
+  overlapping?: ExperimentOverlap[] | null
 }
+export type ExperimentOverlap = { id: number; title: string; kind?: string; start: ISODate; end: ISODate; days?: number | null; status?: string }
 export type ExperimentMetric = {
   key: 'hrv' | 'rhr' | 'sleep_score' | 'stress' | 'easy_hr' | 'mood' | 'energy' | (string & {})
   label: string
@@ -245,6 +248,7 @@ export type ExperimentResult = {
   summary: string
   caveat: string
   share: { title: string; lines: string[] } | null
+  overlapping?: ExperimentOverlap[] | null
 }
 export type ExperimentTemplate = {
   kind: ExperimentKind
@@ -256,7 +260,7 @@ export type ExperimentTemplate = {
 }
 
 export const useActiveExperiment = () =>
-  useQuery({ queryKey: ['experiment-active'], queryFn: () => optional<{ experiment: Experiment | null }>('/experiments/active/'), retry: false, staleTime: 5 * 60_000 })
+  useQuery({ queryKey: ['experiment-active'], queryFn: () => optional<{ experiment: Experiment | null; active_list?: Experiment[] | null; max_active?: number | null }>('/experiments/active/'), retry: false, staleTime: 5 * 60_000 })
 
 // --- §8 goals -----------------------------------------------------------------------
 

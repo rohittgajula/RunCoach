@@ -33,14 +33,16 @@ export function ExperimentsSection() {
   if (list.data === null) return <Empty title="Experiments aren’t available yet">Check back after the next update.</Empty>
 
   const all = list.data ?? []
-  const current = all.find((e) => e.status === 'active' || e.status === 'scheduled') ?? null
-  const waiting = all.find((e) => e.status !== 'active' && e.status !== 'scheduled' && e.decision == null) ?? null
-  const past = all.filter((e) => e !== current && e !== waiting)
+  // R17: up to MAX_ACTIVE can run (or be scheduled) at once.
+  const currents = all.filter((e) => e.status === 'active' || e.status === 'scheduled')
+  const current = currents[0] ?? null
+  const waiting = all.filter((e) => e.status !== 'active' && e.status !== 'scheduled' && e.decision == null)
+  const past = all.filter((e) => !currents.includes(e) && !waiting.includes(e))
 
   return (
     <div className="stack">
       <SectionSummary
-        title={current ? `${current.title}: day ${current.progress?.day ?? 0} of ${current.days}` : 'Try one change, see what it does'}
+        title={currents.length > 1 ? `${currents.length} experiments running` : current ? `${current.title}: day ${current.progress?.day ?? 0} of ${current.days}` : 'Try one change, see what it does'}
         facts={[
           'Your own before vs during — same number of days each side.',
           'Days are counted from your logs, watch sleep and steps.',
@@ -48,10 +50,10 @@ export function ExperimentsSection() {
         ]}
       />
 
-      {current && <ActiveCard e={current} onOpen={() => open(current.id)} />}
-      {waiting && <ResultTeaser e={waiting} onOpen={() => open(waiting.id)} />}
+      {currents.map((e) => <ActiveCard key={e.id} e={e} onOpen={() => open(e.id)} />)}
+      {waiting.map((e) => <ResultTeaser key={e.id} e={e} onOpen={() => open(e.id)} />)}
 
-      {!current && <TemplatePicker onPick={setTemplate} />}
+      <TemplatePicker onPick={setTemplate} running={currents} />
 
       {past.length > 0 && (
         <Disclosure id="exp-past" title="Past experiments" sub={`${past.length} finished`}>
@@ -69,7 +71,7 @@ export function ExperimentsSection() {
         </Disclosure>
       )}
 
-      <StartSheet template={template} onClose={() => setTemplate(null)} />
+      <StartSheet template={template} running={currents} onClose={() => setTemplate(null)} />
       <ResultSheet id={openId} onClose={() => open(null)} />
     </div>
   )
@@ -133,16 +135,34 @@ function ResultTeaser({ e, onOpen }: { e: Experiment; onOpen: () => void }) {
   )
 }
 
-function TemplatePicker({ onPick }: { onPick: (t: ExperimentTemplate) => void }) {
+export const MAX_ACTIVE = 3
+
+function TemplatePicker({ onPick, running }: { onPick: (t: ExperimentTemplate) => void; running: Experiment[] }) {
   const t = useExperimentTemplates()
   if (t.isPending) return <section className="card"><Skeleton lines={3} /></section>
   if (!t.data?.length) return null
+  const full = running.length >= MAX_ACTIVE
+  const busy = new Set(running.filter((e) => e.kind !== 'custom').map((e) => e.kind))
   return (
-    <RowGroup title="Start an experiment">
-      {t.data.map((x) => (
-        <Row key={x.kind} icon={<span aria-hidden="true">{EMOJI[x.kind] ?? '🧪'}</span>} title={x.title} sub={`${x.description} · ${x.default_days} days`} onClick={() => onPick(x)} />
-      ))}
-    </RowGroup>
+    <div className="stack-sm">
+      <RowGroup title={running.length ? 'Start another' : 'Start an experiment'}>
+        {t.data.map((x) => {
+          const already = busy.has(x.kind)
+          return full || already ? (
+            <div key={x.kind} className="row is-disabled" aria-disabled="true">
+              <span className="row-icon" aria-hidden="true">{EMOJI[x.kind] ?? '🧪'}</span>
+              <span className="grow row-text">
+                <span className="row-title">{x.title}</span>
+                <span className="row-sub">{already ? 'Already running' : `${x.description} · ${x.default_days} days`}</span>
+              </span>
+            </div>
+          ) : (
+            <Row key={x.kind} icon={<span aria-hidden="true">{EMOJI[x.kind] ?? '🧪'}</span>} title={x.title} sub={`${x.description} · ${x.default_days} days`} onClick={() => onPick(x)} />
+          )
+        })}
+      </RowGroup>
+      {full && <p className="muted small">You’re running {MAX_ACTIVE} experiments — the most at once. Stop one or let it finish to start another.</p>}
+    </div>
   )
 }
 
@@ -150,15 +170,15 @@ const HABITS: Array<{ key: NonNullable<ExperimentRule['habit']>; label: string }
   { key: 'alcohol', label: 'Alcohol' }, { key: 'caffeine', label: 'Caffeine' }, { key: 'sugar', label: 'Sugar' }, { key: 'smoke', label: 'Smoking' },
 ]
 
-function StartSheet({ template, onClose }: { template: ExperimentTemplate | null; onClose: () => void }) {
+function StartSheet({ template, running, onClose }: { template: ExperimentTemplate | null; running: Experiment[]; onClose: () => void }) {
   return (
     <BottomSheet open={!!template} onClose={onClose} title={template ? `${EMOJI[template.kind] ?? '🧪'} ${template.title}` : ''}>
-      {template && <StartForm key={template.kind} t={template} onDone={onClose} />}
+      {template && <StartForm key={template.kind} t={template} running={running} onDone={onClose} />}
     </BottomSheet>
   )
 }
 
-function StartForm({ t, onDone }: { t: ExperimentTemplate; onDone: () => void }) {
+function StartForm({ t, running, onDone }: { t: ExperimentTemplate; running: Experiment[]; onDone: () => void }) {
   const { athlete } = useAuth()
   const start = useStartExperiment()
   const [days, setDays] = useState(t.default_days || 14)
@@ -180,6 +200,11 @@ function StartForm({ t, onDone }: { t: ExperimentTemplate; onDone: () => void })
   return (
     <div className="stack">
       <p className="muted">{t.description}</p>
+      {running.length > 0 && (
+        <p className="exp-overlap-note">
+          {running.map((e) => e.title).join(' and ')} {running.length === 1 ? 'is' : 'are'} already running. Running two at once makes it harder to tell which one helped — that’s fine, the results will say so.
+        </p>
+      )}
       {t.kind === 'custom' && (
         <>
           <div className="ci-chips" role="radiogroup" aria-label="Habit">
@@ -202,7 +227,7 @@ function StartForm({ t, onDone }: { t: ExperimentTemplate; onDone: () => void })
       <button type="button" className="btn btn-primary btn-block" disabled={start.isPending} onClick={go}>
         {start.isPending ? 'Starting…' : 'Start experiment'}
       </button>
-      <p className="muted small">One experiment at a time. You can stop it whenever you like.</p>
+      <p className="muted small">Up to {MAX_ACTIVE} at once. You can stop it whenever you like.</p>
     </div>
   )
 }
@@ -264,6 +289,7 @@ function ResultBody({ e, result: r, onClose }: { e: Experiment; result: Experime
         </section>
       )}
       {r?.caveat && <p className="muted small">{r.caveat}</p>}
+      <Overlaps list={r?.overlapping ?? e.overlapping} />
 
       {ended && (
         <div className="stack-sm">
@@ -290,5 +316,16 @@ function ResultBody({ e, result: r, onClose }: { e: Experiment; result: Experime
         )
       )}
     </div>
+  )
+}
+
+/** R17: other experiments on some of the same days — say so plainly. */
+function Overlaps({ list }: { list: Experiment['overlapping'] }) {
+  if (!list?.length) return null
+  return (
+    <p className="exp-overlap-note">
+      Overlapped with {list.map((o) => `${o.title} (${dayMonth(o.start)} – ${dayMonth(o.end)}${o.days ? `, ${o.days} shared ${o.days === 1 ? 'day' : 'days'}` : ''})`).join(' and ')}.
+      {' '}Changes on those days could come from either, so read this result with that in mind.
+    </p>
   )
 }
