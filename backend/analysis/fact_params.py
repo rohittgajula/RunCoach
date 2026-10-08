@@ -61,6 +61,10 @@ _SLEEP_H = re.compile(
     r"(\d{1,2}(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)\s*"
     r"(?:-|to)?\s*(?:h|hr|hrs|hours?)\b(?:\s*(?:and\s*)?(\d{1,2})\s*(?:m|min|mins|minutes)\b)?",
     re.IGNORECASE)
+# "sleep ≈ 7", "sleep need: 7.5" — a bare number right after "sleep" is hours.
+_SLEEP_BARE = re.compile(
+    r"\bsleep\w*\b(?:\s+need\w*)?\s*(?:is|of|=|:|≈|~|about|around|roughly|approx\w*|\s)*"
+    r"(\d{1,2}(?:\.\d+)?)\b(?!\s*(?:am|pm|:|km|min|%))()", re.IGNORECASE)
 _SLEEP_HM = re.compile(r"\b(\d{1,2})h(\d{2})\b", re.IGNORECASE)
 _SLEEP_FIRM = re.compile(r"\b(need|needs|require|target|enough|usually|normally|typically|"
                          r"works? (?:best|well|for me)|is fine|ideal|should get|aim|prefer|"
@@ -76,10 +80,12 @@ def _sleep(text: str) -> Param | None:
     if hm:
         minutes = int(hm.group(1)) * 60 + int(hm.group(2))
     else:
-        m = _SLEEP_H.search(text)
+        m = _SLEEP_H.search(text) or _SLEEP_BARE.search(text)
         if not m:
             return None
         hours = _num(m.group(1))
+        if m.re is _SLEEP_BARE and not (4 <= (hours or 0) <= 12):
+            return None
         if hours is None:
             return None
         minutes = round(hours * 60) + (int(m.group(2)) if m.group(2) else 0)

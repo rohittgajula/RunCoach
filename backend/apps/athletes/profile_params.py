@@ -138,6 +138,29 @@ def all_effective(athlete) -> list[dict]:
 
 # --- parsing facts --------------------------------------------------------------------------
 
+def user_authored(fact) -> bool:
+    """Written or edited by the athlete on the Memory page (not by the coach, a check-in
+    extraction, or before R18)."""
+    return fact.source == "manual" or bool(fact.edited)
+
+
+def plan_review_note(athlete, key, value) -> str:
+    """Why a plan-affecting value waits for a yes: its conflict, else the current setting."""
+    conflict = _conflict(athlete, key, value, {})
+    current = parser.display(key, _column(athlete, key)) if _column(athlete, key) is not None \
+        else "not set"
+    note = f"Your settings: {current}; this fact says {parser.display(key, value)}."
+    return f"{conflict} {note}" if conflict else note
+
+
+def _status_for(athlete, fact, key, value, confidence) -> tuple[bool, str]:
+    """(needs_review, conflict note). Plan-affecting values from the coach, a check-in or
+    before R18 are never applied without the athlete's yes."""
+    if key in PLAN_KEYS and not user_authored(fact):
+        return True, plan_review_note(athlete, key, value)
+    return confidence < parser.REVIEW_BELOW, ""
+
+
 def reparse(fact, *, sync: bool = True) -> list:
     """Parse the fact's text into parameters (replacing the old ones). Queues the AI
     fallback when the parser finds nothing and the text looks parameter-like."""
@@ -150,12 +173,14 @@ def reparse(fact, *, sync: bool = True) -> list:
     now = timezone.now()
     with transaction.atomic():
         FactParameter.objects.filter(fact=fact).delete()
-        rows = [FactParameter.objects.create(
-            athlete=athlete, fact=fact, key=p.key, value=p.value, unit=p.unit,
-            confidence=p.confidence, source="parser", needs_review=p.needs_review,
-            status=(FactParameter.Status.REVIEW if p.needs_review
-                    else FactParameter.Status.ACTIVE),
-            effective_at=now) for p in found]
+        rows = []
+        for p in found:
+            review, note = _status_for(athlete, fact, p.key, p.value, p.confidence)
+            rows.append(FactParameter.objects.create(
+                athlete=athlete, fact=fact, key=p.key, value=p.value, unit=p.unit,
+                confidence=p.confidence, source="parser", needs_review=review,
+                status=FactParameter.Status.REVIEW if review else FactParameter.Status.ACTIVE,
+                conflict=note[:200], effective_at=now))
         pending = not found and parser.looks_parameter_like(text)
         type(fact).objects.filter(pk=fact.pk).update(params_text=text, parse_pending=pending)
         fact.params_text, fact.parse_pending = text, pending
@@ -197,12 +222,12 @@ def store_ai_params(fact, text: str, items: list[dict]) -> list:
         if not parser.valid(key, value):
             continue
         confidence = float(item.get("confidence") or 0)
-        review = confidence < parser.REVIEW_BELOW
+        review, note = _status_for(fact.athlete, fact, key, value, confidence)
         rows.append(FactParameter.objects.create(
             athlete=fact.athlete, fact=fact, key=key, value=value, unit=parser.UNITS[key],
             confidence=round(confidence, 2), source="ai", needs_review=review,
             status=FactParameter.Status.REVIEW if review else FactParameter.Status.ACTIVE,
-            effective_at=now))
+            conflict=note[:200], effective_at=now))
     type(fact).objects.filter(pk=fact.pk).update(parse_pending=False)
     sync_plan_fields(fact.athlete)
     return rows

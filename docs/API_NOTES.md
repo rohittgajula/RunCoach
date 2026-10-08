@@ -3127,6 +3127,14 @@ default / null). Editing a fact re-parses it and the effective value changes imm
 Ambiguous / low-confidence parses (confidence < 0.75, e.g. "slept 6 h last night", "run at
 6" without am/pm) are stored with `needs_review: true` and **not applied** until confirmed.
 Every change bumps `data_version`.
+**Plan-affecting keys (`available_days`, `long_run_day`, `runs_per_week`) apply automatically
+only from a fact the athlete wrote or edited on the Memory page** (`source: "app"` or
+`edited: true`). From the coach (chat `add_memory`, extraction), a check-in, or any fact that
+existed before R18 (migration `coaching.0014_r18_legacy_fact_params` parses those explicitly
+at deploy), they are stored `needs_review` with `conflict: "Your settings: Mon, Tue, …; this
+fact says Tue, Thu, Sat, Sun."` (plus the conflict, if any) — UI: "Use this as your running
+days? Yes/No" → `PATCH …/parameters/{pid}/ {action}`. Non-plan keys (sleep need, run time,
+loop distance) apply from any source (by confidence). A bare "sleep ≈ 7" reads as 7 h.
 Plan-shaping keys (`available_days`, `long_run_day`, `runs_per_week`) are written to the
 athlete columns when they become effective, through the same path as `PATCH /athlete/`
 (reflow / relayout of the active plan). Conflicts (long-run day not among the available

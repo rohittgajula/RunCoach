@@ -4,6 +4,7 @@ helper; the workout distance estimate. AI is always mocked."""
 import datetime as dt
 
 import pytest
+from django.db.models import F
 
 from analysis import fact_params
 from apps.athletes import profile_params as pp
@@ -237,3 +238,91 @@ def test_workout_distance_estimate_uses_loop(api, athlete):
     add(api, "My loop is 0.5 km")
     est = api.get(f"/api/workouts/{w.pk}/").json()["distance_estimate"]
     assert est["loop_km"] == 0.5 and est["loops"] == round(est["km"] / 0.5, 1)
+
+
+# --- plan-affecting parameters need the athlete's own hand (prod: Rohit's chat fact) ------
+
+ROHIT_FACT = ("Is available to run on Tuesdays, Thursdays, Saturdays, and Sundays, with "
+              "Sunday suitable for long runs")
+MON_SAT = {"0": True, "1": True, "2": True, "3": True, "4": True, "5": True, "6": False}
+
+
+@pytest.fixture
+def mon_sat(athlete):
+    athlete.available_days, athlete.long_run_day = MON_SAT, 5
+    athlete.save()
+    return athlete
+
+
+def test_chat_fact_with_run_days_needs_review_plan_unchanged(api, mon_sat):
+    from apps.coaching.tools import add_fact
+    from tests.r7_helpers import make_workout
+
+    monday = mon_sat.local_today + dt.timedelta(days=7 - mon_sat.local_today.weekday())
+    workout = make_workout(mon_sat, monday)
+    fact = add_fact(mon_sat, ROHIT_FACT, MemoryFact.Source.CHAT)
+    params = {p.key: p for p in fact.parameters.all()}
+    assert set(params) == {"available_days", "long_run_day"}
+    assert all(p.status == "needs_review" and p.needs_review for p in params.values())
+    assert "Your settings: Mon, Tue, Wed, Thu, Fri, Sat" in params["available_days"].conflict
+    api.get("/api/memory/")
+    mon_sat.refresh_from_db()
+    workout.refresh_from_db()
+    assert mon_sat.available_days == MON_SAT and mon_sat.long_run_day == 5
+    assert workout.date == monday                                   # no reflow
+
+
+def test_user_edited_fact_with_run_days_applies_and_reflows(api, mon_sat):
+    from apps.coaching.tools import add_fact
+    from tests.r7_helpers import make_workout
+
+    monday = mon_sat.local_today + dt.timedelta(days=7 - mon_sat.local_today.weekday())
+    workout = make_workout(mon_sat, monday)
+    fact = add_fact(mon_sat, ROHIT_FACT, MemoryFact.Source.CHAT)
+    r = api.patch(f"/api/memory/{fact.pk}/",
+                  {"text": "I can run on Tuesdays, Thursdays, Saturdays and Sundays. Long "
+                           "runs on Sunday."}, format="json")
+    assert r.status_code == 200
+    assert all(p["status"] == "active" for p in r.json()["parameters"])
+    mon_sat.refresh_from_db()
+    assert [k for k, v in mon_sat.available_days.items() if v] == ["1", "3", "5", "6"]
+    assert mon_sat.long_run_day == 6
+    workout.refresh_from_db()
+    assert workout.date.weekday() in (1, 3, 5, 6)                    # re-flowed
+
+
+def test_checkin_fact_runs_per_week_needs_review_but_sleep_applies(api, athlete):
+    from apps.coaching.tools import add_fact
+
+    fact = add_fact(athlete, "Runs 5 times a week and needs 7 hours of sleep",
+                    MemoryFact.Source.CHECKIN)
+    params = {p.key: p for p in fact.parameters.all()}
+    assert params["runs_per_week"].status == "needs_review"
+    assert params["sleep_need_minutes"].status == "active"
+    athlete.refresh_from_db()
+    assert athlete.runs_per_week is None and sleep_need(athlete)["minutes"] == 420
+
+
+def test_legacy_migration_marks_plan_params_for_review(athlete):
+    import importlib
+
+    from django.apps import apps as global_apps
+
+    MemoryFact.objects.bulk_create([
+        MemoryFact(athlete=athlete, text=ROHIT_FACT, source="chat"),
+        MemoryFact(athlete=athlete, text="sleep ≈ 7", source="chat", pinned=True),
+        MemoryFact(athlete=athlete, text="I can run on Mondays and Fridays", source="manual"),
+    ])
+    days_before = dict(athlete.available_days)
+    migration = importlib.import_module("apps.coaching.migrations.0014_r18_legacy_fact_params")
+    migration.forwards(global_apps, None)
+    by_key = {}
+    for p in FactParameter.objects.filter(athlete=athlete):
+        by_key.setdefault(p.key, []).append(p)
+    assert all(p.status == "needs_review" for p in by_key["available_days"])  # even manual
+    assert all(p.status == "needs_review" for p in by_key["long_run_day"])
+    assert by_key["sleep_need_minutes"][0].status == "active"
+    athlete.refresh_from_db()
+    assert athlete.available_days == days_before
+    assert sleep_need(athlete)["minutes"] == 420 and sleep_need(athlete)["source"] == "memory"
+    assert not MemoryFact.objects.filter(athlete=athlete).exclude(params_text=F("text")).exists()
