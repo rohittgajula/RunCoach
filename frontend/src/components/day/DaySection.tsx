@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { DayFlag } from '../quality/DayFlag'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Disclosure } from '../Disclose'
 import { addDays, parseDate, todayISO } from '../../lib/format'
@@ -42,6 +43,7 @@ export function DaySection() {
   return (
     <div className={`stack ${day.isPlaceholderData ? 'is-stale' : ''}`}>
       <DayStepper date={date} today={today} onPrev={prev ? () => go(prev) : undefined} onNext={next ? () => go(next) : undefined} onToday={date !== today ? () => go(today) : undefined} asOf={d?.date === date ? d : null} />
+      {d?.date === date && <DayFlag date={date} flag={d.flagged} />}
       {day.isPending ? (
         <section className="card"><Skeleton height={300} /></section>
       ) : day.isError && !d ? (

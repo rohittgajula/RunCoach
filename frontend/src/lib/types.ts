@@ -1148,6 +1148,8 @@ export type BBEvent = {
 }
 export type HealthDay = {
   date: ISODate; is_today: boolean; available: boolean; complete: boolean
+  /** R17: illness day — flagged, kept unless the athlete excludes it. */
+  flagged?: { reason: string; text: string; illness_id?: number | null; decision: null | 'include' | 'exclude' } | null
   fetched_at: string | null; data_as_of: string | null
   prev_date: ISODate | null; next_date: ISODate | null
   awake: { start: string; end: string; source: 'sleep' | 'steps' | 'default' } | null
