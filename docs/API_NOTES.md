@@ -3105,22 +3105,66 @@ null for REST/STRENGTH or a workout without steps.
   forecast, wake plan, heart stats. AI summaries: `POST /insights/summary/` body and the
   briefing `ai` object gain `stale: bool` (data changed after the text was generated).
 
-**Memory → settings (propose, never apply silently).** Fact JSON (`/memory/` all forms) gains
+**Memory = live source of truth for profile parameters** (Rohit, 2026-10-08 — replaces the
+spec's "propose + Apply to settings"; there is no `/memory/{id}/apply/`). Each fact is parsed
+into structured parameters whenever it is created or its text changes (any source: app,
+chat tool, extraction, check-in): a deterministic parser first (sleep hours/need, usual run
+time, loop/route distance, available run days, long-run day, runs per week); only when it
+finds nothing and the text looks parameter-like, a cheap AI extraction (`lite` tier, JSON
+schema, cached per fact text) runs in the background. Stored as `FactParameter(fact, key,
+value, unit, confidence, source: parser|ai, needs_review, status)`.
+
+Parameter keys: `sleep_need_minutes` (int), `usual_run_time` ("HH:MM"), `loop_distance_km`
+(float), `available_days` ({"0".."6": bool}), `long_run_day` (0–6), `runs_per_week` (2–6).
+
+**Resolution (one helper, `apps.athletes.profile_params.effective`)** for every key:
+the newest active fact parameter (pinned facts win ties) vs the explicit app setting — the
+more recent of (parameter time = when its fact text was parsed / when it was confirmed) and
+(setting change time) wins; a setting never changed since R18 counts as oldest. Neither →
+Garmin (sleep need: median of last 7 nights) → default (sleep 8 h; others: the column
+default / null). Editing a fact re-parses it and the effective value changes immediately
+(7 → 8 → 6 h moves sleep debt at once); deleting it removes its parameters (falls back).
+Ambiguous / low-confidence parses (confidence < 0.75, e.g. "slept 6 h last night", "run at
+6" without am/pm) are stored with `needs_review: true` and **not applied** until confirmed.
+Every change bumps `data_version`.
+Plan-shaping keys (`available_days`, `long_run_day`, `runs_per_week`) are written to the
+athlete columns when they become effective, through the same path as `PATCH /athlete/`
+(reflow / relayout of the active plan). Conflicts (long-run day not among the available
+days, no day left) → the parameter is set `needs_review` with `conflict: str` and not
+applied; confirming it applies it (the long-run day moves to the latest available day).
+The explicit setting is kept separately, so deleting the fact restores it (and re-flows).
+
+Fact JSON (`/memory/` all forms) gains
 ```
-settings_proposal: null | { field: "sleep_need_minutes"|"usual_run_time"|"loop_distance_km"|
-                                   "available_days"|"runs_per_week"|"long_run_day"|"injury_note",
-                            label: str,               # "Sleep need"
-                            value: int|str|float|object,   # in the field's API format
-                            display: str,             # "7 h"
-                            current: same type|null,
-                            current_display: str,     # "8 h (Garmin)"
-                            summary: str }            # "Sleep need: 8 h (Garmin) → 7 h"
+parameters: [{ id, key, label: str,              # "Sleep need"
+               value, value_display: str,        # "7 h"
+               unit: "min"|"time"|"km"|"days"|"weekday"|"per_week",
+               confidence: float, source: "parser"|"ai",
+               needs_review: bool, status: "active"|"needs_review"|"rejected",
+               conflict: str|null,
+               applied: bool }]                  # this parameter is the current effective value
+parse_pending: bool                              # the AI fallback is still running for this text
 ```
-null when nothing maps, or the setting already has that value. UI: "Apply to settings?".
-**`POST /memory/{id}/apply/`** `{field}` (must equal the proposal's field) → 200
-`{applied: true, field, before, after, display, data_version, fact: Fact}`; 400 `{detail}`
-when the fact has no (or a different) proposal or the value fails validation (same rules as
-PATCH /athlete/); 404 another athlete's fact.
+**`PATCH /memory/{id}/parameters/{pid}/`** `{action: "confirm"|"reject"}` → 200
+`{parameter: FactParameterJSON, effective: Effective, data_version}` (confirm: status
+active, needs_review false, its time = now; reject: status rejected, never applied); 400
+bad action; 404 another athlete's fact/parameter.
+
+**`GET /profile/effective/`** →
+```
+{ parameters: [Effective], data_version: int }
+Effective = { key, label, value, display: str,
+              source: "memory"|"setting"|"garmin"|"default",
+              fact_id: int|null, fact_text: str|null,     # when source = memory
+              updated_at: datetime|null,                  # fact parse/confirm time or setting change time
+              setting_value, garmin_value }               # the fallbacks (null when none)
+```
+`GET /athlete/` `sleep_need.source` gains `"memory"` (label "6 h (from memory)"), plus
+`effective: {key: value}` (read-only) — the values every calculation uses. The athlete
+columns `sleep_need_minutes`, `usual_run_time`, `loop_distance_km` stay the *explicit
+setting*; `available_days`, `long_run_day`, `runs_per_week` are the *effective* values.
+`update_profile` (chat) and `PATCH /athlete/` record the setting change time (only when the
+value actually changes).
 
 ### §C Coach acts on explicit requests
 
@@ -3128,7 +3172,8 @@ New chat tool:
 ```
 update_profile(field, value, confirmed?)
   field: "sleep_need_minutes"|"usual_run_time"|"loop_distance_km"|"available_days"|
-         "runs_per_week"|"long_run_day"|"injury_note"
+         "runs_per_week"|"long_run_day"|"injury_note"   (writes the explicit setting, now —
+         newer than any fact, so it takes effect; a later fact edit wins again)
   value: sleep_need_minutes → minutes (or hours ≤ 12, converted) | null (= Garmin's);
          usual_run_time "HH:MM"; loop_distance_km number; available_days [0–6 weekdays] or
          {"0".."6": bool}; runs_per_week 2–6 | null; long_run_day 0–6; injury_note str
