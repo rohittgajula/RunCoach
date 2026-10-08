@@ -58,6 +58,12 @@ PURE_MODULES = [
     "planning.strength",
     "planning.garmin_strength",
     "planning.race_day",
+    # R17
+    "analysis.data_quality",
+    "analysis.recovery_routine",
+    "analysis.memory_facts",
+    "analysis.garmin_deletions",
+    "planning.illness",
     # R16
     "planning.edit",
     "analysis.freshness",
