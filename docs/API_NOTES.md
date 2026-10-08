@@ -2584,6 +2584,13 @@ second POST while one runs → `skipped: "running"`; a manual POST then → 409 
 frontend should call it when `auto_sync_due` is true (still counts against the `garmin`
 10/hour throttle).
 
+### Run map: `GET /activities/{id}/route/?full=1`
+`full=1` (or `true`) returns the **untrimmed** route — true start and finish,
+`hidden_endpoints: false`, `trimmed_m: 0` — for the owner's own in-app map. Same body
+shape as the default call. Endpoint trimming (`map_hide_endpoints`) still applies to the
+default call (no `full`) and to every share output (`/share-data/`, exports, the routes
+overlay). Owner only: another athlete's id → 404 as before.
+
 ### R16 backend choices
 - Edited workouts store their generated version in `PlannedWorkout.pre_edit`; undo restores
   it. Steps edited in the editor are stored flat (repeat blocks expanded); GET folds them.

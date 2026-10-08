@@ -201,7 +201,10 @@ def activity_route(request, pk: int):
     activity = Activity.objects.filter(athlete=athlete, pk=pk).first()
     if activity is None:
         return Response({"detail": "Not found."}, status=404)
-    return Response(route_body(activity, athlete.map_hide_endpoints))
+    # R16: `?full=1` = the untrimmed route (true start/finish) for the owner's own in-app
+    # map. Endpoint hiding still applies to the default call and to every share output.
+    full = str(request.query_params.get("full", "")).lower() in ("1", "true", "yes")
+    return Response(route_body(activity, False if full else athlete.map_hide_endpoints))
 
 
 @api_view(["GET"])
