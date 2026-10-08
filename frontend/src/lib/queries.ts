@@ -977,10 +977,16 @@ export const dayTrendsQuery = (range: string) =>
 export const useDayTrends = (range: string) =>
   useQuery({ ...dayTrendsQuery(range), placeholderData: keep })
 
-export const useActivityRoute = (id: number | null) =>
+/**
+ * `full`: the in-app map always shows the whole route with true start/finish (R16);
+ * hiding the ends (`map_hide_endpoints`) applies to shared outputs only. `?full=1` asks
+ * the server for the untrimmed route; an older server ignores it and still trims, which
+ * the map notes quietly.
+ */
+export const useActivityRoute = (id: number | null, full = false) =>
   useQuery({
-    queryKey: ['activity-route', id],
-    queryFn: () => optional<ActivityRoute>(`/activities/${id}/route/`),
+    queryKey: ['activity-route', id, full ? 'full' : 'shared'],
+    queryFn: () => optional<ActivityRoute>(`/activities/${id}/route/${full ? '?full=1' : ''}`),
     enabled: id != null,
     retry: false,
     staleTime: 10 * 60_000,

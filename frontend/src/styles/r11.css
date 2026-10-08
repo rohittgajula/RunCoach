@@ -133,3 +133,7 @@
 /* settings toggle row */
 .toggle-row { display: flex; align-items: center; gap: 12px; min-height: 56px; }
 .toggle-row .grow { min-width: 0; }
+/* R16: Garmin-style "Slower ■■■■■■ Faster" scale. */
+.route-scale { flex-wrap: nowrap; gap: 8px; }
+.route-scale-bar { display: inline-flex; gap: 2px; }
+.route-scale-bar i { width: 16px; height: 8px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(11, 13, 16, 0.25); }

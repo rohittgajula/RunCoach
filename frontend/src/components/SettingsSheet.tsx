@@ -101,10 +101,10 @@ function MapPrivacy() {
     <>
       <div className="toggle-row">
         <span className="grow">
-          <strong>Hide start/end on maps</strong>
-          <span className="muted small block">Trims the first and last 200 m of every route, so your home or work isn’t on the map.</span>
+          <strong>Hide start/end when sharing</strong>
+          <span className="muted small block">Trims the first and last 200 m from shared images, cards and exports, so your home or work isn’t on them. Your own run map always shows the full route.</span>
         </span>
-        <button type="button" role="switch" aria-checked={on} aria-label="Hide start and end on maps" disabled={busy} className={`switch ${on ? 'is-on' : ''}`} onClick={toggle} />
+        <button type="button" role="switch" aria-checked={on} aria-label="Hide start and end when sharing" disabled={busy} className={`switch ${on ? 'is-on' : ''}`} onClick={toggle} />
       </div>
       {error && <p className="bad small">{error}</p>}
     </>

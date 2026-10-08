@@ -8,7 +8,7 @@ const RouteMap = lazy(() => import('./RouteMap'))
 
 /** Run detail → Map: fetches the simplified route, then lazy-loads the map. */
 export function RunMapSection({ activityId }: { activityId: number }) {
-  const route = useActivityRoute(activityId)
+  const route = useActivityRoute(activityId, true)
   const { athlete } = useAuth()
   const zones = athlete?.zones?.zones
   const cuts = zones && zones.length >= 5 ? zones.slice(1, 5).map((z) => z.low) : null
@@ -23,7 +23,7 @@ export function RunMapSection({ activityId }: { activityId: number }) {
         <h3>Map</h3>
         <div className="map-empty">
           {r.reason === 'too_short'
-            ? 'Too short to map with start and finish hidden. Turn off “Hide start/end on maps” in Settings to see it.'
+            ? 'This run is too short to draw on a map.'
             : 'No GPS route for this run — indoor, or the watch didn’t record location.'}
         </div>
       </section>

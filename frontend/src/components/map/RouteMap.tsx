@@ -26,49 +26,58 @@ function cssVar(name: string, fallback: string): string {
 
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-/** 5 bins, slow/low → fast/high. Pace uses the running-blue ramp; HR the zone colours. */
-function paletteFor(mode: Mode) {
-  if (mode === 'pace') return ['#b9cdfd', '#7fa3ff', '#2f6bff', '#1f4fcc', '#122f80']
-  if (mode === 'hr') return [cssVar('--walk', '#d5dae1'), cssVar('--easy-2', '#6e96ff'), cssVar('--ok', '#12a150'), cssVar('--warn', '#d98a0b'), cssVar('--bad', '#e5533d')]
-  return [cssVar('--run', '#2f6bff'), cssVar('--walk-map', '#8a94a3')]
-}
+/**
+ * Garmin Connect's familiar scale: slow/low = blue → light blue → green → yellow →
+ * orange → red = fast/high. Fixed hex: these sit on map tiles, not on our cards, so they
+ * stay the same in light and dark (the dark outline carries the contrast).
+ */
+const SCALE = ['#1f5fd6', '#3fb4f0', '#2cb84f', '#f2cf1d', '#f68a1f', '#e3322b']
+/** Five HR zones on the same scale (Z1 blue … Z5 red). */
+const ZONE_SCALE = ['#1f5fd6', '#3fb4f0', '#2cb84f', '#f68a1f', '#e3322b']
+const OUTLINE = '#0b0d10'
 
-function quantiles(values: number[]): number[] {
+function quantiles(values: number[], bins: number): number[] {
   const v = [...values].sort((a, b) => a - b)
   if (!v.length) return []
-  return [0.2, 0.4, 0.6, 0.8].map((q) => v[Math.min(v.length - 1, Math.floor(q * v.length))])
+  return Array.from({ length: bins - 1 }, (_, i) => v[Math.min(v.length - 1, Math.floor(((i + 1) / bins) * v.length))])
 }
 
-type Legend = Array<{ color: string; label: string }>
+type Legend = { kind: 'scale'; colors: string[]; low: string; high: string; lowTitle?: string; highTitle?: string } | { kind: 'items'; items: Array<{ color: string; label: string }> }
 
 function colouring(points: RoutePoint[], mode: Mode, zones: number[] | null, paceRange: { min: number; max: number } | null): { colorOf: (p: RoutePoint) => string | null; legend: Legend } {
-  const pal = paletteFor(mode)
   if (mode === 'runwalk') {
+    const run = cssVar('--run', '#2f6bff')
+    const walk = cssVar('--walk-map', '#8a94a3')
     return {
-      colorOf: (p) => (p.segment === 'walk' ? pal[1] : p.segment === 'stop' ? null : pal[0]),
-      legend: [{ color: pal[0], label: 'Run' }, { color: pal[1], label: 'Walk' }],
+      colorOf: (p) => (p.segment === 'walk' ? walk : p.segment === 'stop' ? null : run),
+      legend: { kind: 'items', items: [{ color: run, label: 'Run' }, { color: walk, label: 'Walk' }] },
     }
   }
   if (mode === 'hr') {
-    // Zone bounds when known (Z2 low … Z5 low), else the run's own quintiles.
-    const cuts = zones && zones.length === 4 ? zones : quantiles(points.map((p) => p.hr).filter((h): h is number => h != null))
-    const bin = (h: number) => cuts.filter((c) => h >= c).length
-    const labels = zones && zones.length === 4 ? ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'] : ['lowest', '', '', '', 'highest']
+    // Zone bounds when known (Z2 low … Z5 low), else the run's own sixths.
+    const byZone = !!zones && zones.length === 4
+    const pal = byZone ? ZONE_SCALE : SCALE
+    const cuts = byZone ? zones! : quantiles(points.map((p) => p.hr).filter((h): h is number => h != null), SCALE.length)
+    const bin = (h: number) => Math.min(pal.length - 1, cuts.filter((c) => h >= c).length)
     return {
       colorOf: (p) => (p.hr == null ? null : pal[bin(p.hr)]),
-      legend: pal.map((color, i) => ({ color, label: labels[i] })),
+      legend: { kind: 'scale', colors: pal, low: byZone ? 'Z1' : 'Lower', high: byZone ? 'Z5' : 'Higher' },
     }
   }
-  // Pace: lower seconds = faster = darker.
+  // Pace: more seconds per km = slower = blue; fewer = faster = red.
   const paces = points.map((p) => p.pace_s_per_km).filter((s): s is number => s != null && s > 0 && s < 1800)
   // The server's 5th–95th percentile range keeps a GPS spike from flattening the colours.
   const lo = paceRange?.min ?? (paces.length ? Math.min(...paces) : null)
   const hi = paceRange?.max ?? (paces.length ? Math.max(...paces) : null)
-  const cuts = lo != null && hi != null && hi > lo ? [0.2, 0.4, 0.6, 0.8].map((q) => lo + q * (hi - lo)) : quantiles(paces)
-  const bin = (s: number) => 4 - cuts.filter((c) => s > c).length
+  const n = SCALE.length
+  const cuts = lo != null && hi != null && hi > lo ? Array.from({ length: n - 1 }, (_, i) => lo + ((i + 1) / n) * (hi - lo)) : quantiles(paces, n)
+  const bin = (s: number) => n - 1 - cuts.filter((c) => s > c).length
   return {
-    colorOf: (p) => (p.pace_s_per_km == null || p.pace_s_per_km <= 0 ? null : pal[bin(p.pace_s_per_km)]),
-    legend: pal.map((color, i) => ({ color, label: i === 0 && hi ? `${pace(hi)} slower` : i === 4 && lo ? `${pace(lo)} faster` : '' })),
+    colorOf: (p) => (p.pace_s_per_km == null || p.pace_s_per_km <= 0 ? null : SCALE[bin(p.pace_s_per_km)]),
+    legend: {
+      kind: 'scale', colors: SCALE, low: 'Slower', high: 'Faster',
+      lowTitle: hi ? `${pace(hi)} /km and slower` : undefined, highTitle: lo ? `${pace(lo)} /km and faster` : undefined,
+    },
   }
 }
 
@@ -126,8 +135,8 @@ export default function RouteMap({ route, zones }: { route: ActivityRoute; zones
     const last = route.finish ?? points[points.length - 1]
     const pin = (cls: string, text: string) =>
       L.divIcon({ className: `map-pin ${cls}`, html: `<span aria-hidden="true">${text}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] })
-    L.marker([first.lat, first.lon], { icon: pin('is-start', '▶'), keyboard: false, title: route.hidden_endpoints ? 'Route shown from here (start hidden)' : 'Start', interactive: false }).addTo(map)
-    L.marker([last.lat, last.lon], { icon: pin('is-finish', '■'), keyboard: false, title: route.hidden_endpoints ? 'Route shown to here (finish hidden)' : 'Finish', interactive: false }).addTo(map)
+    L.marker([first.lat, first.lon], { icon: pin('is-start', '▶'), keyboard: false, title: route.hidden_endpoints ? 'Route shown from here' : 'Start', interactive: false }).addTo(map)
+    L.marker([last.lat, last.lon], { icon: pin('is-finish', '■'), keyboard: false, title: route.hidden_endpoints ? 'Route shown to here' : 'Finish', interactive: false }).addTo(map)
     for (const k of route.km_markers ?? []) {
       L.marker([k.lat, k.lon], {
         icon: L.divIcon({ className: 'map-km', html: `<span>${k.km}</span>`, iconSize: [22, 22], iconAnchor: [11, 11] }),
@@ -154,8 +163,8 @@ export default function RouteMap({ route, zones }: { route: ActivityRoute; zones
     if (!map) return
     lineLayer.current?.remove()
     const group = L.layerGroup()
-    // White casing in both themes: the (inverted) dark tiles need the contrast too.
-    L.polyline(points.map((p) => [p.lat, p.lon] as [number, number]), { color: '#ffffff', weight: 9, opacity: 0.9, interactive: false }).addTo(group)
+    // A dark 1-px outline under a 5-px line: readable on light tiles and the dark theme's.
+    L.polyline(points.map((p) => [p.lat, p.lon] as [number, number]), { color: OUTLINE, weight: 7, opacity: 0.9, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(group)
     let run: Array<[number, number]> = []
     let color: string | null = null
     const flush = () => {
@@ -201,11 +210,19 @@ export default function RouteMap({ route, zones }: { route: ActivityRoute; zones
     <div className="route-map">
       {modes.length > 1 && <RangeSwitch compact value={mode} onChange={setMode} options={modes} label="Colour the route by" />}
       <div className="route-map-canvas" ref={host} role="region" aria-label="Route map. Tap the route to see pace and heart rate at that point." />
-      <div className="route-legend" aria-label="Legend">
-        {legend.map((l, i) => (
-          <span key={i}><i style={{ background: l.color }} />{l.label}</span>
-        ))}
-      </div>
+      {legend.kind === 'scale' ? (
+        <div className="route-legend route-scale" role="img" aria-label={`Colour scale from ${legend.low.toLowerCase()} (blue) to ${legend.high.toLowerCase()} (red)`}>
+          <span title={legend.lowTitle}>{legend.low}</span>
+          <span className="route-scale-bar" aria-hidden="true">{legend.colors.map((c) => <i key={c} style={{ background: c }} />)}</span>
+          <span title={legend.highTitle}>{legend.high}</span>
+        </div>
+      ) : (
+        <div className="route-legend" aria-label="Legend">
+          {legend.items.map((l) => (
+            <span key={l.label}><i style={{ background: l.color }} />{l.label}</span>
+          ))}
+        </div>
+      )}
       <p className="route-readout" aria-live="polite">
         {sel ? (
           <>
@@ -219,7 +236,8 @@ export default function RouteMap({ route, zones }: { route: ActivityRoute; zones
           <span className="muted">Tap the route or the profile to see pace and heart rate there.</span>
         )}
       </p>
-      {route.hidden_endpoints && <p className="muted small">Start and finish are hidden (first and last {route.trimmed_m || 200} m). Change it in Settings → Maps.</p>}
+      {/* Only an older server that can't send the full route yet still trims it here. */}
+      {route.hidden_endpoints && <p className="muted small">The first and last {route.trimmed_m || 200} m aren’t drawn yet.</p>}
       <ElevationProfile points={points} selected={selected} onSelect={setSelected} gain={route.elevation?.gain_m ?? null} />
     </div>
   )
