@@ -116,7 +116,8 @@ def test_briefing_builds_after_4am(api, other_api, athlete, monkeypatch):
     body = api.get("/api/briefing/today/").json()
     assert set(body) == {"date", "ready", "built_at", "dismissed", "wake_time", "greeting",
                          "readiness", "checkin", "session", "weather", "fuel", "focus",
-                         "notes", "ai", "as_of", "freshness"}   # R16 §C
+                         "notes", "ai", "as_of", "freshness",   # R16 §C
+                         "illness"}                              # R17 §10
     assert body["ready"] and body["greeting"] == "Good morning, Tester"
     assert body["readiness"]["score"] == 40 and body["focus"]["key"] == "sleep"
     assert any(n["kind"] == "sleep" for n in body["notes"])
@@ -286,7 +287,7 @@ def test_monthly_report_build_list_and_errors(api, other_api, athlete):
     assert body["ai"]["status"] == "none" and isinstance(body["goal"], str)
     assert set(body) == {"id", "month", "start", "end", "generated_at", "runs", "prs", "fitness",
                          "wellness", "habits", "smoke_free_days", "mood", "weight", "injury",
-                         "went_well", "to_improve", "goal", "ai"}
+                         "went_well", "to_improve", "goal", "ai", "illness"}
     this_month = athlete.local_today.strftime("%Y-%m")
     assert api.get(f"/api/reports/monthly/?month={this_month}").status_code == 400
     assert api.get("/api/reports/monthly/?month=bad").status_code == 400

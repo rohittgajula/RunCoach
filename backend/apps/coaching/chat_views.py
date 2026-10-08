@@ -130,33 +130,105 @@ def messages(request, pk: int):
 
 
 def fact_json(fact: MemoryFact) -> dict:
-    return {"id": fact.pk, "text": fact.text, "source": fact.source, "created_at": fact.created_at}
+    from analysis.memory_facts import CATEGORIES
+
+    category = fact.category if fact.category in CATEGORIES else "other"
+    return {"id": fact.pk, "text": fact.text, "category": category,
+            "category_label": CATEGORIES[category],
+            "source": "app" if fact.source == MemoryFact.Source.MANUAL else fact.source,
+            "pinned": fact.pinned, "created_at": fact.created_at,
+            "updated_at": fact.updated_at or fact.created_at, "edited": fact.edited}
+
+
+PRIVATE_DETAIL = "The private habit is never stored in the coach's memory."
+
+
+def _ordered(athlete):
+    return MemoryFact.objects.filter(athlete=athlete).order_by("-pinned", "-created_at", "-id")
+
+
+def _fact_fields(athlete, data: dict, fact: MemoryFact | None = None) -> dict | Response:
+    from analysis.memory_facts import CATEGORIES, MAX_PINNED, mentions_private_habit
+
+    out: dict = {}
+    if "text" in data or fact is None:
+        text = " ".join(str(data.get("text") or "").split())
+        if not text:
+            return Response({"detail": "text is required."}, status=400)
+        if len(text) > 300:
+            return Response({"detail": "text must be at most 300 characters."}, status=400)
+        if mentions_private_habit(text):
+            return Response({"detail": PRIVATE_DETAIL}, status=400)
+        out["text"] = text
+    if "category" in data and data["category"] is not None:
+        if data["category"] not in CATEGORIES:
+            return Response({"detail": "category must be health, schedule, goals or other."},
+                            status=400)
+        out["category"] = data["category"]
+    if "pinned" in data:
+        if not isinstance(data["pinned"], bool):
+            return Response({"detail": "pinned must be true or false."}, status=400)
+        if data["pinned"] and not (fact and fact.pinned):
+            pinned = MemoryFact.objects.filter(athlete=athlete, pinned=True).count()
+            if pinned >= MAX_PINNED:
+                return Response({"detail": f"At most {MAX_PINNED} facts can be pinned."},
+                                status=400)
+        out["pinned"] = data["pinned"]
+    return out
 
 
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def memory(request):
+    from analysis.memory_facts import CATEGORIES, ORDER
+
     athlete = request.user.athlete
     if request.method == "POST":
-        text = str(request.data.get("text") or "").strip()
-        if not text:
-            return Response({"detail": "text is required."}, status=400)
-        fact = add_fact(athlete, text, MemoryFact.Source.MANUAL)
-        if fact is None:
-            existing = next(
-                f for f in MemoryFact.objects.filter(athlete=athlete)
-                if f.text.lower().rstrip(".") == " ".join(text.split())[:300].lower().rstrip(".")
-            )
+        data = request.data if isinstance(request.data, dict) else {}
+        fields = _fact_fields(athlete, data)
+        if isinstance(fields, Response):
+            return fields
+        key = fields["text"].lower().rstrip(".")
+        existing = next((f for f in MemoryFact.objects.filter(athlete=athlete)
+                         if f.text.lower().rstrip(".") == key), None)
+        if existing is not None:
             return Response(fact_json(existing), status=200)
+        fact = add_fact(athlete, fields["text"], MemoryFact.Source.MANUAL,
+                        category=fields.get("category"), pinned=fields.get("pinned", False))
         return Response(fact_json(fact), status=status.HTTP_201_CREATED)
-    return Response([fact_json(f) for f in MemoryFact.objects.filter(athlete=athlete)])
+    facts = [fact_json(f) for f in _ordered(athlete)]
+    if str(request.query_params.get("grouped", "")).lower() in ("1", "true"):
+        return Response({"count": len(facts), "pinned": sum(1 for f in facts if f["pinned"]),
+                         "groups": [{"key": key, "label": CATEGORIES[key],
+                                     "facts": [f for f in facts if f["category"] == key]}
+                                    for key in ORDER]})
+    return Response(facts)
 
 
-@api_view(["DELETE"])
+@api_view(["PATCH", "DELETE"])
 @permission_classes([IsAuthenticated])
 def memory_delete(request, pk: int):
-    fact = MemoryFact.objects.filter(athlete=request.user.athlete, pk=pk).first()
+    athlete = request.user.athlete
+    fact = MemoryFact.objects.filter(athlete=athlete, pk=pk).first()
     if fact is None:
         return Response({"detail": "Not found."}, status=404)
+    if request.method == "PATCH":
+        data = request.data if isinstance(request.data, dict) else {}
+        fields = _fact_fields(athlete, data, fact)
+        if isinstance(fields, Response):
+            return fields
+        if not fields:
+            return Response({"detail": "Send text, category and/or pinned."}, status=400)
+        if "text" in fields:
+            key = fields["text"].lower().rstrip(".")
+            if any(f.text.lower().rstrip(".") == key
+                   for f in MemoryFact.objects.filter(athlete=athlete).exclude(pk=fact.pk)):
+                return Response({"detail": "The coach already knows this."}, status=400)
+            if fields["text"] != fact.text:
+                fact.edited = True
+        for k, v in fields.items():
+            setattr(fact, k, v)
+        fact.save()
+        return Response(fact_json(fact))
     fact.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)

@@ -17,6 +17,8 @@ from nutrition.targets import (
     FALLBACK_WEIGHT_KG, DayWorkout, Profile, Targets, day_targets,
 )
 
+from apps.planning.models import INACTIVE_STATUSES
+
 from .models import Meal
 
 RANGE_DAYS = {"3m": 91, "6m": 182, "1y": 365}
@@ -59,9 +61,7 @@ class _DayData:
         self.workouts: dict[dt.date, list[PlannedWorkout]] = {}
         for workout in PlannedWorkout.objects.filter(
             athlete=athlete, date__gte=start - dt.timedelta(days=1), date__lte=end,
-        ).exclude(plan__status__in=HIDDEN_PLAN_STATUSES).exclude(
-            status=PlannedWorkout.Status.SKIPPED
-        ):
+        ).exclude(plan__status__in=HIDDEN_PLAN_STATUSES).exclude(status__in=INACTIVE_STATUSES):
             self.workouts.setdefault(workout.date, []).append(workout)
         self.activities: dict[dt.date, list[Activity]] = {}
         for activity in Activity.objects.filter(

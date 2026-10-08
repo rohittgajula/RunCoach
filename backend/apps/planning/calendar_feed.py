@@ -26,7 +26,10 @@ from rest_framework.response import Response
 
 from planning import ics
 
-from .models import CalendarFeed, CalendarFeedItem, PlannedWorkout, Race, StrengthSession, TrainingPlan
+from .models import (
+    INACTIVE_STATUSES, CalendarFeed, CalendarFeedItem, PlannedWorkout, Race, StrengthSession,
+    TrainingPlan,
+)
 
 PAST_DAYS = 30
 FUTURE_DAYS = 180
@@ -134,10 +137,10 @@ def events_for(athlete) -> list[ics.Event]:
     plan = TrainingPlan.objects.filter(athlete=athlete, status=TrainingPlan.Status.ACTIVE).first()
     if plan is not None:
         for w in plan.workouts.filter(date__gte=start, date__lte=end) \
-                .exclude(status=PlannedWorkout.Status.SKIPPED).exclude(kind="RACE"):
+                .exclude(status__in=INACTIVE_STATUSES).exclude(kind="RACE"):
             out.append(_workout_event(w))
     for s in StrengthSession.objects.filter(athlete=athlete, date__gte=start, date__lte=end) \
-            .exclude(status=StrengthSession.Status.SKIPPED):
+            .exclude(status__in=INACTIVE_STATUSES):
         out.append(_strength_event(s))
     zone = zone_of(athlete)
     for r in Race.objects.filter(athlete=athlete, date__gte=start, date__lte=end):

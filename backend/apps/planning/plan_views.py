@@ -18,7 +18,7 @@ from apps.activities.models import Activity
 from apps.athletes.mixins import AthleteScopedMixin
 from apps.coaching.throttles import ChatThrottle, ChatWriteThrottle
 
-from .models import PlannedWorkout, TrainingPlan
+from .models import INACTIVE_STATUSES, PlannedWorkout, TrainingPlan
 from .plan_store import PlanError, accept_plan, decline_plan, rebuild_active_plan
 from .presenters import activity_cards, guard_base, plan_detail, plan_summary, workout_json
 
@@ -168,7 +168,7 @@ def calendar_days(request):
 
     def demanding(day: dt.date) -> bool:
         if any(
-            w.kind in RECOVERY_AFTER and w.status != PlannedWorkout.Status.SKIPPED
+            w.kind in RECOVERY_AFTER and w.status not in INACTIVE_STATUSES
             for w in by_day_workouts.get(day, [])
         ):
             return True
@@ -207,7 +207,7 @@ def calendar_days(request):
     while week_start <= end:
         week_end = week_start + dt.timedelta(days=6)
         week_workouts = [w for w in workouts if week_start <= w.date <= week_end
-                         and w.status != PlannedWorkout.Status.SKIPPED]
+                         and w.status not in INACTIVE_STATUSES]
         week_activities = [a for a in activities if week_start <= a.local_date <= week_end]
         weeks.append({
             "start": week_start,
@@ -260,9 +260,11 @@ def workout_view(request, pk: int):
             fields += ["date", "moved_from"]
     if "status" in request.data:
         new_status = request.data.get("status")
-        if new_status not in PlannedWorkout.Status.values:
+        settable = [s for s in PlannedWorkout.Status.values if s != "paused"]
+        if new_status not in settable:
+            # R17: "paused" belongs to illness mode (POST /illness/), not to PATCH.
             return Response(
-                {"detail": f"status must be one of {', '.join(PlannedWorkout.Status.values)}."},
+                {"detail": f"status must be one of {', '.join(settable)}."},
                 status=400,
             )
         workout.status = new_status
@@ -376,7 +378,14 @@ def activity_detail_json(athlete, activity: Activity) -> dict:
         "workout_id": workout.pk if workout else None,
         "compliance": compliance_json(workout, activity) if workout else None,
         "checkin": _checkin_json(activity),
+        "quality": _quality_json(activity),          # R17 §2
     }
+
+
+def _quality_json(activity: Activity) -> dict | None:
+    from apps.activities.quality import quality_json
+
+    return quality_json(activity)
 
 
 def _checkin_json(activity: Activity) -> dict | None:

@@ -11,7 +11,7 @@ from django.core.cache import cache
 
 from analysis import progress as maths
 
-from .models import Activity, ActivityRecord
+from .models import Activity
 
 HISTORY_DAYS = 365
 MAX_RUNS = 300
@@ -21,12 +21,16 @@ FASTEST_KM_CACHE_S = 30 * 24 * 3600
 def fastest_1k_s(activity: Activity) -> float | None:
     """Quickest 1000 m anywhere in the run, from the distance stream (two pointers).
     Cached per activity and segmentation version — the stream does not change."""
-    key = f"progress:fastest1k:{activity.pk}:{activity.segmentation_version}"
+    from .quality import effective_use, series
+
+    use = effective_use(activity)
+    key = f"progress:fastest1k:{activity.pk}:{activity.segmentation_version}:{use}"
     hit = cache.get(key)
     if hit is not None:
         return hit or None
-    points = [(t, d) for t, d in ActivityRecord.objects.filter(
-        activity=activity, distance_m__isnull=False).values_list("offset_s", "distance_m")]
+    points = [(r["offset_s"], r["distance_m"]) for r in series(activity, ("distance_m",),
+                                                                use=use)
+              if r["distance_m"] is not None]
     best, left = None, 0
     for right in range(len(points)):
         while left < right and points[right][1] - points[left + 1][1] >= 1000:
@@ -56,6 +60,7 @@ def run_dicts(athlete, sport: str = "running", since: dt.date | None = None,
     qs = Activity.objects.filter(athlete=athlete, sport__icontains=word, local_date__gte=since)
     if until is not None:
         qs = qs.filter(local_date__lte=until)
+    qs = qs.exclude(quality__decision="exclude")      # R17: only the athlete's explicit choice
     acts = list(qs.select_related("metrics").prefetch_related("segments")
                 .order_by("-started_at")[:limit])
     acts.reverse()

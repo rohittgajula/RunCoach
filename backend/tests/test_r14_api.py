@@ -331,7 +331,11 @@ def test_experiment_lifecycle(api, athlete, other_api):
     assert exp["status"] == "active" and exp["days"] == 14
     assert exp["progress"]["day"] == 1 and exp["result"]["final"] is False
     assert exp["chip"].startswith("No alcohol · day 1/14")
-    assert api.post("/api/experiments/", {"kind": "no_sugar"}, format="json").status_code == 409
+    # R17: several may run at once (up to 3); the same template overlapping → 400.
+    assert api.post("/api/experiments/", {"kind": "no_alcohol"}, format="json").status_code == 400
+    second = api.post("/api/experiments/", {"kind": "no_sugar"}, format="json")
+    assert second.status_code == 201
+    assert api.delete(f"/api/experiments/{second.json()['id']}/").status_code == 204
 
     HabitLog.objects.create(athlete=athlete, kind="alcohol", at=timezone.now(),
                             local_date=athlete.local_today, quantity=1)

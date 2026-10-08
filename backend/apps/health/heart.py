@@ -55,24 +55,27 @@ def _runs(athlete):
 
     return (Activity.objects.filter(athlete=athlete, sport__icontains="run",
                                     segmentation_version__isnull=False)
+            .exclude(quality__decision="exclude")         # R17: explicit choice only
             .order_by("started_at", "id"))
 
 
 def run_stats(activity, *, ref_hr: int, ref_pace: int) -> dict:
-    from apps.activities.models import ActivityRecord, Segment
+    from apps.activities.models import Segment
 
     try:
         weather = activity.weather
     except ActivityWeather.DoesNotExist:
         weather = None
     feels = weather.feels_like_c if weather is not None else None
-    key = f"{VERSION}:{activity.segmentation_version}:{ref_hr}:{ref_pace}:{feels}"
+    from apps.activities.quality import effective_use, series
+
+    use = effective_use(activity)
+    key = f"{VERSION}:{activity.segmentation_version}:{ref_hr}:{ref_pace}:{feels}:{use[0]}"
     cached = RunHeartStats.objects.filter(activity=activity).first()
     if cached is not None and cached.key == key:
         return cached.payload
-    points = [maths.Point(t, hr, speed, alt) for t, hr, speed, alt in
-              ActivityRecord.objects.filter(activity=activity).order_by("offset_s")
-              .values_list("offset_s", "heart_rate", "speed_mps", "altitude_m")]
+    points = [maths.Point(r["offset_s"], r["heart_rate"], r["speed_mps"], r["altitude_m"])
+              for r in series(activity, ("heart_rate", "speed_mps", "altitude_m"), use=use)]
     blocks = [maths.Block(kind, start, duration) for kind, start, duration in
               Segment.objects.filter(activity=activity).order_by("index")
               .values_list("kind", "start_offset_s", "duration_s")]

@@ -23,9 +23,12 @@ REMINDERS = {
     "run_summary": ("Run summary", "After each run: distance, time, pace and heart rate. "
                     "Shows on your Garmin watch when Garmin Connect mirrors this app's "
                     "notifications."),
+    # R17 §1
+    "recovery_ready": ("Recovery routine ready", "After a run: a short cool-down and "
+                       "stretch routine matched to it."),
 }
 # Sent when something happens, not at a time of day: `time` is null and not settable.
-EVENT_REMINDERS = {"run_summary"}
+EVENT_REMINDERS = {"run_summary", "recovery_ready"}
 ALIASES = {"run_reviewed": "run_summary"}
 
 
@@ -63,6 +66,15 @@ def due(row: ReminderSettings, key: str, local_now: dt.datetime) -> bool:
 
 def message(athlete, key: str) -> dict | None:
     """The push for one reminder, or None when there is nothing to say today."""
+    from apps.health.illness import active as illness_active
+
+    unwell = illness_active(athlete) is not None
+    if key == "morning_checkin" and unwell:
+        # R17 §10: rest messaging only.
+        return {"title": "Morning check-in", "body": "Rest day — focus on getting well.",
+                "url": "/", "tag": "morning_checkin"}
+    if key == "best_run_time" and unwell:
+        return None
     if key == "morning_checkin":
         return {"title": "Morning check-in", "body": "See how ready you are and what today's "
                 "run looks like.", "url": "/", "tag": "morning_checkin"}

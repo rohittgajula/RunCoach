@@ -253,7 +253,7 @@ def _monday(day: dt.date) -> dt.date:
 
 def runs_on(sessions: list[Session], day: dt.date, exclude: set[int] = frozenset()) -> list:
     return [s for s in sessions if s.date == day and s.id not in exclude
-            and s.status != "skipped" and s.kind in OCCUPYING]
+            and s.status not in ("skipped", "paused") and s.kind in OCCUPYING]
 
 
 def spacing_ok(session: Session, to_date: dt.date, sessions: list[Session],
@@ -261,7 +261,7 @@ def spacing_ok(session: Session, to_date: dt.date, sessions: list[Session],
     """Would `session` on `to_date` keep the plan's spacing? `exclude`: ids that move
     away with it (a swap partner)."""
     others = [s for s in sessions if s.id != session.id and s.id not in exclude
-              and s.status != "skipped"]
+              and s.status not in ("skipped", "paused")]
     races = {s.date for s in others if s.kind == "RACE"}
     if to_date + dt.timedelta(days=1) in races or to_date in races:
         return False

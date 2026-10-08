@@ -191,3 +191,46 @@ class RunHeartStats(models.Model):
     key = models.CharField(max_length=80)       # algorithm + segmentation + reference values
     payload = models.JSONField(default=dict)
     computed_at = models.DateTimeField(auto_now=True)
+
+
+class Illness(OwnedByAthlete):
+    """R17 §10: "I'm sick / injured". While active the plan's upcoming workouts are
+    paused; "I'm better" builds the return-to-run block (planning/illness.py)."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        RECOVERED = "recovered", "Recovered"
+
+    type = models.CharField(max_length=8)                 # cold|flu|stomach|injury|other
+    symptoms = models.CharField(max_length=10, default="above_neck")
+    fever = models.BooleanField(default=False)
+    start_date = models.DateField()
+    expected_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    note = models.CharField(max_length=200, blank=True, default="")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE,
+                              db_index=True)
+    recovered_on = models.DateField(null=True, blank=True)
+    paused_count = models.PositiveIntegerField(default=0)
+    return_block = models.JSONField(null=True, blank=True)
+    race_warning = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-start_date", "-id"]
+        constraints = [models.UniqueConstraint(fields=["athlete"],
+                                               condition=models.Q(status="active"),
+                                               name="one_active_illness_per_athlete")]
+
+
+class DayDataDecision(OwnedByAthlete):
+    """R17: the athlete's include/exclude choice for one day's wellness numbers (a
+    flagged illness day). Only an explicit "exclude" leaves the day out of trends."""
+
+    date = models.DateField()
+    decision = models.CharField(max_length=8)             # include|exclude
+    decided_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["athlete", "date"],
+                                               name="uniq_day_data_decision")]

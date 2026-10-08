@@ -16,7 +16,8 @@ from __future__ import annotations
 import json
 import re
 
-MUTATING_TOOLS = ("edit_workout", "edit_week", "move_workout", "skip_workout", "clear_day")
+MUTATING_TOOLS = ("edit_workout", "edit_week", "move_workout", "skip_workout", "clear_day",
+                  "set_illness", "recover_illness")
 # A proposal is not a change to the active plan, but saying "I've set up a new plan" after
 # one is honest — so it counts for the guard (not for `plan_changed`).
 HONEST_TOOLS = MUTATING_TOOLS + ("propose_plan",)

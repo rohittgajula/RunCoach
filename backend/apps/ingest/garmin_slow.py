@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 BODY_DAYS = 30
 BACKFILL_DAYS = 180
+DELETION_PAGE = 100                 # R17: one listing call for the deletion check
 FITNESS_AGE_EVERY_DAYS = 7          # backfill samples fitness age weekly, not daily
 MAX_GEAR_STATS = 10
 
@@ -400,6 +401,14 @@ def sync_slow(athlete: Athlete, client, *, force: bool = False) -> dict:
             gear = call("gear", lambda: client.get_gear(str(pk)))
             done["shoes"] = store_gear(athlete, gear, call) if gear else 0
         done["watch_alarms"] = store_watch_alarms(athlete, profile, call)
+        # R17: one listing call — activities RunCoach holds that Garmin no longer lists
+        # become review questions (never deleted automatically).
+        listing = call("activity list", lambda: client.get_activities(0, DELETION_PAGE))
+        if isinstance(listing, list):
+            from apps.activities.deletion import check_listing
+
+            done["deleted_in_garmin"] = len(check_listing(
+                athlete, listing, page_full=len(listing) >= DELETION_PAGE))
     except RateLimited as exc:
         logger.warning("garmin slow sync rate limited for %s: %s", athlete.pk, exc)
         return {**done, "rate_limited": True, "calls": call.calls}

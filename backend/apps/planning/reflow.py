@@ -25,7 +25,7 @@ from planning.generator import MAX_RUN_DAYS, run_day_limit
 from planning.reflow import Item, reflow
 
 from .garmin_sync import forget_on_garmin, resync_on_garmin
-from .models import PlannedWorkout, TrainingPlan
+from .models import INACTIVE_STATUSES, PlannedWorkout, TrainingPlan
 from .plan_services import config_from_settings
 
 REASON = "training days changed"
@@ -65,7 +65,7 @@ def reflow_active_plan(athlete) -> dict | None:
     available = [int(d) for d, on in (athlete.available_days or {}).items() if on]
     last_date = plan.race.date - dt.timedelta(days=1) if plan.race else None
 
-    workouts = {w.pk: w for w in plan.workouts.exclude(status=PlannedWorkout.Status.SKIPPED)}
+    workouts = {w.pk: w for w in plan.workouts.exclude(status__in=INACTIVE_STATUSES)}
     items = [Item(id=w.pk, date=w.date, kind=w.kind, duration_s=w.duration_s, status=w.status,
                   edited=w.edited_by == "user")
              for w in workouts.values()]

@@ -312,3 +312,40 @@ def intraday_refresh() -> dict:
         except Exception:  # noqa: BLE001
             logger.debug("could not queue the intraday refresh for %s", athlete.pk)
     return {"queued": queued}
+
+
+# --- R17: re-import one deleted activity ------------------------------------------------
+
+REIMPORT_WAIT_S = 20
+
+
+@shared_task(name="ingest.reimport_one")
+def reimport_task(athlete_id: int, garmin_activity_id: int) -> dict:
+    from .garmin import reimport_one
+
+    if garmin_blocked():
+        return {"code": "rate_limited", "detail": "Garmin is rate-limiting this server."}
+    athlete = Athlete.objects.filter(pk=athlete_id).first()
+    if athlete is None:
+        return {"code": "gone"}
+    try:
+        return reimport_one(athlete, garmin_activity_id)
+    except GarminRateLimited as exc:
+        trip_breaker(str(exc))
+        return {"code": "rate_limited", "detail": "Garmin is rate-limiting this server."}
+    except GarminAuthError as exc:
+        return {"code": "auth", "detail": str(exc)}
+
+
+def run_reimport(athlete_id: int, garmin_activity_id: int) -> dict:
+    from django.conf import settings
+
+    if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+        return reimport_task.apply(args=(athlete_id, garmin_activity_id)).get()
+    try:
+        return reimport_task.apply_async(args=(athlete_id, garmin_activity_id),
+                                         queue="garmin").get(timeout=REIMPORT_WAIT_S,
+                                                             disable_sync_subtasks=False)
+    except Exception as exc:  # noqa: BLE001
+        return {"code": "queue", "detail": f"The Garmin queue did not answer in time "
+                                           f"({type(exc).__name__}). Try again in a minute."}

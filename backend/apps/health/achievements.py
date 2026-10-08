@@ -61,11 +61,14 @@ def evaluate(athlete) -> list[dict]:
         _store(athlete, key, Achievement.Kind.PR, label, day)
     pr_dates = list(Achievement.objects.filter(athlete=athlete, kind=Achievement.Kind.PR)
                     .values_list("earned_on", flat=True))
+    from .illness import illness_days
+
+    neutral = illness_days(athlete)          # R17: being ill never breaks a streak
     results = {
-        "consistency": maths.consistent_weeks(run_dates, today),
+        "consistency": maths.consistent_weeks(run_dates, today, neutral),
         "distance": maths.first_5k([(d, m or 0) for d, m in runs]),
         "records": maths.records(pr_dates),
-        "run_streak": maths.run_streak(run_dates, today),
+        "run_streak": maths.run_streak(run_dates, today, neutral),
         "sleep": maths.sleep_streak(nights),
     }
     smoke = _smoke(athlete)
@@ -74,7 +77,25 @@ def evaluate(athlete) -> list[dict]:
     cravings = _cravings(athlete)
     if cravings is not None:
         results["cravings"] = cravings
+    recovery = _recovery(athlete)
+    if recovery is not None:
+        results["recovery"] = recovery
     return maths.badges(results)
+
+
+def _recovery(athlete):
+    """R17 §1: shown once the athlete has done one routine."""
+    from analysis.recovery_routine import recovery_streak, streak_reached
+    from apps.activities.recovery import _run_flags
+    from apps.activities.models import RecoveryLog
+
+    if not RecoveryLog.objects.filter(athlete=athlete).exists():
+        return None
+    flags = _run_flags(athlete)
+    targets = [t for t, _, _ in maths.CATALOGUE["recovery"][1]]
+    reached = streak_reached([(day, done) for day, done, _ in flags], targets)
+    current, _ = recovery_streak([done for _, done, _ in flags])
+    return reached, current
 
 
 def _cravings(athlete):

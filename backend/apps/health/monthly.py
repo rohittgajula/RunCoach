@@ -164,7 +164,14 @@ def report_json(report: MonthlyReport) -> dict:
     habits = [h for h in p.get("habits", [])
               if h["habit"] != "private" or athlete.private_habit_enabled]
     good, improve, goal = _bullets(p, athlete, ai_safe=False)
-    return {"id": report.pk, "month": p.get("month"), "start": p.get("start"),
+    from .reports import RESTED_LINE, illness_rows
+
+    illness = illness_rows(athlete, dt.date.fromisoformat(str(p.get("start"))),
+                           dt.date.fromisoformat(str(p.get("end"))), "days_in_month") \
+        if p.get("start") and p.get("end") else []
+    if illness:
+        good = [RESTED_LINE] + [g for g in good if g != RESTED_LINE]
+    return {"illness": illness, "id": report.pk, "month": p.get("month"), "start": p.get("start"),
             "end": p.get("end"), "generated_at": report.created_at, "runs": p.get("runs", {}),
             "prs": p.get("prs", []), "fitness": p.get("fitness", {}),
             "wellness": p.get("wellness", []), "habits": habits,

@@ -92,6 +92,9 @@ def workout_json(workout: PlannedWorkout, guard_inputs: dict | None = None) -> d
         "garmin_status": garmin_status(workout),
         # R16 §A: the athlete's edits.
         **edit_fields(workout),
+        # R17 §10: illness mode.
+        "paused_by_illness": workout.paused_by_illness,
+        "illness_return": workout.illness_return,
     }
 
 

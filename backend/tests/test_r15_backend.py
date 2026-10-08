@@ -632,7 +632,7 @@ def test_share_data_shape_trimming_and_isolation(api, other_api, athlete, local_
                          "started_at", "start_local", "distance_m", "distance_km", "moving_s",
                          "elapsed_s", "avg_pace_s_per_km", "run_pace_s_per_km", "avg_hr",
                          "max_hr", "cadence_spm", "elevation_gain_m", "calories", "splits",
-                         "best_km", "weather", "route"}
+                         "best_km", "weather", "route", "quality"}
     assert body["distance_km"] == 2.0 and body["moving_s"] == 1800
     assert body["avg_pace_s_per_km"] == 900 and body["calories"] == 210
     assert body["elevation_gain_m"] == 12.0 and body["weather"] is None

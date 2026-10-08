@@ -45,6 +45,10 @@ class FakeClient:
         if name in self.missing:
             raise Exception("404 Not Found")
 
+    def get_activities(self, start=0, limit=20):     # R17: the deletion check
+        self._hit("get_activities")
+        return []
+
     def get_endurance_score(self, start, end=None):
         self._hit("get_endurance_score")
         if end:

@@ -35,8 +35,10 @@ def share_payload(activity: Activity, hide: bool) -> dict:
     km = (activity.total_distance_m or 0) / 1000
     moving = int(round(activity.total_timer_s or activity.total_elapsed_s or 0))
     local_start = activity.started_at.astimezone(athlete.local_now.tzinfo)
-    samples = list(activity.records.order_by("offset_s").values_list(
-        "offset_s", "distance_m", "heart_rate"))
+    from .quality import series
+
+    samples = [(r["offset_s"], r["distance_m"], r["heart_rate"])
+               for r in series(activity, ("distance_m", "heart_rate"))]
     splits = maths.km_splits(samples)
     route = route_body(activity, hide)
     gain = activity.total_ascent_m
@@ -78,4 +80,7 @@ def share_data(request, pk: int):
                 .first())
     if activity is None:
         return Response({"detail": "Not found."}, status=404)
-    return Response(share_payload(activity, athlete.map_hide_endpoints))
+    from .quality import quality_json
+
+    return Response({**share_payload(activity, athlete.map_hide_endpoints),
+                     "quality": quality_json(activity)})

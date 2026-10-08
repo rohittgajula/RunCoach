@@ -252,3 +252,76 @@ class RunReview(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class ActivityQuality(models.Model):
+    """R17 §2: the bad-data filter's verdict on one activity. The raw records are never
+    changed; the cleaned series is recomputed from them with `params` when needed.
+
+    `summary` is analysis.data_quality.Result.summary_dict(). `decision` and `use_choice`
+    are the athlete's own choices and survive re-derivation."""
+
+    activity = models.OneToOneField(Activity, on_delete=models.CASCADE, related_name="quality")
+    version = models.PositiveSmallIntegerField(default=1)
+    score = models.PositiveSmallIntegerField(default=100)
+    summary = models.JSONField(default=dict)
+    params = models.JSONField(default=dict)          # {max_hr, foot}
+    decision = models.CharField(max_length=8, blank=True, default="")      # include|exclude
+    use_choice = models.CharField(max_length=8, blank=True, default="")    # cleaned|raw
+    decided_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def use(self) -> str:
+        return self.use_choice or self.summary.get("use_default") or "raw"
+
+
+class RecoveryLog(OwnedByAthlete):
+    """R17 §1: the recovery routine done after one run."""
+
+    activity = models.OneToOneField(Activity, on_delete=models.CASCADE,
+                                    related_name="recovery_log")
+    done_at = models.DateTimeField()
+    skipped = models.JSONField(default=list)
+    notified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class RecoveryPush(OwnedByAthlete):
+    """R17 §1: "Recovery routine ready" sent once per run (dedupe)."""
+
+    activity = models.OneToOneField(Activity, on_delete=models.CASCADE,
+                                    related_name="recovery_push")
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+
+class ActivityTombstone(OwnedByAthlete):
+    """R17: an activity the athlete deleted. Later syncs, backfills, reingests and
+    re-uploads of the same Garmin id or file never bring it back."""
+
+    class Reason(models.TextChoices):
+        USER = "user", "Deleted by the athlete"
+        GARMIN = "deleted_in_garmin", "Deleted in Garmin"
+
+    garmin_activity_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    sha256 = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    local_date = models.DateField(null=True, blank=True)
+    sport = models.CharField(max_length=40, blank=True, default="")
+    distance_m = models.FloatField(default=0)
+    reason = models.CharField(max_length=20, choices=Reason.choices, default=Reason.USER)
+    deleted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-deleted_at", "-id"]
+
+
+class GarminDeletionCheck(OwnedByAthlete):
+    """R17: an activity Garmin no longer lists. Never deleted automatically — a data
+    review item until the athlete says remove (delete + tombstone) or keep."""
+
+    activity = models.OneToOneField(Activity, on_delete=models.CASCADE,
+                                    related_name="garmin_deletion")
+    detected_at = models.DateTimeField(auto_now_add=True)
+    decision = models.CharField(max_length=8, blank=True, default="")    # keep
+    decided_at = models.DateTimeField(null=True, blank=True)

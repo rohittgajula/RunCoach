@@ -254,6 +254,7 @@ def form_payload(athlete, period) -> dict:
     runs = []
     for a in (Activity.objects.filter(athlete=athlete, sport__icontains="run",
                                       local_date__gte=start, local_date__lte=end)
+              .exclude(quality__decision="exclude")
               .select_related("metrics").order_by("started_at")):
         m = getattr(a, "metrics", None)
         if m is None or m.run_block_count <= 0:

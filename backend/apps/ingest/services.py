@@ -53,6 +53,11 @@ def _ingest(raw: RawFitFile, garmin_activity_id: int | None) -> Activity:
         athlete=athlete, garmin_activity_id=garmin_activity_id
     ).exists():
         raise DuplicateActivity(f"activity {garmin_activity_id} already stored")
+    # R17: the athlete deleted this activity; nothing brings it back but "re-import".
+    from apps.activities.deletion import is_tombstoned
+
+    if is_tombstoned(athlete, garmin_activity_id=garmin_activity_id, sha256=raw.sha256):
+        raise DuplicateActivity("this activity was deleted by the athlete")
 
     with raw.file.open("rb") as handle:
         parsed = parse(handle)

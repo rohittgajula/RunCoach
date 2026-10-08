@@ -23,6 +23,28 @@ from .models import Experiment
 
 START_AHEAD_DAYS = 14
 OPEN = (Experiment.Status.SCHEDULED, Experiment.Status.ACTIVE)
+# R17: up to three experiments may run at once (R14 allowed one).
+MAX_OPEN = 3
+OVERLAP_NOTE = ("Another experiment ran at the same time, so the changes can't be pinned "
+                "on one of them.")
+
+
+def _same_template(a_kind: str, a_rule: dict, b: Experiment) -> bool:
+    if a_kind != b.kind:
+        return False
+    if a_kind == "custom":
+        return a_rule.get("habit") == (b.rule or {}).get("habit")
+    return True
+
+
+def overlapping(exp: Experiment) -> list[dict]:
+    """Other experiments whose window overlaps this one's (stopped ones by their
+    shortened window)."""
+    others = Experiment.objects.filter(athlete=exp.athlete, start__lte=exp.end,
+                                       end__gte=exp.start).exclude(pk=exp.pk)
+    return [{"id": o.pk, "title": o.title, "start": o.start, "end": o.end,
+             "days": (min(o.end, exp.end) - max(o.start, exp.start)).days + 1}
+            for o in others.order_by("start", "id")]
 
 
 def _bad(message: str, code: int = 400) -> Response:
@@ -153,7 +175,8 @@ def experiment_json(exp: Experiment, today: dt.date, with_result: bool = False) 
             "decision": exp.decision or None, "created_at": exp.created_at,
             "ended_at": exp.ended_at,
             "progress": {"day": day, "days": days, "pct": round(day / days * 100)},
-            "adherence": adh, "chip": chip}
+            "adherence": adh, "chip": chip,
+            "overlapping": overlapping(exp)}           # R17
     if with_result:
         body["result"] = result(exp, today, last, adh)
     return body
@@ -169,7 +192,9 @@ def result(exp: Experiment, today: dt.date, last: dt.date, adh: dict) -> dict:
     metrics = maths.compare(series, (b_start, b_end), (exp.start, d_end)) \
         if d_end >= exp.start else maths.compare({}, (b_start, b_end), (exp.start, exp.start))
     title = "Private habit limit" if exp.rule.get("habit") == "private" else exp.title
-    return {"final": final, "baseline": {"start": b_start, "end": b_end},
+    overlap = overlapping(exp)
+    return {"overlapping": overlap, "overlap_note": OVERLAP_NOTE if overlap else None,
+            "final": final, "baseline": {"start": b_start, "end": b_end},
             "during": {"start": exp.start, "end": d_end},
             "adherence_pct": adh["pct"], "metrics": metrics,
             "summary": maths.summary(exp.title, adh["pct"], metrics, final),
@@ -277,8 +302,14 @@ def experiments(request):
         for e in Experiment.objects.select_for_update().filter(athlete=athlete,
                                                                 status__in=OPEN):
             refresh_status(e, today)
-        if Experiment.objects.filter(athlete=athlete, status__in=OPEN).exists():
-            return _bad("You already have an experiment running — stop it first.", 409)
+        open_rows = list(Experiment.objects.filter(athlete=athlete, status__in=OPEN))
+        if len(open_rows) >= MAX_OPEN:
+            return _bad(f"You already have {MAX_OPEN} experiments running — stop one first.",
+                        409)
+        end = start + dt.timedelta(days=days - 1)
+        if any(_same_template(kind, rule, e) and e.start <= end and e.end >= start
+               for e in open_rows):
+            return _bad("You already have this experiment running in those dates.")
         exp = Experiment.objects.create(
             athlete=athlete, kind=kind, title=title.strip(), start=start,
             end=start + dt.timedelta(days=days - 1), rule=rule,
@@ -348,8 +379,17 @@ def experiment_active(request):
     today = athlete.local_today
     rows = [refresh_status(e, today) for e in Experiment.objects.filter(
         athlete=athlete, status__in=[*OPEN, Experiment.Status.COMPLETED])]
-    active = next((e for e in rows if e.status == Experiment.Status.ACTIVE), None)
+    active = next((e for e in sorted(rows, key=lambda e: (e.start, e.pk))
+                   if e.status == Experiment.Status.ACTIVE), None)
     if active is None:
         active = next((e for e in rows if e.status == Experiment.Status.COMPLETED
                        and not e.decision and e.end >= today - dt.timedelta(days=7)), None)
-    return Response({"experiment": experiment_json(active, today) if active else None})
+    # R17: several can run at once — `active_list` has every active one (oldest start
+    # first), then completed ones still waiting for a keep/stop decision (≤ 7 days).
+    listed = sorted([e for e in rows if e.status == Experiment.Status.ACTIVE],
+                    key=lambda e: (e.start, e.pk))
+    listed += [e for e in rows if e.status == Experiment.Status.COMPLETED
+               and not e.decision and e.end >= today - dt.timedelta(days=7)]
+    return Response({"experiment": experiment_json(active, today) if active else None,
+                     "active_list": [experiment_json(e, today) for e in listed],
+                     "max_active": MAX_OPEN})

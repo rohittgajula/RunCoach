@@ -38,6 +38,8 @@ class ReminderSettings(OwnedByAthlete):
     # time). Replaces R13's "Run reviewed". On by default — it only reaches athletes who
     # subscribed a device to push.
     run_summary = models.BooleanField(default=True)
+    # R17 §1: "Recovery routine ready" after a run (event; off by default).
+    recovery_ready = models.BooleanField(default=False)
     # R11 §C: nudges driven by the intraday data (and water by the clock). All off.
     move = models.BooleanField(default=False)
     move_start = models.TimeField(default=dt.time(9, 0))

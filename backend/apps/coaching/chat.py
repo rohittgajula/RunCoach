@@ -14,6 +14,7 @@ import logging
 
 from django.db import transaction
 
+from analysis.memory_facts import context_facts
 from apps.athletes.models import Athlete
 
 from .client import AIUnavailable, chat_with_tools
@@ -98,7 +99,10 @@ def system_prompt(athlete: Athlete) -> str:
             "diet_goal": athlete.diet_goal,
         },
         "races": upcoming_races(athlete),
-        "memory": list(MemoryFact.objects.filter(athlete=athlete).values_list("text", flat=True)[:40]),
+        # R17 §16: pinned facts always, then the newest others (≤ 40 in all).
+        "memory": context_facts(list(MemoryFact.objects.filter(athlete=athlete)
+                                     .order_by("-created_at", "-id")
+                                     .values_list("text", "pinned"))),
         "last_6_weeks": weeks,
         "history_summary": history_summary(athlete),
         "active_plan": {
@@ -122,6 +126,15 @@ def system_prompt(athlete: Athlete) -> str:
         ],
         "diet_today": {"targets": diet["targets"], "eaten": diet["eaten"]},
     }
+    # R17 §10: illness mode — type, dates and counts only.
+    from apps.health.illness import active as illness_active
+
+    ill = illness_active(athlete)
+    if ill is not None:
+        context["illness"] = {"type": ill.type, "since": ill.start_date,
+                              "paused_sessions": ill.paused_count,
+                              "note": "Plan paused. Rest messaging only; use recover_illness "
+                                      "when they say they're better."}
     from apps.habits.services import chat_context
 
     habits = chat_context(athlete)

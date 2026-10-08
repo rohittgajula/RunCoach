@@ -21,7 +21,7 @@ from planning.adaptation import decide
 from planning.generator import Session
 from planning.workouts import build_workout
 
-from .models import PlanAdjustment, PlannedWorkout, TrainingPlan
+from .models import INACTIVE_STATUSES, PlanAdjustment, PlannedWorkout, TrainingPlan
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ def adapt_week(athlete: Athlete, today: dt.date | None = None) -> PlanAdjustment
 
     planned = list(plan.workouts.filter(
         date__gte=reviewed, date__lt=this_monday,
-    ).exclude(status=PlannedWorkout.Status.SKIPPED))
+    ).exclude(status__in=INACTIVE_STATUSES))
     if not planned:
         return None        # the plan had not started last week: nothing to compare
 
@@ -105,7 +105,7 @@ def adapt_week(athlete: Athlete, today: dt.date | None = None) -> PlanAdjustment
     planned_run_s = sum(run_seconds(w) for w in planned)
     upcoming = list(plan.workouts.filter(
         date__gte=this_monday, date__lt=this_monday + dt.timedelta(days=7),
-    ).exclude(status=PlannedWorkout.Status.SKIPPED).select_related("phase"))
+    ).exclude(status__in=INACTIVE_STATUSES).select_related("phase"))
     decision = decide(planned_run_s, actual_run_s, sum(run_seconds(w) for w in upcoming))
 
     try:

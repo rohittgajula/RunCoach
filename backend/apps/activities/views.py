@@ -79,7 +79,7 @@ def activity_facets(request):
     })
 
 
-class ActivityDetail(AthleteScopedMixin, generics.RetrieveAPIView):
+class ActivityDetail(AthleteScopedMixin, generics.RetrieveDestroyAPIView):
     serializer_class = ActivityDetailSerializer
     permission_classes = [IsAuthenticated]
     queryset = Activity.objects.select_related("metrics").prefetch_related("segments")
@@ -88,6 +88,13 @@ class ActivityDetail(AthleteScopedMixin, generics.RetrieveAPIView):
         from apps.planning.plan_views import activity_detail_json
 
         return Response(activity_detail_json(request.user.athlete, self.get_object()))
+
+    def destroy(self, request, *args, **kwargs):
+        """R17: delete the activity and everything derived from it; a tombstone stops
+        any later sync from bringing it back."""
+        from .deletion import delete_activity
+
+        return Response(delete_activity(self.get_object()))
 
 
 # A 28-minute run is ~1,670 samples and a long one is far more. Charts cannot show
@@ -117,10 +124,18 @@ def activity_series(request, pk: int):
     if not rows:
         return Response({"points": [], "has_hr": False, "has_cadence": False})
 
+    # R17 §2: the cleaned HR beside the raw one; `hr` stays raw.
+    from .quality import run_filter, params_for, quality_row
+
+    q = quality_row(activity)
+    cleaned = run_filter(
+        [{**r, "latitude": None, "longitude": None} for r in rows],
+        q.params if q and q.params else params_for(activity)).cleaned
     step = max(1, len(rows) // CHART_POINTS)
     points = []
     for start in range(0, len(rows), step):
         bucket = rows[start : start + step]
+        clean_hr = [v for v in cleaned.heart_rate[start : start + step] if v is not None]
 
         def mean(key):
             values = [r[key] for r in bucket if r[key] is not None]
@@ -134,6 +149,8 @@ def activity_series(request, pk: int):
             # slower than 20 min/km is a stop, and plotting it flattens the whole axis.
             "pace": round(1000 / speed) if speed and 1000 / speed < 1200 else None,
             "hr": mean("heart_rate"),
+            "hr_clean": round(sum(clean_hr) / len(clean_hr), 1) if clean_hr else None,
+            "hr_fixed": any(cleaned.hr_fixed[start : start + step]),
             "cadence": mean("cadence_spm"),
             "altitude": mean("altitude_m"),
         })
@@ -154,19 +171,28 @@ ROUTES_MAX = 50
 
 
 def route_cache_key(activity: Activity, hide: bool) -> str:
-    return f"route:v1:{activity.pk}:{activity.segmentation_version}:{int(hide)}"
+    from .quality import effective_use
+
+    return (f"route:v1:{activity.pk}:{activity.segmentation_version}:{int(hide)}"
+            f":{effective_use(activity)}")
 
 
 def overlay_cache_key(activity: Activity, hide: bool) -> str:
-    return f"route-overlay:v1:{activity.pk}:{int(hide)}"
+    from .quality import effective_use
+
+    return f"route-overlay:v1:{activity.pk}:{int(hide)}:{effective_use(activity)}"
 
 
 def _route_samples(activity: Activity) -> list[dict]:
-    rows = activity.records.filter(latitude__isnull=False, longitude__isnull=False).order_by(
-        "offset_s").values_list("offset_s", "latitude", "longitude", "distance_m", "heart_rate",
-                                "altitude_m")
-    return [{"t": t, "lat": lat, "lon": lon, "dist": d, "hr": hr, "alt": alt}
-            for t, lat, lon, d, hr, alt in rows]
+    # R17 §2: masked GPS points (teleports, impossible speed) are dropped when the run
+    # uses the cleaned series.
+    from .quality import series
+
+    rows = series(activity, ("latitude", "longitude", "distance_m", "heart_rate",
+                             "altitude_m"))
+    return [{"t": r["offset_s"], "lat": r["latitude"], "lon": r["longitude"],
+             "dist": r["distance_m"], "hr": r["heart_rate"], "alt": r["altitude_m"]}
+            for r in rows if r["latitude"] is not None and r["longitude"] is not None]
 
 
 def route_body(activity: Activity, hide: bool) -> dict:
@@ -204,7 +230,10 @@ def activity_route(request, pk: int):
     # R16: `?full=1` = the untrimmed route (true start/finish) for the owner's own in-app
     # map. Endpoint hiding still applies to the default call and to every share output.
     full = str(request.query_params.get("full", "")).lower() in ("1", "true", "yes")
-    return Response(route_body(activity, False if full else athlete.map_hide_endpoints))
+    from .quality import quality_json
+
+    return Response({**route_body(activity, False if full else athlete.map_hide_endpoints),
+                     "quality": quality_json(activity)})
 
 
 @api_view(["GET"])

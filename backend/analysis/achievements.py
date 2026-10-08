@@ -51,10 +51,17 @@ CATALOGUE: dict[str, tuple[str, list[tuple[int, str, str]]]] = {
         (50, "50 cravings beaten", "Fifty cravings resisted."),
         (100, "100 cravings beaten", "A hundred cravings resisted."),
     ]),
+    # R17 §1: the recovery routine done after N runs in a row.
+    "recovery": ("runs", [
+        (3, "Recovery streak: 3", "Did the recovery routine after 3 runs in a row."),
+        (7, "Recovery streak: 7", "Did the recovery routine after 7 runs in a row."),
+        (14, "Recovery streak: 14", "Did the recovery routine after 14 runs in a row."),
+    ]),
 }
 KEY_PREFIX = {"smoke_free": "smoke_free_", "consistency": "consistent_weeks_",
               "distance": "first_5k", "records": "prs_", "run_streak": "run_streak_",
-              "sleep": "sleep_7h_", "cravings": "cravings_resisted_"}
+              "sleep": "sleep_7h_", "cravings": "cravings_resisted_",
+              "recovery": "recovery_streak_"}
 
 
 def badge_key(group: str, target: int) -> str:
@@ -94,10 +101,12 @@ def smoke_free(smoke_totals: dict[dt.date, float], tracking_start: dt.date | Non
     return reached, current
 
 
-def consistent_weeks(run_dates: list[dt.date], today: dt.date
-                     ) -> tuple[dict[int, dt.date], int]:
+def consistent_weeks(run_dates: list[dt.date], today: dt.date,
+                     neutral: set[dt.date] | None = None) -> tuple[dict[int, dt.date], int]:
     """Consecutive Monday–Sunday weeks with ≥ 2 runs. Earned on the day of the run that
-    made the Nth week count. Progress counts the current week once it qualifies."""
+    made the Nth week count. Progress counts the current week once it qualifies.
+    R17: a week with an illness day (`neutral`) and < 2 runs neither counts nor breaks."""
+    neutral = neutral or set()
     targets = [t for t, _, _ in CATALOGUE["consistency"][1]]
     if not run_dates:
         return {}, 0
@@ -117,21 +126,26 @@ def consistent_weeks(run_dates: list[dt.date], today: dt.date
             for target in targets:
                 if run >= target and target not in reached:
                     reached[target] = days[MIN_WEEK_RUNS - 1]
-        elif week != this_week:
+        elif week != this_week and not any(
+                week + dt.timedelta(days=i) in neutral for i in range(7)):
             run = 0
         current = run
         week += dt.timedelta(days=7)
     return reached, current
 
 
-def run_streak(run_dates: list[dt.date], today: dt.date) -> tuple[dict[int, dt.date], int]:
+def run_streak(run_dates: list[dt.date], today: dt.date,
+               neutral: set[dt.date] | None = None) -> tuple[dict[int, dt.date], int]:
+    """R17: illness days (`neutral`) are skipped over — they neither count nor break."""
     targets = [t for t, _, _ in CATALOGUE["run_streak"][1]]
     if not run_dates:
         return {}, 0
-    days = day_range(min(run_dates), today)
+    neutral = (neutral or set()) - set(run_dates)
+    days = [d for d in day_range(min(run_dates), today) if d not in neutral]
     good = set(run_dates)
     reached, current, _ = streak_reached(days, good, targets)
-    if today not in good and current == 0 and (today - dt.timedelta(days=1)) in good:
+    previous = days[-2] if len(days) >= 2 and days[-1] == today else None
+    if today not in good and current == 0 and previous in good:
         # Today has no run yet: the streak is still alive.
         _, current, _ = streak_reached(days[:-1], good, targets)
     return reached, current

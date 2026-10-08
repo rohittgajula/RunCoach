@@ -11,6 +11,7 @@ import datetime as dt
 import json
 import logging
 
+from django.db.models import Q
 from django.utils import timezone
 
 from analysis import run_review as maths
@@ -63,7 +64,9 @@ def compute(activity: Activity) -> dict:
     history = list(Activity.objects.filter(
         athlete=athlete, sport__icontains="run",
         local_date__gte=activity.local_date - dt.timedelta(days=HISTORY_DAYS),
-        local_date__lte=activity.local_date).select_related("metrics"))
+        local_date__lte=activity.local_date)
+        .exclude(Q(quality__decision="exclude") & ~Q(pk=activity.pk))   # R17
+        .select_related("metrics"))
     kinds = _kinds(athlete, [a.pk for a in history] + [activity.pk])
     points = [_point(a, kinds.get(a.pk, "EASY")) for a in history
               if getattr(a, "metrics", None) is not None]

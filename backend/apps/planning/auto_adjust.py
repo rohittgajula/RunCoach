@@ -30,7 +30,7 @@ from planning import adapt
 from planning.generator import Session
 from planning.workouts import build_workout
 
-from .models import PlannedWorkout, TrainingPlan, WorkoutAdjustment
+from .models import INACTIVE_STATUSES, PlannedWorkout, TrainingPlan, WorkoutAdjustment
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +144,7 @@ def week_room(plan: TrainingPlan, day: dt.date) -> int:
     what is prescribed now. Skipped sessions count on neither side."""
     start = _plan_week_start(plan, day)
     rows = plan.workouts.filter(date__gte=start, date__lt=start + dt.timedelta(days=7)) \
-        .exclude(status=PlannedWorkout.Status.SKIPPED).exclude(kind="RACE")
+        .exclude(status__in=INACTIVE_STATUSES).exclude(kind="RACE")
     planned = sum(_run_s(_baseline_steps(w)) for w in rows)
     current = sum(_run_s(w.steps) for w in rows)
     return planned - current
@@ -307,6 +307,10 @@ def evaluate(athlete: Athlete, *, trigger: str, activity: Activity | None = None
     """Decide and apply. Returns the WorkoutAdjustment rows created (maybe none)."""
     if not athlete.auto_adjust_plan:
         return []
+    from apps.health.illness import active as illness_active
+
+    if illness_active(athlete) is not None:
+        return []                # R17 §10: the plan is paused while unwell
     plan = TrainingPlan.objects.filter(athlete=athlete, status=TrainingPlan.Status.ACTIVE).first()
     if plan is None:
         return []

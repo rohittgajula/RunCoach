@@ -13,7 +13,7 @@ from django.db import transaction
 from apps.athletes.models import Athlete
 from planning.checkin import Verdict, WorkoutSummary, decide
 
-from .models import PlannedWorkout, TrainingPlan
+from .models import INACTIVE_STATUSES, PlannedWorkout, TrainingPlan
 from .plan_services import snapshot_for
 
 CHECKIN = "checkin"
@@ -25,7 +25,7 @@ def today_workout(athlete: Athlete) -> PlannedWorkout | None:
         PlannedWorkout.objects.filter(
             athlete=athlete, date=athlete.local_today,
             plan__status=TrainingPlan.Status.ACTIVE,
-        ).exclude(status=PlannedWorkout.Status.SKIPPED)
+        ).exclude(status__in=INACTIVE_STATUSES)
         .select_related("phase").order_by("id").first()
     )
 
@@ -98,6 +98,15 @@ def today_payload(athlete: Athlete) -> dict:
     payload["reasons"] = reason_dates(athlete, athlete.local_today, payload["reasons"])
     payload["as_of"] = fresh["as_of"]
     payload["freshness"] = fresh
+    # R17 §10: illness mode — rest messaging, no session.
+    from apps.health.illness import active, brief
+
+    ill = active(athlete)
+    payload["illness"] = brief(ill, athlete.local_today) if ill else None
+    if ill is not None:
+        payload.update({"verdict": "rest", "headline": "Rest and get well",
+                        "note": payload["illness"]["advice"][0], "workout": None,
+                        "adjusted": None, "applied": False})
     return payload
 
 

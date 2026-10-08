@@ -17,7 +17,7 @@ from django.db import transaction
 from planning import strength as rules
 from planning.garmin_strength import build_payload, payload_hash
 
-from .models import PlannedWorkout, StrengthSession, TrainingPlan
+from .models import INACTIVE_STATUSES, PlannedWorkout, StrengthSession, TrainingPlan
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def place_for(athlete) -> dict:
                 last = min(last, phases_end)
             rows = (PlannedWorkout.objects.filter(athlete=athlete, plan=plan, date__gte=first,
                                                   date__lte=last + dt.timedelta(days=1))
-                    .exclude(status=PlannedWorkout.Status.SKIPPED).values_list("date", "kind"))
+                    .exclude(status__in=INACTIVE_STATUSES).values_list("date", "kind"))
             kinds: dict[dt.date, list[str]] = {}
             for day, kind in rows:
                 kinds.setdefault(day, []).append(kind)

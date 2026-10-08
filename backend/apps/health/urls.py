@@ -4,7 +4,7 @@ from . import (
     achievements, briefing, compare_views, day_views, forecast_views, garmin_views, injury,
     monthly, mood, reports, wake_views,
 )
-from . import experiments, goals, heart
+from . import data_review, experiments, goals, heart, illness
 
 urlpatterns = [
     path("health/fitness/", garmin_views.fitness, name="health-fitness"),
@@ -55,4 +55,11 @@ urlpatterns = [
     path("goals/<int:pk>/", goals.goal_detail, name="goal"),
     path("goals/<int:pk>/values/", goals.goal_values, name="goal-values"),
     path("health/heart/", heart.heart, name="health-heart"),
+    # R17
+    path("illness/", illness.illness_view, name="illness"),
+    path("illness/history/", illness.illness_history, name="illness-history"),
+    path("illness/<int:pk>/", illness.illness_detail, name="illness-detail"),
+    path("illness/<int:pk>/recover/", illness.illness_recover, name="illness-recover"),
+    path("data-review/", data_review.data_review, name="data-review"),
+    path("data-review/decide/", data_review.data_review_decide, name="data-review-decide"),
 ]

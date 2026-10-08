@@ -26,7 +26,7 @@ from planning.workouts import build_workout
 
 from .adaptation import _walk_seconds, run_seconds
 from .garmin_sync import forget_on_garmin, resync_on_garmin
-from .models import PlannedWorkout, TrainingPlan
+from .models import INACTIVE_STATUSES, PlannedWorkout, TrainingPlan
 from .plan_services import config_from_settings
 
 REASON = "runs per week changed"
@@ -131,7 +131,7 @@ def relayout_active_plan(athlete) -> dict | None:
     config, bands = config_from_settings(), bands_for(athlete)
 
     weeks = defaultdict(list)
-    for w in plan.workouts.exclude(status=PlannedWorkout.Status.SKIPPED).select_related("phase"):
+    for w in plan.workouts.exclude(status__in=INACTIVE_STATUSES).select_related("phase"):
         weeks[(w.date - start).days // 7].append(w)
 
     regenerated, notes, changed, doomed = 0, [], [], []

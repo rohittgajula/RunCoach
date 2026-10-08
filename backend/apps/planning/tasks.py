@@ -14,6 +14,10 @@ def adapt_week_task(athlete_id: int) -> dict:
     athlete = Athlete.objects.filter(pk=athlete_id).first()
     if athlete is None:
         return {"skipped": "gone"}
+    from apps.health.illness import active as illness_active
+
+    if illness_active(athlete) is not None:
+        return {"skipped": "illness"}      # R17 §10: paused while unwell
     adjustment = adapt_week(athlete)
     if adjustment is None:
         return {"athlete": athlete_id, "adjusted": False}
@@ -200,7 +204,11 @@ def strength_topup() -> dict:
     from .strength_service import place_for
 
     done = 0
+    from apps.health.illness import active as illness_active
+
     for athlete in Athlete.objects.filter(strength_per_week__gt=0):
+        if illness_active(athlete) is not None:
+            continue                         # R17 §10: nothing new while unwell
         try:
             place_for(athlete)
             done += 1

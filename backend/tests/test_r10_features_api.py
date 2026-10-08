@@ -243,7 +243,8 @@ def test_reminders_hidden_without_vapid(api, settings):
     assert [r["key"] for r in body["reminders"]] == ["morning_checkin", "habit_log",
                                                      "best_run_time", "weekly_report",
                                                      # R13, R15 (run_summary replaced run_reviewed)
-                                                     "morning_briefing", "run_summary"]
+                                                     "morning_briefing", "run_summary",
+                                                     "recovery_ready"]
     # R15: run_summary is the one reminder on by default.
     assert all(r["enabled"] is (r["key"] == "run_summary") for r in body["reminders"])
     assert "Home Screen" in body["ios_note"]

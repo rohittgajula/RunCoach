@@ -27,6 +27,10 @@ def derive_one(activity_id: int) -> dict:
 
     metrics = derive(activity)
     queue_after_run(activity)
+    # R17 §1: "Recovery routine ready" (opt-in; recent runs only).
+    from .recovery import maybe_push
+
+    maybe_push(activity)
     return {"activity": activity_id, "segmented": metrics is not None}
 
 

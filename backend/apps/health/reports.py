@@ -60,8 +60,12 @@ def _runs(athlete, start: dt.date, end: dt.date) -> tuple[dict, dict]:
 
 
 def _wellness(athlete, start: dt.date, end: dt.date) -> dict[str, list]:
+    from .data_review import excluded_days
+
+    # R17: days the athlete explicitly left out (e.g. while ill) don't count.
     rows = DailyMetrics.objects.filter(athlete=athlete, metric_date__gte=start,
-                                       metric_date__lte=end)
+                                       metric_date__lte=end) \
+        .exclude(metric_date__in=excluded_days(athlete))
     return {"hrv": [r.hrv_overnight_avg for r in rows],
             "rhr": [r.resting_hr for r in rows],
             "sleep": [r.sleep_seconds / 3600 if r.sleep_seconds else None for r in rows],
@@ -138,7 +142,12 @@ def report_json(report: WeeklyReport) -> dict:
     good, improve, goal = maths.bullets(runs=p["runs"], wellness=p.get("wellness", []),
                                         habits=habits, prs=p.get("prs", []),
                                         zones=p.get("zones", {}))
+    illness = illness_rows(report.athlete, report.week_start,
+                           report.week_start + dt.timedelta(days=6), "days_in_week")
+    if illness:
+        good = [RESTED_LINE] + [g for g in good if g != RESTED_LINE]
     return {
+        "illness": illness,                  # R17 §10
         "id": report.pk, "week_start": report.week_start,
         "week_end": report.week_start + dt.timedelta(days=6),
         "generated_at": report.created_at,
@@ -150,6 +159,24 @@ def report_json(report: WeeklyReport) -> dict:
         # R13 §10: averages only, computed on read (older stored reports gain it too).
         "mood": _mood(report),
     }
+
+
+RESTED_LINE = "You rested while unwell — the right call."
+
+
+def illness_rows(athlete, start: dt.date, end: dt.date, days_key: str) -> list[dict]:
+    """R17 §10: illness periods overlapping [start, end]."""
+    from planning.illness import label_for
+
+    from .illness import periods
+
+    out = []
+    for s, e, ill in periods(athlete):
+        lo, hi = max(s, start), min(e, end)
+        if lo <= hi:
+            out.append({"id": ill.pk, "type": ill.type, "type_label": label_for(ill.type),
+                        "start": s, "end": e, days_key: (hi - lo).days + 1})
+    return out
 
 
 def _mood(report: WeeklyReport) -> dict:

@@ -90,7 +90,7 @@ def compute(athlete) -> dict:
         smoke_free = _safe(lambda: smoke_streak(athlete)["current_days"])
     mood = MoodLog.objects.filter(athlete=athlete, date=today).first()
     adjustment = current_for(workout) if workout is not None else None
-    return {
+    body = {
         "date": today.isoformat(), "greeting": maths.greeting(athlete.display_name),
         "readiness": {"score": metrics.training_readiness if metrics else None,
                       "label": (metrics.training_readiness_level or None) if metrics else None,
@@ -115,7 +115,19 @@ def compute(athlete) -> dict:
                              need_h=need_h, mood=mood.mood if mood else None,
                              reviewed=_safe(lambda: recent(athlete)) is not None),
         "injury_risk": injury["risk"],
+        "illness": None,
     }
+    # R17 §10: illness mode — rest messaging and no session.
+    from .illness import active, brief
+
+    ill = active(athlete)
+    if ill is not None:
+        info = brief(ill, today)
+        body["illness"] = json.loads(json.dumps(info, default=str))
+        body["checkin"] = {"verdict": "rest", "headline": "Rest and get well"}
+        body["session"] = {"workout": None, "adjustment": None, "strength": None}
+        body["focus"] = {"key": "illness", "text": info["advice"][0]}
+    return body
 
 
 def _weather(athlete) -> dict | None:
@@ -164,7 +176,8 @@ def briefing_json(athlete, row: MorningBriefing | None) -> dict:
              "wake_time": f"{wake // 60:02d}:{wake % 60:02d}" if wake is not None else None,
              "greeting": maths.greeting(athlete.display_name), "readiness": None,
              "checkin": None, "session": None, "weather": None, "fuel": None, "focus": None,
-             "notes": [], "ai": {"status": "none", "text": "", "generated_at": None}}
+             "notes": [], "ai": {"status": "none", "text": "", "generated_at": None},
+             "illness": None}
     if row is None:
         return empty
     p = row.payload
@@ -172,7 +185,7 @@ def briefing_json(athlete, row: MorningBriefing | None) -> dict:
             "greeting": p.get("greeting"), "readiness": p.get("readiness"),
             "checkin": p.get("checkin"), "session": p.get("session"),
             "weather": p.get("weather"), "fuel": p.get("fuel"), "focus": p.get("focus"),
-            "notes": p.get("notes", []),
+            "notes": p.get("notes", []), "illness": p.get("illness"),
             "ai": ({"status": "ready", "text": row.ai_text, "generated_at": row.ai_generated_at}
                    if row.ai_text else empty["ai"])}
 

@@ -19,7 +19,9 @@ WORKOUT_KEYS = {"id", "date", "title", "kind", "phase", "duration_s", "load", "s
                 "auto_adjustment",
                 # R16 §A
                 "edited_by", "edited_at", "edited_via", "notes", "can_edit",
-                "can_undo_edit", "planned"}
+                "can_undo_edit", "planned",
+                # R17 §10
+                "paused_by_illness", "illness_return"}
 STEP_KEYS = {"kind", "duration_s", "intensity", "label", "pace_min_s", "pace_max_s",
              "hr_min", "hr_max"}
 FUEL_KEYS = {"before", "during", "after", "carbs_g_during_per_h"}
@@ -205,7 +207,9 @@ def test_metric_entries_mirror_weight(api, athlete):
 def test_memory_endpoints(api):
     r = api.post("/api/memory/", {"text": "Has a sore left knee."}, format="json")
     assert r.status_code == 201
-    assert set(r.json()) == {"id", "text", "source", "created_at"}
+    assert set(r.json()) == {"id", "text", "source", "created_at",
+                             # R17 §16
+                             "category", "category_label", "pinned", "updated_at", "edited"}
     assert api.post("/api/memory/", {"text": "has a sore left knee"}, format="json").status_code == 200
     assert len(api.get("/api/memory/").json()) == 1
     assert api.delete(f"/api/memory/{r.json()['id']}/").status_code == 204

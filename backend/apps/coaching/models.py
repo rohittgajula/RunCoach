@@ -279,8 +279,14 @@ class MemoryFact(OwnedByAthlete):
     class Source(models.TextChoices):
         CHAT = "chat", "Chat"
         MANUAL = "manual", "Manual"
+        CHECKIN = "checkin", "Check-in"
 
     text = models.CharField(max_length=300)
+    # R17 §16: the memory page.
+    category = models.CharField(max_length=10, default="other")   # health|schedule|goals|other
+    pinned = models.BooleanField(default=False)
+    edited = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     source = models.CharField(max_length=8, choices=Source.choices, default=Source.MANUAL)
     source_message = models.ForeignKey(
         ChatMessage, on_delete=models.SET_NULL, null=True, blank=True, related_name="memories"

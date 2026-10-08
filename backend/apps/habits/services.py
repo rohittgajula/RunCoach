@@ -79,8 +79,12 @@ def _totals(athlete, kind: str, since: dt.date | None = None) -> dict[dt.date, f
 
 
 def _mornings(athlete, start: dt.date, end: dt.date) -> dict[dt.date, dict]:
+    from apps.health.data_review import excluded_days
+
+    # R17: days the athlete explicitly excluded (e.g. while ill) are left out.
     rows = DailyMetrics.objects.filter(athlete=athlete, metric_date__gte=start,
-                                       metric_date__lte=end)
+                                       metric_date__lte=end) \
+        .exclude(metric_date__in=excluded_days(athlete))
     return {r.metric_date: {"hrv": r.hrv_overnight_avg, "rhr": r.resting_hr,
                             "sleep_score": r.sleep_score,
                             "body_battery": r.body_battery_high, "stress": r.stress_avg,
@@ -93,6 +97,7 @@ def _runs(athlete, start: dt.date, end: dt.date) -> dict[dt.date, dict]:
     by_day: dict[dt.date, list] = {}
     for a in (Activity.objects.filter(athlete=athlete, sport__icontains="run",
                                       local_date__gte=start, local_date__lte=end)
+              .exclude(quality__decision="exclude")
               .select_related("metrics")):
         m = getattr(a, "metrics", None)
         if m is None or not m.run_pace_s_per_km or not m.avg_run_hr:

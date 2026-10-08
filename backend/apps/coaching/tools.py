@@ -153,6 +153,24 @@ TOOLS = [
         ["kind", "quantity"]),
     _fn("add_memory", "Remember a durable fact about the athlete.",
         {"text": {"type": "string"}}, ["text"]),
+    # R17 §10: illness mode.
+    _fn("set_illness",
+        "Mark the athlete as sick or injured when they tell you so. Pauses every upcoming "
+        "planned workout (removed from the watch) until they are better. Only when the "
+        "athlete says they are unwell; never guess.",
+        {"type": {"type": "string", "enum": ["cold", "flu", "stomach", "injury", "other"],
+                  "description": "flu = fever / flu"},
+         "symptoms": {"type": "string", "enum": ["above_neck", "below_neck"]},
+         "fever": {"type": "boolean"},
+         "start_date": {**DATE, "description": "YYYY-MM-DD, default today (≤ 14 days ago)"},
+         "expected_days": {"type": "integer", "minimum": 1, "maximum": 60},
+         "note": {"type": "string"}},
+        ["type"]),
+    _fn("recover_illness",
+        "The athlete says they are better: end illness mode and build the easy "
+        "return-to-run block (then the plan resumes).",
+        {"date": {**DATE, "description": "YYYY-MM-DD the athlete felt better, default today"}},
+        []),
 ]
 
 
@@ -486,22 +504,72 @@ class ToolRunner:
                                       at=when, note="via chat")
         return {"logged": log_json(log), "today": counts_on(self.athlete, log.local_date)}
 
+    def t_set_illness(self, type, symptoms=None, fever=None, start_date=None,
+                      expected_days=None, note=None):
+        from apps.health.illness import IllnessError, start
+        from apps.planning.models import PlannedWorkout
+
+        data = {"type": type, "symptoms": symptoms, "fever": fever,
+                "start_date": start_date, "note": note}
+        if expected_days is not None:
+            data["expected_days"] = expected_days
+        try:
+            ill = start(self.athlete, data)
+        except IllnessError as exc:
+            return {"error": exc.detail}
+        first = (PlannedWorkout.objects.filter(athlete=self.athlete, paused_by_illness=ill.pk)
+                 .order_by("date", "id").first())
+        if first is not None:
+            self._changed(first.pk, first.date,
+                          f"Plan paused while you're unwell ({ill.paused_count} sessions)")
+        return {"status": "started", "illness": {"id": ill.pk, "type": ill.type,
+                                                 "start_date": str(ill.start_date)},
+                "paused": ill.paused_count}
+
+    def t_recover_illness(self, date=None):
+        from apps.health.illness import IllnessError, active, recover
+
+        ill = active(self.athlete)
+        if ill is None:
+            return {"error": "The athlete is not marked as unwell."}
+        try:
+            body = recover(ill, _date(date) if date else None)
+        except (IllnessError, ValueError) as exc:
+            return {"error": getattr(exc, "detail", str(exc))}
+        block = body["return_block"] or {}
+        for s in block.get("sessions", []):
+            if s.get("workout_id"):
+                self._changed(s["workout_id"], s["date"], f"{s['title']} (return block)")
+        return {"status": "recovered",
+                "return_block": {"label": block.get("label"), "start": block.get("start"),
+                                 "resumes_on": block.get("resumes_on"),
+                                 "sessions": [{"date": s["date"], "title": s["title"],
+                                               "minutes": s["duration_s"] // 60,
+                                               "hr_cap": s["hr_cap"]}
+                                              for s in block.get("sessions", [])]},
+                "race_warning": (body.get("race_warning") or {}).get("text")}
+
     def t_add_memory(self, text):
         fact = add_fact(self.athlete, text, MemoryFact.Source.CHAT, self.chat_message)
         return {"saved": fact is not None}
 
 
-def add_fact(athlete, text: str, source: str, message=None) -> MemoryFact | None:
-    """De-duplicated on normalised text; returns None when already known."""
+def add_fact(athlete, text: str, source: str, message=None, *, category: str | None = None,
+             pinned: bool = False) -> MemoryFact | None:
+    """De-duplicated on normalised text; returns None when already known — or when it
+    mentions the private habit (R17: never stored, whatever the source)."""
+    from analysis.memory_facts import guess_category, mentions_private_habit
+
     clean = " ".join((text or "").split())[:300]
-    if not clean:
+    if not clean or mentions_private_habit(clean):
         return None
     key = clean.lower().rstrip(".")
     for existing in MemoryFact.objects.filter(athlete=athlete).values_list("text", flat=True):
         if existing.lower().rstrip(".") == key:
             return None
     return MemoryFact.objects.create(
-        athlete=athlete, text=clean, source=source, source_message=message
+        athlete=athlete, text=clean, source=source, source_message=message,
+        category=category or guess_category(clean), pinned=pinned,
     )
 
 
@@ -532,8 +600,10 @@ def training_summary(athlete: Athlete, weeks: int = 6) -> list[dict]:
 def km_splits(activity: Activity) -> list[dict]:
     """Seconds per whole kilometre from the per-second records."""
     splits, next_km, last_t = [], 1000.0, 0.0
-    for offset, distance in activity.records.order_by("offset_s").values_list(
-            "offset_s", "distance_m"):
+    from apps.activities.quality import series
+
+    for offset, distance in ((r["offset_s"], r["distance_m"])
+                             for r in series(activity, ("distance_m",))):
         if distance is not None and distance >= next_km:
             splits.append({"km": int(next_km // 1000), "seconds": round(offset - last_t)})
             last_t, next_km = offset, next_km + 1000

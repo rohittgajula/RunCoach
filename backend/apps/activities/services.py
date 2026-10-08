@@ -23,17 +23,20 @@ logger = logging.getLogger(__name__)
 
 
 def load_samples(activity: Activity) -> list[Sample]:
-    rows = activity.records.order_by("offset_s").values(
-        "offset_s", "distance_m", "speed_mps", "cadence_spm", "heart_rate"
-    )
+    """R17: the series the run's data-quality `use` picks (raw, or the cleaned copy)."""
+    from .quality import series
+
+    rows = series(activity, ("distance_m", "speed_mps", "cadence_spm", "heart_rate"))
     return [Sample(**row) for row in rows]
 
 
 def _dynamics(activity: Activity, segments) -> dict:
-    rows = activity.records.order_by("offset_s").values(
-        "offset_s", "cadence_spm", "stride_length_m", "vertical_oscillation_mm",
+    from .quality import series
+
+    rows = series(activity, (
+        "cadence_spm", "stride_length_m", "vertical_oscillation_mm",
         "ground_contact_ms", "respiration_rate", "speed_mps",
-    )
+    ))
     windows = [(s.start_offset_s, s.duration_s) for s in segments if s.kind == "run"]
     return dynamics.summarise([dynamics.DynamicsSample(**row) for row in rows], windows)
 
@@ -63,13 +66,18 @@ def _training_effect(activity: Activity) -> dict:
 
 
 @transaction.atomic
-def derive(activity: Activity) -> ActivityMetrics | None:
+def derive(activity: Activity, reassess: bool = True) -> ActivityMetrics | None:
     """Segment an activity and store its metrics. Idempotent — safe to re-run.
 
     Returns None when the activity cannot be honestly segmented (a cycling session,
     a strength session, anything without a cadence sensor). That is a legitimate
     outcome, not a failure: better no number than a confident wrong one.
     """
+    if reassess:
+        # R17 §2: the bad-data filter first — its `use` decides which series follows.
+        from .quality import assess
+
+        activity.quality = assess(activity)
     samples = load_samples(activity)
 
     try:

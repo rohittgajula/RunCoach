@@ -156,7 +156,14 @@ def day_json(athlete, day: dt.date) -> dict:
         "prev_date": prev_day if earliest and prev_day >= earliest else None,
         "next_date": day + dt.timedelta(days=1) if day < today else None,
         **body,
+        "flagged": _flag(athlete, day),          # R17: an illness day, never auto-excluded
     }
+
+
+def _flag(athlete, day: dt.date) -> dict | None:
+    from .data_review import day_flag
+
+    return day_flag(athlete, day)
 
 
 def summary_json(athlete) -> dict:
@@ -231,10 +238,16 @@ def trends_json(athlete, period) -> dict:
 
     from .period import as_period
 
+    from .data_review import excluded_days, flagged_days
+
     period = as_period(athlete, period)
     start, end = period.start, period.end
-    days = day_rows(athlete, start, end)
-    prev = day_rows(athlete, period.compare_start, period.compare_end)
+    # R17: only days the athlete explicitly excluded are left out; illness days are
+    # listed in flagged_days either way.
+    excluded = excluded_days(athlete)
+    days = [d for d in day_rows(athlete, start, end) if d["date"] not in excluded]
+    prev = [d for d in day_rows(athlete, period.compare_start, period.compare_end)
+            if d["date"] not in excluded]
     stress_by_day = dict(IntradayDay.objects.filter(athlete=athlete, day__gte=start, day__lte=end)
                          .values_list("day", "stress"))
     goal_days = {d["date"]: (d["steps"], d["step_goal"]) for d in days}
@@ -253,4 +266,5 @@ def trends_json(athlete, period) -> dict:
         "day_night_run": day_trends.day_night_run(
             days, _nights(athlete, start, end + dt.timedelta(days=1)),
             _next_runs(athlete, start, end + dt.timedelta(days=2))),
+        "flagged_days": flagged_days(athlete, start, end),
     }

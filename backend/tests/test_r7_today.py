@@ -13,7 +13,9 @@ TODAY_KEYS = {"date", "verdict", "headline", "reasons", "signals_missing", "note
               # R13 §3 / §10
               "injury", "mood",
               # R16 §C
-              "as_of", "freshness"}
+              "as_of", "freshness",
+              # R17 §10
+              "illness"}
 HOURS = 3600
 
 

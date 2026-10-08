@@ -106,13 +106,16 @@ def snapshot_for(athlete: Athlete, day: dt.date | None = None) -> WellnessSnapsh
     )
     if not rows:
         # No wellness data does NOT mean no signals — a pain report still counts.
-        from apps.journal.services import flags_for
-
-        return WellnessSnapshot(**flags_for(athlete, day), **_checkin_extras(athlete, day))
+        return WellnessSnapshot(**_flags(athlete, day), **_checkin_extras(athlete, day))
 
     today = rows[0] if rows[0].metric_date == day else None
-    history = [r.hrv_overnight_avg for r in rows[1:] if r.hrv_overnight_avg]
-    resting = [r.resting_hr for r in rows[1:] if r.resting_hr]
+    # R17: baselines leave out only days the athlete explicitly excluded (e.g. while ill).
+    from apps.health.data_review import excluded_days
+
+    excluded = excluded_days(athlete)
+    history = [r.hrv_overnight_avg for r in rows[1:]
+               if r.hrv_overnight_avg and r.metric_date not in excluded]
+    resting = [r.resting_hr for r in rows[1:] if r.resting_hr and r.metric_date not in excluded]
 
     # Resting HR and body battery are daytime figures: in the morning today's row is
     # often still empty while yesterday's is complete. One day old is still "current";
@@ -129,9 +132,7 @@ def snapshot_for(athlete: Athlete, day: dt.date | None = None) -> WellnessSnapsh
 
     # Subjective flags come from what the athlete actually said, and they outrank
     # every sensor reading below: excellent readiness does not overrule a pain report.
-    from apps.journal.services import flags_for
-
-    flags = flags_for(athlete, day)
+    flags = _flags(athlete, day)
 
     return WellnessSnapshot(
         readiness=today.training_readiness if today else None,
@@ -147,6 +148,17 @@ def snapshot_for(athlete: Athlete, day: dt.date | None = None) -> WellnessSnapsh
         body_battery_high=recent("body_battery_high"),
         **_checkin_extras(athlete, day),
     )
+
+
+def _flags(athlete: Athlete, day: dt.date) -> dict:
+    """Journal pain/illness flags; R17: an illness-mode period counts as illness."""
+    from apps.health.illness import illness_on
+    from apps.journal.services import flags_for
+
+    flags = dict(flags_for(athlete, day))
+    if illness_on(athlete, day) is not None:
+        flags["illness_reported"] = True
+    return flags
 
 
 def _checkin_extras(athlete: Athlete, day: dt.date) -> dict:

@@ -70,7 +70,9 @@ def _above_cap(activity: Activity) -> dict:
         return empty
     base = guard_base(activity.athlete)
     cap = base["z2_high"] or base["hr_ceiling"]
-    samples = activity.records.values_list("offset_s", "heart_rate")
+    from apps.activities.quality import series
+
+    samples = [(r["offset_s"], r["heart_rate"]) for r in series(activity, ("heart_rate",))]
     result = time_above(samples, cap)
     if result is None:
         return empty

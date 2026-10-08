@@ -31,6 +31,11 @@ Experiment, Goal (+ GoalEntry) (health) cascade with the Athlete; ActivityWeathe
 RunHeartStats cascade with each Activity. `today_layout`, `weather_auto_apply` and the
 admin-set `ai_call_budget` live on the Athlete row. AIRequestLog rows cascade as before
 (only an admin's test prompts have no athlete).
+
+R17: RecoveryLog, RecoveryPush, ActivityTombstone, GarminDeletionCheck (activities),
+Illness and DayDataDecision (health) cascade with the Athlete; ActivityQuality cascades
+with each Activity. Cached routes / fastest-1 km keys now carry the series `use` suffix
+and are dropped too (activities.deletion.activity_cache_keys).
 """
 
 import logging
@@ -107,13 +112,12 @@ def _cache_keys(user: User) -> list[str]:
     athlete = getattr(user, "athlete", None)
     if athlete is None:
         return []
+    from apps.activities.deletion import activity_cache_keys
+
     keys = []
     for pk, version in Activity.objects.filter(athlete=athlete).values_list(
             "pk", "segmentation_version"):
-        keys.append(f"progress:fastest1k:{pk}:{version}")
-        # R11 §E: cached run routes (both privacy settings) and overlay lines.
-        keys += [f"route:v1:{pk}:{version}:{hide}" for hide in (0, 1)]
-        keys += [f"route-overlay:v1:{pk}:{hide}" for hide in (0, 1)]
+        keys += activity_cache_keys(pk, version)
     return keys
 
 

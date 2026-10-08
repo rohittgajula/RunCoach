@@ -132,7 +132,7 @@ def strength_detail(request, pk: int):
         return _bad(f"Unknown field(s): {', '.join(sorted(unknown))}.")
     fields = []
     if "status" in data:
-        if data["status"] not in StrengthSession.Status.values:
+        if data["status"] not in StrengthSession.Status.values or data["status"] == "paused":
             return _bad("status must be planned, completed or skipped.")
         session.status = data["status"]
         if session.status != StrengthSession.Status.COMPLETED:

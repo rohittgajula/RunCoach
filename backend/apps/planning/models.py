@@ -129,6 +129,7 @@ class PlannedWorkout(OwnedByAthlete):
         PLANNED = "planned", "Planned"
         COMPLETED = "completed", "Completed"
         SKIPPED = "skipped", "Skipped"
+        PAUSED = "paused", "Paused"        # R17 §10: illness mode
 
     plan = models.ForeignKey(TrainingPlan, on_delete=models.CASCADE, related_name="workouts")
     phase = models.ForeignKey(
@@ -173,6 +174,10 @@ class PlannedWorkout(OwnedByAthlete):
     edited_via = models.CharField(max_length=8, blank=True, default="")
     pre_edit = models.JSONField(null=True, blank=True)
     notes = models.TextField(blank=True, default="")
+    # R17 §10: the Illness (health app) that paused it / that this return session is for.
+    # Plain ids (not FKs) to keep the planning ↔ health migrations independent.
+    paused_by_illness = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    illness_return = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -184,6 +189,11 @@ class PlannedWorkout(OwnedByAthlete):
     @property
     def user_edited(self) -> bool:
         return self.edited_by == "user"
+
+
+# R17: statuses that take a workout out of the plan's live schedule (skipped by the
+# athlete, paused by illness mode). Paused ones keep their content for later.
+INACTIVE_STATUSES = ("skipped", "paused")
 
 
 class PlanAdjustment(OwnedByAthlete):
@@ -255,6 +265,7 @@ class StrengthSession(OwnedByAthlete):
         PLANNED = "planned", "Planned"
         COMPLETED = "completed", "Completed"
         SKIPPED = "skipped", "Skipped"
+        PAUSED = "paused", "Paused"        # R17 §10
 
     plan = models.ForeignKey(TrainingPlan, on_delete=models.SET_NULL, null=True, blank=True,
                              related_name="strength_sessions")
@@ -269,6 +280,7 @@ class StrengthSession(OwnedByAthlete):
         "activities.Activity", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="strength_sessions")
     auto_completed = models.BooleanField(default=False)
+    paused_by_illness = models.PositiveIntegerField(null=True, blank=True)
     garmin_workout_id = models.BigIntegerField(null=True, blank=True)
     garmin_schedule_id = models.BigIntegerField(null=True, blank=True)
     garmin_synced_at = models.DateTimeField(null=True, blank=True)

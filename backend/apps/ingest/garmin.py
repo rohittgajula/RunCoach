@@ -186,8 +186,19 @@ def sync_athlete(athlete: Athlete, limit: int | None = None) -> SyncResult:
         .values_list("garmin_activity_id", flat=True)
     )
     backfill = not athlete.garmin_backfilled or not known
+    # R17: activities the athlete deleted here never come back.
+    from apps.activities.deletion import check_listing, tombstoned_garmin_ids
+
+    deleted = tombstoned_garmin_ids(athlete)
     cutoff = athlete.local_today - dt.timedelta(days=round(HISTORY_MONTHS * 30.4))
     listing, _ = list_new_activities(client, known, backfill=backfill, cutoff=cutoff)
+    if backfill and known:
+        # A full listing back to the cutoff: anything we hold that it lacks was
+        # deleted in Garmin — a review question, never an automatic delete.
+        try:
+            check_listing(athlete, listing, page_full=False)
+        except Exception:  # noqa: BLE001
+            logger.exception("garmin deletion check failed for %s", athlete.pk)
     if limit:
         listing = listing[:limit]
     downloads = 0
@@ -197,7 +208,7 @@ def sync_athlete(athlete: Athlete, limit: int | None = None) -> SyncResult:
         activity_id = entry.get("activityId")
         if activity_id is None:
             continue
-        if activity_id in known:
+        if activity_id in known or activity_id in deleted:
             result.skipped += 1
             continue
         if downloads >= MAX_DOWNLOADS_PER_SYNC:
@@ -273,6 +284,47 @@ def sync_athlete(athlete: Athlete, limit: int | None = None) -> SyncResult:
         fields.append("garmin_backfilled")
     athlete.save(update_fields=fields)
     return result
+
+
+def reimport_one(athlete: Athlete, garmin_activity_id: int) -> dict:
+    """R17: fetch one activity again (after its tombstone was removed)."""
+    from garminconnect import Garmin
+
+    from apps.activities.models import Activity
+
+    existing = Activity.objects.filter(athlete=athlete,
+                                       garmin_activity_id=garmin_activity_id).first()
+    if existing is not None:
+        return {"activity_id": existing.pk, "detail": "Already here."}
+    client = _client(athlete)
+    try:
+        payload = client.download_activity(
+            garmin_activity_id, dl_fmt=Garmin.ActivityDownloadFormat.ORIGINAL)
+    except Exception as exc:  # noqa: BLE001
+        if "429" in str(exc) or "TooManyRequests" in str(exc):
+            raise GarminRateLimited(str(exc)) from exc
+        return {"activity_id": None, "detail": "Garmin no longer has this activity."}
+    extracted = _extract_fit(payload) if payload else None
+    if extracted is None:
+        return {"activity_id": None, "detail": "Garmin no longer has this activity."}
+    data, filename = extracted
+    digest = RawFitFile.hash_bytes(data)
+    raw = RawFitFile.objects.filter(athlete=athlete, sha256=digest).first()
+    if raw is None:
+        raw = RawFitFile.objects.create(
+            athlete=athlete, file=ContentFile(data, name=f"{garmin_activity_id}_{filename}"),
+            original_name=filename, sha256=digest, size_bytes=len(data))
+    try:
+        activity = ingest_fit(raw, garmin_activity_id=garmin_activity_id)
+    except DuplicateActivity:
+        return {"activity_id": None, "detail": "Already here."}
+    from apps.activities.services import derive
+
+    try:
+        derive(activity)
+    except Exception:  # noqa: BLE001 — the beat re-derives anything stale
+        logger.exception("derive after reimport failed for %s", activity.pk)
+    return {"activity_id": activity.pk, "detail": "Re-imported from Garmin."}
 
 
 def check_connection(athlete: Athlete) -> dict:

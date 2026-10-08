@@ -196,6 +196,15 @@ def extract_checkin_note(self, entry_id: int) -> dict:
     entry.extraction_failed = False
     entry.save(update_fields=["extracted", "pain_reported", "illness_reported",
                               "extraction_failed"])
+    # R17 §16: a pain the note names is worth remembering (source "checkin"); the same
+    # private-habit filter as every other fact applies inside add_fact.
+    if facts.pain_reported and facts.pain_location:
+        from .models import MemoryFact
+        from .tools import add_fact
+
+        when = entry.applies_to_date.strftime("%-d %b %Y")
+        add_fact(entry.athlete, f"Reported {str(facts.pain_location).strip()[:60]} pain "
+                 f"after a run ({when}).", MemoryFact.Source.CHECKIN, category="health")
     return {"entry": entry_id, "pain": entry.pain_reported, "illness": entry.illness_reported}
 
 

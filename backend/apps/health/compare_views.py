@@ -140,7 +140,8 @@ def _runs(athlete, key, start, end) -> dict[dt.date, float]:
     easy_low, easy_high = athlete.easy_pace_min - 15, athlete.easy_pace_max + 30
     by_day: dict[dt.date, list[float]] = {}
     qs = (Activity.objects.filter(athlete=athlete, sport__icontains="run", local_date__gte=start,
-                                  local_date__lte=end).select_related("metrics"))
+                                  local_date__lte=end).exclude(quality__decision="exclude")
+          .select_related("metrics"))
     if key == "easy_hr":
         qs = qs.prefetch_related("segments")
     for a in qs:
@@ -185,7 +186,12 @@ def series_for(athlete, key: str, start: dt.date, end: dt.date) -> dict[dt.date,
         return _mood(athlete, key, start, end)
     group = CATALOGUE[key][2]
     if group == "wellness":
-        return _wellness(athlete, key, start, end)
+        # R17: days the athlete explicitly excluded (e.g. while ill) are left out.
+        from .data_review import excluded_days
+
+        excluded = excluded_days(athlete)
+        return {d: v for d, v in _wellness(athlete, key, start, end).items()
+                if d not in excluded}
     if group == "habits":
         return _habit(athlete, key, start, end)
     if group == "day":

@@ -236,7 +236,7 @@ def test_reminders_include_nudges_and_validate(api, athlete):
     assert keys["move"]["after_min"] == 60 and keys["move"]["threshold"] is None
     assert keys["breathing"]["threshold"] == 51 and keys["water"]["every_h"] == 2
     assert body["quiet_hours"] == {"start": "22:00", "end": "07:00"}
-    assert body["data_as_of"] is None and len(body["reminders"]) == 6   # + R13 two
+    assert body["data_as_of"] is None and len(body["reminders"]) == 7   # + R13 two, R17 one
     r = api.patch("/api/reminders/", {"move": {"enabled": True, "after_min": 75, "start": "08:00"},
                                       "quiet_hours": {"start": "23:00"},
                                       "habit_log": {"enabled": True}}, format="json")

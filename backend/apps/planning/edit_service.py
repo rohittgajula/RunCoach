@@ -27,7 +27,7 @@ from nutrition.fueling import fueling_for
 from nutrition.targets import FALLBACK_WEIGHT_KG
 from planning import edit as rules
 
-from .models import PlannedWorkout, TrainingPlan
+from .models import INACTIVE_STATUSES, PlannedWorkout, TrainingPlan
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ CHAT_CAP = 0.20
 NOT_EDITABLE_TEXT = {
     "completed": "This session is already done — completed sessions can't be edited.",
     "skipped": "This session was skipped — move it back to planned first.",
+    "paused": "This session is paused while you're unwell.",
     "past": "This session is in the past.",
     "notes_only": "Only notes can be changed on race day (and on a rest day).",
 }
@@ -60,6 +61,8 @@ def editable_reason(workout: PlannedWorkout, today: dt.date | None = None) -> st
         return "completed"
     if workout.status == PlannedWorkout.Status.SKIPPED:
         return "skipped"
+    if workout.status == PlannedWorkout.Status.PAUSED:
+        return "paused"
     if workout.date < today:
         return "past"
     if workout.kind in ("RACE", "REST") or not workout.steps:
@@ -127,7 +130,7 @@ def _context(athlete, workout: PlannedWorkout, top: int | None, overrides: dict)
     hi = max(sunday, workout.date + dt.timedelta(days=1))
     rows = PlannedWorkout.objects.filter(athlete=athlete, plan_id=workout.plan_id,
                                          date__gte=lo, date__lte=hi) \
-        .exclude(status=PlannedWorkout.Status.SKIPPED).exclude(pk=workout.pk)
+        .exclude(status__in=INACTIVE_STATUSES).exclude(pk=workout.pk)
     neighbour_hard, others = False, []
     for row in rows:
         steps = overrides.get(row.pk, row.steps or [])

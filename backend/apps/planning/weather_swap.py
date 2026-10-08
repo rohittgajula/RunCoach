@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from analysis import weather_plan as wp
 
-from .models import PlannedWorkout, TrainingPlan, WeatherSuggestion
+from .models import INACTIVE_STATUSES, PlannedWorkout, TrainingPlan, WeatherSuggestion
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +215,7 @@ def runs_vs_weather(athlete, checks: dict, pending_rows: list) -> list[dict]:
     for w in PlannedWorkout.objects.filter(plan=plan, date__gte=today,
                                            date__lte=today + dt.timedelta(days=6),
                                            kind__in=wp.RUN_KINDS | {"RACE"}) \
-            .exclude(status=PlannedWorkout.Status.SKIPPED).order_by("date", "id"):
+            .exclude(status__in=INACTIVE_STATUSES).order_by("date", "id"):
         check_ = checks.get(w.date)
         best = None
         if check_ is not None and check_.best is not None and check_.verdict != "bad":
