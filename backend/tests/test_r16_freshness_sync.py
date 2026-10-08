@@ -130,26 +130,35 @@ def garmin(monkeypatch):
 
 def test_status_not_connected(api, athlete, clock):
     body = api.get("/api/sync/status/").json()
-    assert body == {"connected": False, "last_sync_at": None, "last_attempt_at": None,
-                    "running": False, "breaker_open": False, "can_sync_now": False,
-                    "auto_sync_due": False, "next_auto_sync_at": None, "min_interval_s": 1800}
+    r16 = {"connected": False, "last_sync_at": None, "last_attempt_at": None,
+           "running": False, "breaker_open": False, "can_sync_now": False,
+           "auto_sync_due": False, "next_auto_sync_at": None, "min_interval_s": 1800}
+    assert {k: body[k] for k in r16} == r16           # R18 adds keys (job, run_aware …)
+    assert body["phase"] == "idle" and body["job_id"] is None
     r = api.post("/api/garmin/sync/", {"auto": True}, format="json")
     assert r.status_code == 200 and r.json()["skipped"] == "not_connected"
 
 
-def test_auto_sync_runs_once_then_throttles(api, connected, garmin, clock):
+def test_auto_sync_runs_once_then_throttles(api, connected, garmin, clock, no_real_garmin_queue):
+    from apps.ingest import sync_jobs
+
     status = api.get("/api/sync/status/").json()
     assert status["can_sync_now"] and status["auto_sync_due"] and status["next_auto_sync_at"] is None
     r = api.post("/api/garmin/sync/", {"auto": True}, format="json")
-    assert r.status_code == 200 and r.json()["imported"] == 1 and garmin == [20]
-    after = r.json()["status"]
+    body = r.json()
+    # R18: auto runs the full-sync job path (queued on the garmin queue).
+    assert r.status_code == 200 and body["job_id"] and body["mode"] == "full"
+    assert [q[0] for q in no_real_garmin_queue] == ["full_sync"]
+    after = body["status"]
     assert after["last_attempt_at"] and after["auto_sync_due"] is False
-    assert after["running"] is False and after["next_auto_sync_at"]
+    assert after["running"] is True and after["phase"] == "queued"
+    assert api.post("/api/garmin/sync/", {"auto": True}, format="json").json()["skipped"] == "running"
+    sync_jobs._finish(connected.pk, sync_jobs.get_job(connected.pk))     # the worker is done
     again = api.post("/api/garmin/sync/", {"auto": True}, format="json").json()
-    assert again["skipped"] == "recent" and garmin == [20]          # Garmin not called
+    assert again["skipped"] == "recent" and len(no_real_garmin_queue) == 1   # Garmin not called
     clock["hour"] = 11                                               # 2 h later
     assert api.get("/api/sync/status/").json()["auto_sync_due"] is True
-    assert "imported" in api.post("/api/garmin/sync/", {"auto": True}, format="json").json()
+    assert api.post("/api/garmin/sync/", {"auto": True}, format="json").json()["job_id"]
 
 
 def test_recent_manual_sync_blocks_auto(api, connected, garmin, clock):

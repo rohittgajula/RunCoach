@@ -1,6 +1,7 @@
 """R13 §8 cravings + savings, §9 caffeine, §15 data export, and account deletion /
 tenant isolation for every new R13 model."""
 
+from tests.r18_helpers import nodv
 import datetime as dt
 import io
 import zipfile
@@ -25,7 +26,7 @@ def test_craving_crud_cigarette_link_and_isolation(api, other_api, athlete):
                                            "mood": 2, "at": at(athlete, 1, 9).isoformat()},
                  format="json")
     assert r.status_code == 201, r.json()
-    body = r.json()
+    body = nodv(r.json())
     assert set(body) == {"id", "at", "local_date", "intensity", "trigger", "place", "mood",
                          "smoked", "cigarette_log_id", "note", "created_at"}
     assert body["smoked"] is False and body["cigarette_log_id"] is None
@@ -111,7 +112,7 @@ def test_caffeine_logging_today_and_report(api, other_api, athlete):
     assert "caffeine" not in api.get("/api/habits/summary/").json()
     assert other_api.get("/api/habits/caffeine/").json()["total"] == 0
     r = api.delete("/api/habits/logs/?kind=caffeine")
-    assert r.json() == {"deleted": 2}
+    assert nodv(r.json()) == {"deleted": 2}
 
 
 def test_caffeine_compare_series(api, athlete):

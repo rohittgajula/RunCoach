@@ -2,6 +2,7 @@
 habit), compare any two, reminders / web push, achievements, the readiness forecast and
 shoes — plus tenant isolation and account deletion for every new model."""
 
+from tests.r18_helpers import nodv
 import datetime as dt
 import json
 
@@ -278,10 +279,10 @@ def test_subscribe_unsubscribe_and_move_between_accounts(api, other_api, athlete
     other_api.post("/api/reminders/subscribe/", SUB, format="json")
     assert PushSubscription.objects.get().athlete_id == other_athlete.pk
     # Unsubscribe only ever touches the requester's rows.
-    assert api.post("/api/reminders/unsubscribe/", {"endpoint": SUB["endpoint"]},
-                    format="json").json() == {"deleted": 0}
-    assert other_api.post("/api/reminders/unsubscribe/", {"endpoint": SUB["endpoint"]},
-                          format="json").json() == {"deleted": 1}
+    assert nodv(api.post("/api/reminders/unsubscribe/", {"endpoint": SUB["endpoint"]},
+                         format="json").json()) == {"deleted": 0}
+    assert nodv(other_api.post("/api/reminders/unsubscribe/", {"endpoint": SUB["endpoint"]},
+                               format="json").json()) == {"deleted": 1}
     bad = {"endpoint": "http://insecure", "keys": SUB["keys"]}
     assert api.post("/api/reminders/subscribe/", bad, format="json").status_code == 400
     assert api.post("/api/reminders/subscribe/", {"endpoint": SUB["endpoint"]},
@@ -303,7 +304,7 @@ def test_push_send_and_expired_subscription(api, athlete, vapid, monkeypatch):
     api.post("/api/reminders/subscribe/", SUB, format="json")
     api.post("/api/reminders/subscribe/", {**SUB, "endpoint": "https://push.example.com/gone"},
              format="json")
-    r = api.post("/api/reminders/test/").json()
+    r = nodv(api.post("/api/reminders/test/").json())
     assert r == {"sent": 1, "failed": 1}
     assert PushSubscription.objects.count() == 1          # the expired one is deleted
     assert sent[0][2] == {"sub": "mailto:ops@example.com"}

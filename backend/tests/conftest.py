@@ -142,7 +142,8 @@ def no_real_garmin_queue(monkeypatch):
             queued.append((name, tuple(args), dict(kwargs or {}), countdown))
         return apply_async
 
-    for name in ("sync_slow_one", "sync_intraday_one", "backfill_intraday", "backfill_r10"):
+    for name in ("sync_slow_one", "sync_intraday_one", "backfill_intraday", "backfill_r10",
+                 "full_sync"):
         monkeypatch.setattr(getattr(tasks, name), "apply_async", recorder(name))
     return queued
 
@@ -193,4 +194,27 @@ def isolated_sync_cache(monkeypatch):
     cache = LocMemCache("sync-status-tests", {})
     cache.clear()
     monkeypatch.setattr(sync_status, "cache", cache)
+    return cache
+
+
+@pytest.fixture(autouse=True)
+def isolated_r18_cache(monkeypatch):
+    """R18: data versions, versioned caches and sync jobs live in a fresh in-memory cache
+    per test (never the shared Redis); the AI fact parse never reaches the broker (queued
+    calls are recorded — tests run the task body themselves)."""
+    from django.core.cache.backends.locmem import LocMemCache
+
+    from apps.athletes import versioning
+    from apps.coaching import tasks as coaching_tasks
+    from apps.ingest import sync_jobs
+
+    cache = LocMemCache("r18-tests", {})
+    cache.clear()
+    monkeypatch.setattr(versioning, "cache", cache)
+    monkeypatch.setattr(sync_jobs, "cache", cache)
+    monkeypatch.setattr(sync_jobs, "_pause", lambda: None)
+    queued: list = []
+    monkeypatch.setattr(coaching_tasks.parse_fact_params_ai, "delay",
+                        lambda *args, **kwargs: queued.append(args))
+    cache.r18_ai_queue = queued
     return cache

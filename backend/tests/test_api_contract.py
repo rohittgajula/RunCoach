@@ -21,7 +21,9 @@ WORKOUT_KEYS = {"id", "date", "title", "kind", "phase", "duration_s", "load", "s
                 "edited_by", "edited_at", "edited_via", "notes", "can_edit",
                 "can_undo_edit", "planned",
                 # R17 §10
-                "paused_by_illness", "illness_return"}
+                "paused_by_illness", "illness_return",
+                # R18 §B
+                "distance_estimate"}
 STEP_KEYS = {"kind", "duration_s", "intensity", "label", "pace_min_s", "pace_max_s",
              "hr_min", "hr_max"}
 FUEL_KEYS = {"before", "during", "after", "carbs_g_during_per_h"}
@@ -101,7 +103,7 @@ def test_plan_endpoints(api, athlete, proposed_plan):
     r = api.post(f"/api/plans/{proposed_plan.pk}/accept/")
     assert r.status_code == 200
     plan = r.json()
-    assert set(plan) == SUMMARY_KEYS | {"summary", "weeks", "adjustments"}
+    assert set(plan) - {"data_version"} == SUMMARY_KEYS | {"summary", "weeks", "adjustments"}
     assert plan["status"] == "active" and plan["phase_count"] == len(plan["phases"])
     assert plan["current_phase_id"] == plan["phases"][0]["id"]
     for week in plan["weeks"]:
@@ -132,7 +134,7 @@ def test_diet_day_shape(api, athlete, active):
         "items": [{"name": "idli", "quantity": "3", "kcal": 180, "carbs_g": 36,
                    "protein_g": 6, "fat_g": 1}], "source": "manual"}, format="json")
     assert r.status_code == 201, r.content
-    assert set(r.json()) == MEAL_KEYS and r.json()["kcal"] == 180
+    assert set(r.json()) - {"data_version"} == MEAL_KEYS and r.json()["kcal"] == 180
     body = api.get("/api/diet/day/", {"date": str(day)}).json()
     # R8 §D added weather_tips and targets.water_bonus_ml (0 without weather);
     # R11 §D added the hydration log (water).
@@ -189,7 +191,7 @@ def test_profile_summary_and_fitness(api, athlete, active):
 
 def test_metric_entries_mirror_weight(api, athlete):
     r = api.post("/api/metrics/entries/", {"kind": "weight", "value": 71.5}, format="json")
-    assert r.status_code == 201 and set(r.json()) == {"id", "value", "recorded_at", "source"}
+    assert r.status_code == 201 and set(r.json()) - {"data_version"} == {"id", "value", "recorded_at", "source"}
     api.post("/api/metrics/entries/", {"kind": "weight", "value": 80,
                                        "recorded_at": "2020-01-01"}, format="json")
     athlete.refresh_from_db()
@@ -207,9 +209,11 @@ def test_metric_entries_mirror_weight(api, athlete):
 def test_memory_endpoints(api):
     r = api.post("/api/memory/", {"text": "Has a sore left knee."}, format="json")
     assert r.status_code == 201
-    assert set(r.json()) == {"id", "text", "source", "created_at",
+    assert set(r.json()) - {"data_version"} == {"id", "text", "source", "created_at",
                              # R17 §16
-                             "category", "category_label", "pinned", "updated_at", "edited"}
+                             "category", "category_label", "pinned", "updated_at", "edited",
+                             # R18
+                             "parameters", "parse_pending"}
     assert api.post("/api/memory/", {"text": "has a sore left knee"}, format="json").status_code == 200
     assert len(api.get("/api/memory/").json()) == 1
     assert api.delete(f"/api/memory/{r.json()['id']}/").status_code == 204

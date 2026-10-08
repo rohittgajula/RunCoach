@@ -64,10 +64,12 @@ def test_propose_plan_creates_proposal_and_attaches_card(api, athlete, fake_ai):
                  {"content": "Build a plan for me to run 10k."}, format="json")
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"user", "assistant", "plan_changed", "needs_confirmation"}   # R16
+    assert set(body) - {"data_version"} == {"user", "assistant", "plan_changed",
+                                            "needs_confirmation", "profile_changed"}   # R16/R18
     assistant = body["assistant"]
     assert set(assistant) == {"id", "role", "content", "attachments", "status", "created_at",
-                              "plan_changed", "needs_confirmation"}                  # R16
+                              "plan_changed", "needs_confirmation",
+                              "profile_changed"}                                     # R16/R18
     assert assistant["status"] == "done"
     [card] = assistant["attachments"]
     assert card["type"] == "plan_proposal" and card["plan"]["status"] == "proposed"

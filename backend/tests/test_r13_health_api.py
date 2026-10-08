@@ -1,6 +1,7 @@
 """R13 §3 injury watch + pain, §6 briefing, §7 run review, §10 mood, §11 monthly report,
 compare catalogue and reminders — API shapes, validation and tenant isolation."""
 
+from tests.r18_helpers import nodv
 import datetime as dt
 
 import pytest
@@ -46,7 +47,7 @@ def test_pain_crud_validation_and_isolation(api, other_api, athlete, other_athle
     r = api.post("/api/health/pain/", {"location": "knee", "side": "left", "severity": 2},
                  format="json")
     assert r.status_code == 201
-    body = r.json()
+    body = nodv(r.json())
     assert set(body) == {"id", "date", "location", "side", "severity", "activity_id", "note",
                          "created_at"}
     again = api.post("/api/health/pain/", {"location": "knee", "side": "left", "severity": 3},
@@ -81,7 +82,8 @@ def test_pain_report_queues_auto_adjust(api, athlete, no_real_r13_queue,
 def test_injury_endpoint(api, other_api, athlete):
     body = api.get("/api/health/injury/").json()
     assert body["risk"] == "low" and body["flags"] == [] and body["pains"] == []
-    assert set(body) == {"date", "risk", "flags", "pains", "guidance", "note"}
+    assert set(body) == {"date", "risk", "flags", "pains", "guidance", "note",
+                         "athlete_note"}                                     # R18
     for offset in (0, -1):
         PainReport.objects.create(athlete=athlete, date=day(athlete, offset), location="hip",
                                   side="left", severity=3)
@@ -122,7 +124,7 @@ def test_briefing_builds_after_4am(api, other_api, athlete, monkeypatch):
     assert body["readiness"]["score"] == 40 and body["focus"]["key"] == "sleep"
     assert any(n["kind"] == "sleep" for n in body["notes"])
     assert body["fuel"]["kcal"] > 0 and body["weather"] is None
-    assert api.post("/api/briefing/today/dismiss/").json() == {"dismissed": True}
+    assert nodv(api.post("/api/briefing/today/dismiss/").json()) == {"dismissed": True}
     assert api.get("/api/briefing/today/").json()["dismissed"] is True
     assert MorningBriefing.objects.filter(athlete=athlete).count() == 1
     assert other_api.get("/api/briefing/today/").json()["dismissed"] is False
@@ -235,7 +237,7 @@ def test_review_push_only_when_enabled(athlete, monkeypatch, settings):
 
 def test_mood_upsert_list_delete_and_isolation(api, other_api, athlete):
     r = api.post("/api/mood/", {"mood": 4, "energy": 3, "note": "fine"}, format="json")
-    assert r.status_code == 201 and set(r.json()) == {"date", "mood", "energy", "note",
+    assert r.status_code == 201 and set(nodv(r.json())) == {"date", "mood", "energy", "note",
                                                       "updated_at"}
     r = api.post("/api/mood/", {"mood": 2, "energy": 2}, format="json")
     assert r.status_code == 200 and MoodLog.objects.filter(athlete=athlete).count() == 1

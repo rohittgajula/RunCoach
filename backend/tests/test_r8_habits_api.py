@@ -1,6 +1,7 @@
 """R8 §B through the API: logs CRUD, tenant isolation, today, summary, AI summary,
 chat tool, check-in alcohol signal and the Insights focus items."""
 
+from tests.r18_helpers import nodv
 import datetime as dt
 
 import pytest
@@ -26,7 +27,7 @@ def test_create_list_patch_delete(api, athlete):
     r = api.post("/api/habits/logs/", {"kind": "alcohol", "quantity": 2, "note": "beer"},
                  format="json")
     assert r.status_code == 201, r.json()
-    body = r.json()
+    body = nodv(r.json())
     assert set(body) == {"id", "kind", "quantity", "at", "local_date", "note", "created_at",
                          "subtype"}   # R13 §9 (null except for caffeine)
     assert body["subtype"] is None

@@ -1,6 +1,7 @@
 """R9 §B/§C through the API: the private habit (enable/disable, bulk delete, never to
 the AI), the habit health report and tenant isolation."""
 
+from tests.r18_helpers import nodv
 import datetime as dt
 import json
 
@@ -107,7 +108,7 @@ def test_bulk_delete_private_only_own(api, other_api, athlete, other_athlete):
     assert api.delete("/api/habits/logs/").status_code == 400          # kind required
     assert api.delete("/api/habits/logs/?kind=nope").status_code == 400
     r = api.delete("/api/habits/logs/?kind=private")
-    assert r.status_code == 200 and r.json() == {"deleted": 3}
+    assert r.status_code == 200 and nodv(r.json()) == {"deleted": 3}
     assert not HabitLog.objects.filter(athlete=athlete, kind="private").exists()
     assert HabitLog.objects.filter(pk=keep.pk).exists()
     assert HabitLog.objects.filter(pk=theirs.pk).exists()
@@ -115,7 +116,7 @@ def test_bulk_delete_private_only_own(api, other_api, athlete, other_athlete):
     log(athlete, "private")
     athlete.private_habit_enabled = False
     athlete.save()
-    assert api.delete("/api/habits/logs/?kind=private").json() == {"deleted": 1}
+    assert nodv(api.delete("/api/habits/logs/?kind=private").json()) == {"deleted": 1}
 
 
 def test_private_tenant_isolation(api, other_api, athlete, other_athlete):
@@ -126,7 +127,7 @@ def test_private_tenant_isolation(api, other_api, athlete, other_athlete):
     assert other_api.get("/api/habits/summary/").json()["private"]["total"] == 0
     assert other_api.get("/api/habits/logs/", {"kind": "private"}).json() == []
     assert other_api.delete(f"/api/habits/logs/{mine.pk}/").status_code == 404
-    assert other_api.delete("/api/habits/logs/?kind=private").json() == {"deleted": 0}
+    assert nodv(other_api.delete("/api/habits/logs/?kind=private").json()) == {"deleted": 0}
     assert HabitLog.objects.filter(pk=mine.pk).exists()
 
 

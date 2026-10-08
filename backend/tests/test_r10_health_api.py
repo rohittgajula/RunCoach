@@ -1,6 +1,7 @@
 """R10 §B endpoints: /health/fitness|training-status|sleep|form|records|body/ — shapes,
 ranges, nulls when Garmin has nothing, and tenant isolation."""
 
+from tests.r18_helpers import nodv
 import datetime as dt
 
 import pytest
@@ -122,7 +123,7 @@ def test_sleep_payload(api, athlete):
     first = body["nights"][0]
     assert set(first) == {"date", "sleep_s", "need_s", "score", "deep_s", "light_s", "rem_s",
                           "awake_s", "bedtime", "wake_time", "restless_moments", "spo2_avg",
-                          "spo2_low", "breathing_rate"}
+                          "spo2_low", "breathing_rate", "garmin_need_s"}
     assert first["bedtime"].endswith(("23:00", "00:30")) and first["spo2_avg"] == 95.0
     assert body["averages"]["spo2_avg"] == 95.0 and body["averages"]["bedtime"] is not None
     assert body["regularity"]["bedtime_sd_min"] == 45 and body["regularity"]["n"] == 6
