@@ -508,3 +508,14 @@ button.metric-cell { cursor: pointer; }
 .exfig-measure { stroke-linecap: round; }
 .exfig-measure.is-bad { stroke: var(--bad); }
 .exfig-measure.is-ok { stroke: var(--ok); }
+
+/* Floor and face (R19).
+ *
+ * The first animated figures had a hairline ground and a featureless round
+ * head, and on the supine movements you could not tell which way was down or
+ * which way the body faced — a glute bridge read as a crab walk. The floor is
+ * now a hatched surface with thickness, drawn behind the body on the lying
+ * movements rather than under the heels, and the head grows a nose. */
+.exfig-floor { opacity: 0.5; }
+.exfig-hatch { stroke: var(--muted); stroke-width: 1; opacity: 0.45; }
+.exfig-face { stroke: var(--fg); }

@@ -64,6 +64,19 @@ type Move = {
   props?: Prop[]
   /** Dashed reference line between two joints, when the cue is about alignment. */
   guide?: [keyof Pose, keyof Pose]
+  /**
+   * Which way the face points, as a unit-ish direction. A plain circle head has
+   * no front, and on the floor movements that made the whole figure ambiguous —
+   * you could not tell a glute bridge from a crab walk.
+   */
+  facing: [number, number]
+  /**
+   * How the body meets the floor. "stand" draws a thin ground line under the
+   * feet; "lie" fills a band behind the whole body, because on a supine
+   * exercise the floor is what the back is pressed against and a line under the
+   * heels says nothing. "wall" adds the vertical surface instead.
+   */
+  surface: 'stand' | 'lie' | 'wall' | 'under'
   a: Pose
   b: Pose
 }
@@ -71,6 +84,7 @@ type Move = {
 const MOVES: Record<string, Move> = {
   'Box squat': {
     dur: 3.4,
+    facing: [-1, 0], surface: 'stand',
     props: [{ x: 62, y: 64, w: 32, h: 5 }, { x: 88, y: 64, w: 5, h: 28 }],
     a: {
       head: [44, 20], neck: [44, 29], hip: [44, 57],
@@ -88,6 +102,7 @@ const MOVES: Record<string, Move> = {
   },
   'Wall push-up': {
     dur: 3.0,
+    facing: [1, 0], surface: 'wall',
     props: [{ x: 80, y: 8, w: 6, h: 84 }],
     a: {
       head: [48, 26], neck: [52, 33], hip: [40, 66],
@@ -102,6 +117,7 @@ const MOVES: Record<string, Move> = {
   },
   'Glute bridge': {
     dur: 3.2,
+    facing: [0, -1], surface: 'lie',
     guide: ['neck', 'knee'],
     a: {
       head: [16, 80], neck: [25, 82], hip: [52, 84],
@@ -116,6 +132,7 @@ const MOVES: Record<string, Move> = {
   },
   'Calf raise': {
     dur: 2.2,
+    facing: [-1, 0], surface: 'stand',
     a: {
       head: [50, 22], neck: [50, 31], hip: [50, 62],
       knee: [50, 77], ankle: [50, 92], knee2: [46, 77], ankle2: [46, 92],
@@ -130,6 +147,7 @@ const MOVES: Record<string, Move> = {
   },
   'Table row': {
     dur: 3.0,
+    facing: [0, -1], surface: 'under',
     props: [{ x: 6, y: 34, w: 88, h: 5 }],
     a: {
       head: [24, 76], neck: [32, 74], hip: [66, 79],
@@ -144,6 +162,7 @@ const MOVES: Record<string, Move> = {
   },
   'Dead bug': {
     dur: 3.6,
+    facing: [0, -1], surface: 'lie',
     guide: ['neck', 'hip'],
     a: {
       head: [18, 70], neck: [27, 72], hip: [58, 74],
@@ -229,6 +248,19 @@ export function ExerciseFigure({
 
   const animate = !reduced
   const { a, b, dur } = move
+  // A pattern id has to be unique per figure or several on one page share the
+  // first one — which looks fine until a figure is removed and the rest lose
+  // their floor.
+  const hatchId = `hatch-${name.replace(/\W+/g, '-').toLowerCase()}`
+  // Lying movements need the floor behind the body, not under the feet.
+  const floorY = move.surface === 'lie' ? 88 : move.surface === 'under' ? 90 : 92
+
+  const nose = (p: Pose) => {
+    const [fx, fy] = move.facing
+    return `M${p.head[0]} ${p.head[1]} L${p.head[0] + fx * 11} ${p.head[1] + fy * 11}`
+  }
+  const faceFrom = nose(a)
+  const faceTo = nose(b)
   const guide = move.guide
     ? {
         from: `M${a[move.guide[0]][0]} ${a[move.guide[0]][1]} L${a[move.guide[1]][0]} ${a[move.guide[1]][1]}`,
@@ -239,7 +271,27 @@ export function ExerciseFigure({
   return (
     <div className={`exfig ${className}`}>
       <svg viewBox="0 0 100 100" role="img" aria-label={`${name} demonstration`}>
-        <line x1="4" y1="92" x2="96" y2="92" className="exfig-ground" />
+        <defs>
+          <pattern id={hatchId} width="4" height="4" patternUnits="userSpaceOnUse"
+                   patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="4" className="exfig-hatch" />
+          </pattern>
+        </defs>
+
+        {/* The floor, drawn as a surface with thickness. A hairline under the
+            heels is enough for a standing figure and tells you nothing at all
+            about one lying down, which is how the supine movements became
+            unreadable. */}
+        <rect x="0" y={floorY} width="100" height={100 - floorY}
+              fill={`url(#${hatchId})`} className="exfig-floor" />
+        <line x1="0" y1={floorY} x2="100" y2={floorY} className="exfig-ground" />
+
+        {move.surface === 'wall' && (
+          <>
+            <rect x="0" y="0" width="100" height="100" fill="none" />
+            <line x1="86" y1="0" x2="86" y2={floorY} className="exfig-ground" />
+          </>
+        )}
         {(move.props ?? []).map((p, i) => (
           <rect key={i} x={p.x} y={p.y} width={p.w} height={p.h} rx="1.5" className="exfig-prop" />
         ))}
@@ -257,6 +309,15 @@ export function ExerciseFigure({
         <Limb d={legA} from={a} to={b} dur={dur} animate={animate} className="exfig-body" />
         <Limb d={spine} from={a} to={b} dur={dur} animate={animate} className="exfig-body" />
         <Limb d={arm} from={a} to={b} dur={dur} animate={animate} className="exfig-body" width={4} />
+
+        <path d={animate ? faceFrom : faceTo} className="exfig-face" fill="none"
+              strokeWidth={3} strokeLinecap="round">
+          {animate && (
+            <animate attributeName="d" values={`${faceFrom};${faceTo};${faceFrom}`}
+                     keyTimes="0;0.5;1" dur={`${dur}s`} repeatCount="indefinite"
+                     calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1" />
+          )}
+        </path>
 
         <circle r="7" cx={animate ? a.head[0] : b.head[0]} cy={animate ? a.head[1] : b.head[1]}
                 className="exfig-head">
