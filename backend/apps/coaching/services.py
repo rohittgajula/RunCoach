@@ -390,3 +390,48 @@ def extract_fact_params(athlete: Athlete, text: str):
         user_prompt=FACT_PARAMS_USER.format(text=text),
         schema=FactParams,
     )
+
+
+COMPARE_USER = """These runs belong to one athlete. Python has already computed every
+number and every change below — your job is to read them, not to recompute them.
+
+Runs, oldest first:
+{rows}
+
+What changed, each against the oldest:
+{metrics}
+
+Direction tells you which way is better: 1 means higher is better, -1 means lower is
+better, 0 means neither. A pace that fell is an improvement. A heart rate that fell at
+a similar pace is an improvement. Distance falling is not, on its own, a problem.
+
+Every distance here is RUN distance — what the athlete actually ran, with the walking
+excluded. Do not describe it as the distance they covered.
+
+Be specific to these figures. Do not restate every number; name the one that matters
+and say what to do about it. If nothing genuinely improved, say so rather than
+finding something."""
+
+
+def compare_runs(athlete: Athlete, rows: list[dict], metrics: list[dict]) -> dict:
+    """The model's read of a comparison Python has already computed.
+
+    Cached on the figures themselves, so ticking the same four runs twice costs
+    once. The comparison is deterministic; only the prose is bought.
+    """
+    import json
+
+    from .schemas import RunComparison
+
+    review, cached = _run(
+        athlete,
+        kind=AIAnalysis.Kind.REVIEW,
+        operation="compare_runs",
+        payload={"rows": rows, "metrics": metrics},
+        user_prompt=COMPARE_USER.format(
+            rows=json.dumps(rows, indent=2, default=str),
+            metrics=json.dumps(metrics, indent=2, default=str),
+        ),
+        schema=RunComparison,
+    )
+    return {"available": True, "cached": cached, **review.model_dump(mode="json")}

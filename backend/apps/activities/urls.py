@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .compare_views import compare
 from .progress_views import progress, progress_review
 from .r17_views import (
     activity_quality, activity_recovery, activity_recovery_done, deleted_activities,
@@ -15,6 +16,7 @@ from .views import (
 urlpatterns = [
     path("activities/", ActivityList.as_view(), name="activity-list"),
     path("activities/facets/", activity_facets, name="activity-facets"),
+    path("activities/compare/", compare, name="activity-compare"),
     path("activities/<int:pk>/", ActivityDetail.as_view(), name="activity-detail"),
     path("activities/<int:pk>/series/", activity_series, name="activity-series"),
     path("activities/<int:pk>/route/", activity_route, name="activity-route"),

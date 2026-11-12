@@ -138,6 +138,27 @@ class ProgressReview(BaseModel):
     markdown: str = Field(description="A short markdown review, 60-140 words.")
 
 
+class RunComparison(BaseModel):
+    """Two to four runs read against each other, after Python has done the maths."""
+
+    headline: str = Field(
+        description="One sentence naming the single most important difference, in "
+        "the athlete's own units. Not a summary of everything that changed."
+    )
+    improving: list[str] = Field(
+        description="0-3 short points that genuinely got better. Empty is a valid "
+        "answer and better than inventing one."
+    )
+    watch: list[str] = Field(
+        description="0-3 short points going the wrong way, or worth keeping an eye on."
+    )
+    do_next: list[str] = Field(
+        description="1-3 concrete things to do in the next run or two. Specific to "
+        "these numbers — not general running advice."
+    )
+    markdown: str = Field(description="A short markdown read, 60-140 words.")
+
+
 class WeeklyReportSummary(BaseModel):
     """R10 §C10: the optional paragraph on the weekly report card."""
 
