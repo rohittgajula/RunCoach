@@ -50,3 +50,24 @@ def test_training_thresholds_are_all_present():
         "MIN_RUNS_FOR_PREDICTION", "MIN_WEEKS_FOR_PREDICTION",
     }
     assert required <= set(settings.TRAINING)
+
+
+def test_celery_can_actually_reach_its_broker():
+    """A real connection, not a settings string.
+
+    Every other assertion in this file would have passed on the day a fresh
+    install picked up a kombu that refuses to speak to the pinned redis-py.
+    Nothing failed at import, nothing failed at startup, and every background
+    task raised VersionMismatch the moment it was queued — sync, derivation,
+    analysis, the nightly schedule.
+
+    Checking that CELERY_BROKER_URL is set tests that somebody typed a string.
+    This tests that the string works.
+    """
+    from config.celery import app
+
+    connection = app.connection()
+    try:
+        connection.default_channel  # forces the transport to be constructed
+    finally:
+        connection.release()
