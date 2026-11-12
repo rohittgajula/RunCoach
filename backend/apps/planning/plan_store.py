@@ -510,6 +510,149 @@ PRACTICE_PHASE_NAMES: dict[str, tuple[str, str]] = {
 }
 
 
+def _practice_baseline(athlete: Athlete, available_days, long_run_day):
+    """The baseline both no-race modes start from.
+
+    Shared because the two differ only in what they build toward: how the
+    athlete's history becomes a starting point is the same question either way,
+    and two copies of it would drift the first time one was corrected.
+    """
+    history = history_baseline(athlete)
+    baseline = baseline_for(athlete)
+    if history.source != "history":
+        baseline = dataclasses.replace(
+            baseline,
+            run_km_per_week=max(baseline.run_km_per_week, BEGINNER_RUN_KM_PER_WEEK),
+            run_pace_s_per_km=(athlete.easy_pace_min + athlete.easy_pace_max) / 2,
+        )
+    # The best unbroken block ever recorded: the difference between ground being
+    # regained and ground being broken for the first time.
+    baseline = dataclasses.replace(
+        baseline,
+        demonstrated_longest_s=max(
+            float(history.best_longest_run_s or 0.0), baseline.longest_run_s,
+        ),
+    )
+    days = _normalise_days(available_days)
+    if days is not None:
+        baseline = dataclasses.replace(baseline, available_days=days)
+    if long_run_day is not None:
+        baseline = dataclasses.replace(baseline, long_run_day=int(long_run_day))
+    if not baseline.available_days.get(str(baseline.long_run_day), False):
+        open_days = [d for d in range(7) if baseline.available_days.get(str(d))]
+        baseline = dataclasses.replace(
+            baseline, long_run_day=open_days[-1] if open_days else 6,
+        )
+    if athlete.runs_per_week:
+        baseline = dataclasses.replace(baseline, runs_per_week=int(athlete.runs_per_week))
+    return baseline
+
+
+def _persist_practice(athlete, plan, generated, baseline, start, horizon_end):
+    """Phases and workouts for a plan with no race in it."""
+    merged = _merge_phases(generated, horizon_end)
+    phases: list[PlanPhase] = []
+    for order, block in enumerate(merged):
+        name, description = PRACTICE_PHASE_NAMES.get(
+            block["generator_phase"], (block["generator_phase"].title(), ""),
+        )
+        phases.append(PlanPhase.objects.create(
+            plan=plan, order=order, name=name, description=description,
+            kind=PHASE_KIND[block["generator_phase"]],
+            generator_phase=block["generator_phase"],
+            start=block["start"], end=block["end"],
+        ))
+
+    bands = bands_for(athlete)
+    weight = athlete.weight_kg or FALLBACK_WEIGHT_KG
+    rows: list[PlannedWorkout] = []
+    for week, phase in _weeks_with_phases(generated.weeks, phases):
+        for session in week.sessions:
+            if session.optional or session.kind == "RACE" or session.date < start:
+                continue
+            spec = build_workout(session, bands, week.phase)
+            rows.append(PlannedWorkout(
+                athlete=athlete, plan=plan, phase=phase, date=session.date,
+                title=spec.title[:120], kind=spec.kind, duration_s=spec.duration_s,
+                load=spec.load, steps=[s.as_dict() for s in spec.steps],
+                description=spec.description, purpose=spec.purpose,
+                target_zone=spec.target_zone,
+                fueling=fueling_for(spec.kind, spec.duration_s, weight).as_dict(),
+            ))
+    PlannedWorkout.objects.bulk_create(rows)
+    return plan
+
+
+@transaction.atomic
+def propose_goal_plan(
+    athlete: Athlete,
+    *,
+    target_distance_km: float,
+    target_date: dt.date,
+    available_days=None,
+    long_run_day: int | None = None,
+    chat_message=None,
+) -> TrainingPlan:
+    """A dated goal with no race: "5 km without stopping, by June".
+
+    Between the two existing modes. A race plan needs an event; a practice plan
+    has no deadline. This has a date the athlete chose and nothing else a race
+    brings — no taper, no race week, no entry.
+
+    The one thing it does that a race plan does not is refuse. A race date is a
+    fact, so a plan to it is built and warned about; a self-set date is a wish,
+    and the useful answer to an impossible wish is the possible one beside it.
+    The plan is still built either way, because the training is the same
+    training — only the date in the goal changes.
+    """
+    from planning.practice import generate_goal
+
+    today = athlete.local_today
+    start = today + dt.timedelta(days=1)
+    if target_date <= start:
+        raise PlanError("Pick a date at least two days away.")
+    if not 0.4 <= float(target_distance_km) <= 100:
+        raise PlanError("The distance must be between 0.4 and 100 km.")
+
+    baseline = _practice_baseline(athlete, available_days, long_run_day)
+    generated, verdict = generate_goal(
+        start, target_date, float(target_distance_km), baseline, config_from_settings(),
+    )
+
+    when = (
+        f"by {target_date:%-d %b %Y}" if verdict.achievable
+        else f"— realistically {verdict.earliest_date:%-d %b %Y}"
+        if verdict.earliest_date else "— date to be revisited"
+    )
+    plan = TrainingPlan.objects.create(
+        athlete=athlete,
+        race=None,
+        name=f"{float(target_distance_km):g} km without stopping"[:160],
+        goal=f"Run {float(target_distance_km):g} km without stopping {when}.",
+        status=TrainingPlan.Status.PROPOSED,
+        generator_version=GENERATOR_VERSION,
+        chat_message=chat_message,
+        summary={
+            "kind": "goal",
+            "weeks": generated.weeks_available,
+            "peak_run_km": generated.peak_run_km,
+            "peak_continuous_s": generated.peak_continuous_s,
+            "target_distance_km": float(target_distance_km),
+            "target_date": target_date.isoformat(),
+            "achievable": verdict.achievable,
+            "needs_continuous_s": verdict.needs_s,
+            "reaches_continuous_s": verdict.reaches_s,
+            "earliest_date": verdict.earliest_date.isoformat() if verdict.earliest_date else None,
+            "warnings": generated.warnings,
+            "available_days": baseline.available_days,
+            "long_run_day": baseline.long_run_day,
+        },
+    )
+    _persist_practice(athlete, plan, generated, baseline, start,
+                      start + dt.timedelta(days=generated.weeks_available * 7))
+    return plan
+
+
 @transaction.atomic
 def propose_practice_plan(
     athlete: Athlete,
@@ -532,37 +675,9 @@ def propose_practice_plan(
     today = athlete.local_today
     start = today + dt.timedelta(days=1)
     horizon = max(4, min(int(weeks or HORIZON_WEEKS), 26))
-
-    days = _normalise_days(available_days)
     history = history_baseline(athlete)
-    baseline = baseline_for(athlete)
     beginner = history.source != "history"
-    if beginner:
-        baseline = dataclasses.replace(
-            baseline,
-            run_km_per_week=max(baseline.run_km_per_week, BEGINNER_RUN_KM_PER_WEEK),
-            run_pace_s_per_km=(athlete.easy_pace_min + athlete.easy_pace_max) / 2,
-        )
-    # The best unbroken block ever recorded, which is what separates ground being
-    # REGAINED from ground being broken for the first time. history_baseline has
-    # tracked it all along; nothing had asked for it.
-    baseline = dataclasses.replace(
-        baseline,
-        demonstrated_longest_s=max(
-            float(history.best_longest_run_s or 0.0), baseline.longest_run_s,
-        ),
-    )
-    if days is not None:
-        baseline = dataclasses.replace(baseline, available_days=days)
-    if long_run_day is not None:
-        baseline = dataclasses.replace(baseline, long_run_day=int(long_run_day))
-    if not baseline.available_days.get(str(baseline.long_run_day), False):
-        available = [d for d in range(7) if baseline.available_days.get(str(d))]
-        baseline = dataclasses.replace(
-            baseline, long_run_day=available[-1] if available else 6,
-        )
-    if athlete.runs_per_week:
-        baseline = dataclasses.replace(baseline, runs_per_week=int(athlete.runs_per_week))
+    baseline = _practice_baseline(athlete, available_days, long_run_day)
 
     generated = generate_practice(start, baseline, config_from_settings(), weeks=horizon)
     milestone = milestone_for(baseline.longest_run_s, baseline.run_pace_s_per_km)
@@ -609,35 +724,6 @@ def propose_practice_plan(
         },
     )
 
-    horizon_end = start + dt.timedelta(days=horizon * 7)
-    merged = _merge_phases(generated, horizon_end)
-    phases: list[PlanPhase] = []
-    for order, block in enumerate(merged):
-        name, description = PRACTICE_PHASE_NAMES.get(
-            block["generator_phase"], (block["generator_phase"].title(), ""),
-        )
-        phases.append(PlanPhase.objects.create(
-            plan=plan, order=order, name=name, description=description,
-            kind=PHASE_KIND[block["generator_phase"]],
-            generator_phase=block["generator_phase"],
-            start=block["start"], end=block["end"],
-        ))
-
-    bands = bands_for(athlete)
-    weight = athlete.weight_kg or FALLBACK_WEIGHT_KG
-    rows: list[PlannedWorkout] = []
-    for week, phase in _weeks_with_phases(generated.weeks, phases):
-        for session in week.sessions:
-            if session.optional or session.kind == "RACE" or session.date < start:
-                continue
-            spec = build_workout(session, bands, week.phase)
-            rows.append(PlannedWorkout(
-                athlete=athlete, plan=plan, phase=phase, date=session.date,
-                title=spec.title[:120], kind=spec.kind, duration_s=spec.duration_s,
-                load=spec.load, steps=[s.as_dict() for s in spec.steps],
-                description=spec.description, purpose=spec.purpose,
-                target_zone=spec.target_zone,
-                fueling=fueling_for(spec.kind, spec.duration_s, weight).as_dict(),
-            ))
-    PlannedWorkout.objects.bulk_create(rows)
+    _persist_practice(athlete, plan, generated, baseline, start,
+                      start + dt.timedelta(days=horizon * 7))
     return plan

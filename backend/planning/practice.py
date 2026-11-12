@@ -206,3 +206,133 @@ def generate_practice(
         warnings=warnings,
         weeks=built,
     )
+
+
+# --- a distance by a date, with no race attached ------------------------------
+#
+# Rohit: "if its not compulsary that i dont have an end date, you can choose
+# accordingly — like within this many days i wanna finish 5k."
+#
+# A milestone with no date is right for somebody who wants to train; a date is
+# right for somebody who wants a deadline. Neither needs an entry fee, a start
+# line or a taper, and the app only ever offered the version that came with all
+# three.
+#
+# The one thing this mode must do that a race plan does not: refuse. A race date
+# is a fact, so a plan to it is built and warned about. A self-set date is a
+# wish, and the useful answer to an impossible wish is the possible one beside
+# it — not a plan that spends four months arriving somewhere short.
+
+
+@dataclass(frozen=True)
+class Feasibility:
+    """Whether a distance can be run continuously by a date, and when it can."""
+
+    target_distance_km: float
+    target_date: dt.date
+    #: When the ramp starts. Needed so the earliest achievable date is an
+    #: absolute answer rather than one derived from the date being asked about —
+    #: the first version drifted by days depending on what was requested, which
+    #: makes "the honest date" look like a guess.
+    plan_start: dt.date
+    #: Continuous running the target needs, at this athlete's current pace.
+    needs_s: int
+    #: What the ramp reaches by the target date.
+    reaches_s: int
+    weeks_available: int
+    #: The first week the ramp reaches the target, however far out.
+    weeks_needed: int | None
+    achievable: bool
+
+    @property
+    def earliest_date(self) -> dt.date | None:
+        """The first date this is realistic, whatever date was asked about."""
+        if self.weeks_needed is None:
+            return None
+        return self.plan_start + dt.timedelta(weeks=self.weeks_needed)
+
+
+def assess_goal(
+    plan_start: dt.date,
+    target_date: dt.date,
+    target_distance_km: float,
+    baseline: Baseline,
+    config: PlanConfig | None = None,
+    search_weeks: int = 104,
+) -> Feasibility:
+    """Can this distance be run without stopping by this date, and if not, when.
+
+    Projected with the same continuous curve a plan is built from, including the
+    regain rate — so an athlete returning to ground they have held is told the
+    truth about how fast it comes back, rather than being quoted the beginner's
+    timeline for it.
+    """
+    config = config or PlanConfig()
+    weeks_available = max((target_date - plan_start).days // 7, 0)
+    needs_s = round(target_distance_km * baseline.run_pace_s_per_km)
+
+    curve, _ = _continuous_curve(
+        ["AEROBIC"] * max(search_weeks, weeks_available + 1),
+        baseline.longest_run_s, config,
+        baseline.demonstrated_longest_s or baseline.longest_run_s,
+    )
+    weeks_needed = next((i for i, value in enumerate(curve) if value >= needs_s), None)
+    reaches_s = round(curve[min(weeks_available, len(curve) - 1)]) if curve else 0
+
+    return Feasibility(
+        target_distance_km=target_distance_km,
+        target_date=target_date,
+        plan_start=plan_start,
+        needs_s=needs_s,
+        reaches_s=reaches_s,
+        weeks_available=weeks_available,
+        weeks_needed=weeks_needed,
+        achievable=weeks_needed is not None and weeks_needed <= weeks_available,
+    )
+
+
+def generate_goal(
+    plan_start: dt.date,
+    target_date: dt.date,
+    target_distance_km: float,
+    baseline: Baseline,
+    config: PlanConfig | None = None,
+) -> tuple[Plan, Feasibility]:
+    """A dated plan toward running a distance, with no race ceremony.
+
+    The plan is built for the weeks available either way. When the date is not
+    achievable the plan is still returned — the training is the same training —
+    but the warning says so plainly and names the date that would work, because
+    an athlete who is told "no" and nothing else just picks another number.
+    """
+    config = config or PlanConfig()
+    verdict = assess_goal(plan_start, target_date, target_distance_km, baseline, config)
+    weeks = max(verdict.weeks_available, 4)
+
+    plan = generate_practice(plan_start, baseline, config, weeks=weeks)
+
+    target_label = f"{target_distance_km:g} km without stopping"
+    if verdict.achievable:
+        warning = (
+            f"{target_label} by {target_date:%-d %B} is realistic: the ramp "
+            f"reaches {verdict.reaches_s / 60:.0f} minutes of continuous running "
+            f"against the {verdict.needs_s / 60:.0f} it needs at your pace."
+        )
+    elif verdict.earliest_date:
+        warning = (
+            f"{target_label} by {target_date:%-d %B} is not realistic from where "
+            f"you are. It needs {verdict.needs_s / 60:.0f} minutes of continuous "
+            f"running and the ramp reaches {verdict.reaches_s / 60:.0f} by then. "
+            f"{verdict.earliest_date:%-d %B %Y} is the honest date — this plan "
+            "builds toward it, and the date can move once you are further along."
+        )
+    else:
+        warning = (
+            f"{target_label} is a long way from a {baseline.longest_run_s / 60:.0f}"
+            "-minute unbroken run. The plan below builds the block that gets you "
+            "there; the distance is worth revisiting once it is bigger."
+        )
+
+    plan = replace(plan, warnings=[warning, *plan.warnings[1:]],
+                   race_needs_continuous_s=verdict.needs_s)
+    return plan, verdict

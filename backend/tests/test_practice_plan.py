@@ -155,3 +155,73 @@ def test_a_complete_beginner_still_gets_a_plan():
     assert len(plan.weeks) == HORIZON_WEEKS
     assert all(w.planned_run_km > 0 for w in plan.weeks)
     assert plan.peak_continuous_s > 0
+
+
+# --- a distance by a date, with no race -------------------------------------
+
+
+def test_an_impossible_date_is_refused_with_the_possible_one():
+    """The whole reason this mode differs from a race plan.
+
+    A race date is a fact, so a plan to it is built and warned about. A
+    self-set date is a wish, and the useful answer to an impossible wish is the
+    possible one beside it — "no" on its own just makes somebody pick another
+    number.
+    """
+    from planning.practice import assess_goal
+
+    soon = assess_goal(START, START + dt.timedelta(days=90), 5.0, baseline(), PlanConfig())
+    assert soon.achievable is False
+    assert soon.earliest_date is not None
+    assert soon.earliest_date > START + dt.timedelta(days=90)
+
+
+def test_the_earliest_date_does_not_depend_on_what_was_asked():
+    """It drifted by days with the requested date in the first version.
+
+    "The honest date" that changes depending on the question looks like a guess,
+    because it is one.
+    """
+    from planning.practice import assess_goal
+
+    answers = {
+        assess_goal(START, START + dt.timedelta(days=days), 5.0,
+                    baseline(), PlanConfig()).earliest_date
+        for days in (60, 90, 180, 210, 365)
+    }
+    assert len(answers) == 1
+
+
+def test_a_realistic_date_is_confirmed_rather_than_hedged():
+    from planning.practice import assess_goal, generate_goal
+
+    far = START + dt.timedelta(days=300)
+    verdict = assess_goal(START, far, 5.0, baseline(), PlanConfig())
+    assert verdict.achievable is True
+
+    plan, _ = generate_goal(START, far, 5.0, baseline(), PlanConfig())
+    assert "realistic" in plan.warnings[0]
+
+
+def test_a_goal_plan_still_has_no_race_week():
+    """A date is not a race. No taper, no race session, no entry."""
+    from planning.practice import generate_goal
+
+    plan, _ = generate_goal(START, START + dt.timedelta(days=300), 5.0,
+                            baseline(), PlanConfig())
+    phases = {w.phase for w in plan.weeks}
+    assert "TAPER" not in phases and "RACE" not in phases
+
+
+def test_a_distance_beyond_the_continuous_ceiling_says_so_without_a_date():
+    """10 km nonstop at 10:04/km is 100 minutes; the generator caps at 75.
+
+    Returning a confident date for something the plan will never prescribe
+    would be the worst possible answer.
+    """
+    from planning.practice import assess_goal
+
+    verdict = assess_goal(START, START + dt.timedelta(days=700), 10.0,
+                          baseline(), PlanConfig())
+    assert verdict.achievable is False
+    assert verdict.earliest_date is None

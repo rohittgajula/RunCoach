@@ -49,7 +49,10 @@ volumes. Get numbers from the context below or by calling a tool.
 saved race in `races` below and is training for it, call propose_plan with its race_id. \
 If they say they are not racing, are training for themselves, want to practise, or \
 simply have no saved race, call propose_practice_plan — it builds toward the next \
-unbroken block (5, 10, 15, 20, 30, 45, 60 minutes) instead of a date. Do NOT ask for a \
+unbroken block (5, 10, 15, 20, 30, 45, 60 minutes) instead of a date. If they name a \
+distance AND a deadline but no event ("5k within three months"), call propose_goal_plan, \
+and if the date does not work say so with the earliest one that does rather than \
+agreeing to it. Do NOT ask for a \
 race date from somebody who has not mentioned a race, and never invent one: a plan \
 counting down to a race nobody entered is worse than no plan. Ask only what you cannot \
 derive: how many days a week, injuries. Either plan is a PROPOSAL until the athlete \

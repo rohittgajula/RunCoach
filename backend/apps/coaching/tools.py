@@ -72,6 +72,22 @@ TOOLS = [
     _fn("get_workout", "One planned workout with its steps.", {"id": {"type": "integer"}}, ["id"]),
     _fn("get_workouts", "Planned workouts between two dates (inclusive).",
         {"start": DATE, "end": DATE}, ["start", "end"]),
+    _fn("propose_goal_plan",
+        "Build a plan toward running a DISTANCE WITHOUT STOPPING by a date the "
+        "athlete chose — \"5k within three months\", \"10k by summer\". No race, "
+        "no entry, no taper. Use this when they name both a distance and a "
+        "deadline but no event. If the date is not realistic the plan is still "
+        "built and the result says so, with the earliest date that works — tell "
+        "them that honestly rather than agreeing to the date they asked for. "
+        "Never invent the date; if they gave a distance but no date, call "
+        "propose_practice_plan instead and let the milestones do the work.",
+        {"target_distance_km": {"type": "number", "minimum": 0.4, "maximum": 100},
+         "target_date": DATE,
+         "available_days": {"type": "array",
+                            "items": {"type": "integer", "minimum": 0, "maximum": 6},
+                            "description": "Weekdays, 0 = Monday."},
+         "long_run_day": {"type": "integer", "minimum": 0, "maximum": 6}},
+        ["target_distance_km", "target_date"]),
     _fn("propose_practice_plan",
         "Build a training plan with NO RACE, as a proposal the athlete must accept. "
         "Use this whenever they say they are not racing, are training for themselves, "
@@ -306,6 +322,36 @@ class ToolRunner:
         return diet_day(self.athlete, _date(date))
 
     # --- write ----------------------------------------------------------------
+    def t_propose_goal_plan(self, target_distance_km, target_date,
+                            available_days=None, long_run_day=None):
+        """A distance by a date, with none of the race ceremony."""
+        from apps.planning.plan_store import propose_goal_plan
+
+        try:
+            plan = propose_goal_plan(
+                self.athlete, target_distance_km=float(target_distance_km),
+                target_date=_date(target_date), available_days=available_days,
+                long_run_day=long_run_day, chat_message=self.chat_message,
+            )
+        except PlanError as exc:
+            return {"error": str(exc)}
+
+        self._attach("plan_proposal", plan.pk)
+        summary = plan.summary
+        return {
+            "plan_id": plan.pk, "status": plan.status, "name": plan.name,
+            "goal": plan.goal,
+            "achievable": summary.get("achievable"),
+            "earliest_date": summary.get("earliest_date"),
+            "needs_continuous_s": summary.get("needs_continuous_s"),
+            "reaches_continuous_s": summary.get("reaches_continuous_s"),
+            "weeks": summary.get("weeks"),
+            "warnings": summary.get("warnings", []),
+            "note": ("Tell the athlete plainly whether their date works. If it "
+                     "does not, give them the earliest one that does rather than "
+                     "softening it — the plan is built either way."),
+        }
+
     def t_propose_practice_plan(self, available_days=None, long_run_day=None, weeks=None):
         """A plan for somebody who is not racing, which is most people."""
         from apps.planning.plan_store import propose_practice_plan
