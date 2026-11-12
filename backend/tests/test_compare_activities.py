@@ -149,3 +149,31 @@ def test_at_most_four(api, athlete, two_runs):
     response = api.post(reverse("activity-compare"),
                         {"ids": [older.pk, newer.pk, *extra]}, format="json")
     assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_a_negative_baseline_does_not_flip_the_change(api, athlete):
+    """Found on real data: heart-rate drift is legitimately negative.
+
+    Rohit's drift went from -6.1% on 9 Oct to -10.1% on 9 Nov — it FELL by 4
+    points. Dividing by a negative baseline reported that as +65.6%, an
+    increase, which is the exact opposite of what happened. Any metric that can
+    go below zero breaks a percentage computed the obvious way.
+    """
+    older = make_run(athlete, day=dt.date(2026, 10, 9), logged_m=2325, run_m=1320,
+                     run_s=781, longest_s=699, pace=592, hr=142, cadence=161)
+    newer = make_run(athlete, day=dt.date(2026, 11, 9), logged_m=2504, run_m=945,
+                     run_s=571, longest_s=392, pace=604, hr=146, cadence=153)
+    older.metrics.hr_drift_percent = -6.1
+    older.metrics.save(update_fields=["hr_drift_percent"])
+    newer.metrics.hr_drift_percent = -10.1
+    newer.metrics.save(update_fields=["hr_drift_percent"])
+
+    data = api.post(reverse("activity-compare"),
+                    {"ids": [older.pk, newer.pk]}, format="json").data
+    drift = next(m for m in data["metrics"] if m["key"] == "hr_drift_percent")
+
+    assert drift["change_pct"][str(newer.pk)] < 0, "a fall must read as a fall"
+    # And it is not called an improvement either way: falling drift usually
+    # means the first minutes were too hard, not that fitness improved.
+    assert drift["direction"] == 0

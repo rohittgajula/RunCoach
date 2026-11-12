@@ -45,7 +45,11 @@ METRICS: dict[str, tuple[str, int, str]] = {
     "avg_run_cadence_spm": ("Cadence", 1, "Steps per minute while running"),
     "run_fraction": ("Run fraction", 1, "Share of the outing actually run"),
     "run_block_count": ("Run blocks", 0, "How many times you started running"),
-    "hr_drift_percent": ("Heart-rate drift", -1, "Rising HR at steady pace means fatigue"),
+    # Direction 0 on purpose. Rising drift means fatigue, but FALLING drift is
+    # not straightforwardly good — strongly negative drift usually means the
+    # first minutes were too hard and heart rate settled afterwards. Calling
+    # that an improvement would praise a pacing mistake.
+    "hr_drift_percent": ("Heart-rate drift", 0, "Rising HR at steady pace means fatigue"),
 }
 
 
@@ -113,8 +117,13 @@ def _deltas(rows: list[dict]) -> list[dict]:
             "key": key, "label": label, "direction": direction, "note": note,
             "baseline_id": base["id"],
             "values": {str(i): v for i, v in series},
+            # Divided by the MAGNITUDE of the baseline, not the baseline itself.
+            # Heart-rate drift is legitimately negative, and dividing by a
+            # negative number flips the sign of every change computed from it:
+            # Rohit's drift going from -6.1% to -10.1% — a fall — was reported
+            # as +65.6%, an increase, which is the opposite of what happened.
             "change_pct": {
-                str(i): round((v - baseline) / baseline * 100, 1) for i, v in series
+                str(i): round((v - baseline) / abs(baseline) * 100, 1) for i, v in series
             },
         })
     return out
