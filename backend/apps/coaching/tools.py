@@ -72,6 +72,22 @@ TOOLS = [
     _fn("get_workout", "One planned workout with its steps.", {"id": {"type": "integer"}}, ["id"]),
     _fn("get_workouts", "Planned workouts between two dates (inclusive).",
         {"start": DATE, "end": DATE}, ["start", "end"]),
+    _fn("propose_practice_plan",
+        "Build a training plan with NO RACE, as a proposal the athlete must accept. "
+        "Use this whenever they say they are not racing, are training for themselves, "
+        "want to practise, or just want to get fitter — and whenever they have no "
+        "saved race. It builds toward the next MILESTONE (the next unbroken block "
+        "worth reaching: 5, 10, 15, 20, 30, 45 or 60 minutes) instead of a date, so "
+        "there is nothing to be late for. Do not invent a race to fit someone who "
+        "did not ask for one. Same safety rules as a race plan: the weekly increase "
+        "cap, the cutback every fourth week, the long run on their chosen day.",
+        {"available_days": {"type": "array",
+                            "items": {"type": "integer", "minimum": 0, "maximum": 6},
+                            "description": "Weekdays, 0 = Monday."},
+         "long_run_day": {"type": "integer", "minimum": 0, "maximum": 6},
+         "weeks": {"type": "integer", "minimum": 4, "maximum": 26,
+                   "description": "How far ahead to write. Default 12."}},
+        []),
     _fn("propose_plan",
         "Build a training plan with the deterministic generator and save it as a PROPOSAL "
         "the athlete must accept. Plan for a SAVED race by passing its race_id (see "
@@ -290,6 +306,39 @@ class ToolRunner:
         return diet_day(self.athlete, _date(date))
 
     # --- write ----------------------------------------------------------------
+    def t_propose_practice_plan(self, available_days=None, long_run_day=None, weeks=None):
+        """A plan for somebody who is not racing, which is most people."""
+        from apps.planning.plan_store import propose_practice_plan
+
+        try:
+            plan = propose_practice_plan(
+                self.athlete, available_days=available_days,
+                long_run_day=long_run_day, weeks=weeks,
+                chat_message=self.chat_message,
+            )
+        except PlanError as exc:
+            return {"error": str(exc)}
+
+        self._attach("plan_proposal", plan.pk)
+        summary = plan.summary
+        return {
+            "plan_id": plan.pk, "status": plan.status, "name": plan.name,
+            "goal": plan.goal,
+            "milestone": summary.get("milestone_label"),
+            "milestone_distance_m": summary.get("milestone_distance_m"),
+            "milestone_index": summary.get("milestone_index"),
+            "milestone_total": summary.get("milestone_total"),
+            "weeks": summary.get("weeks"),
+            "peak_run_km": summary.get("peak_run_km"),
+            "peak_continuous_s": summary.get("peak_continuous_s"),
+            "phases": [{"name": p.name, "kind": p.kind, "start": p.start, "end": p.end,
+                        "description": p.description} for p in plan.phases.all()],
+            "warnings": summary.get("warnings", []),
+            "note": "Shown as a proposal card. Not active until they accept. "
+                    "Accepting archives any existing plan and clears its future, "
+                    "which is how a stale race plan gets removed.",
+        }
+
     def t_propose_plan(self, race_id=None, race_name=None, race_date=None, distance_km=None,
                        is_target=True, confirmed_new_race=False, available_days=None,
                        long_run_day=None, phase_names_and_descriptions=None):

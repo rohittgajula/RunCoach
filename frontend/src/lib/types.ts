@@ -68,6 +68,15 @@ export type PlanSummary = {
   end: ISODate
   current_phase_id: number | null
   phases: Phase[]
+  /** Set only on a practice plan: the unbroken block it is building toward. */
+  milestone?: {
+    label: string | null
+    seconds: number | null
+    distance_m: number | null
+    index: number | null
+    total: number | null
+  } | null
+  kind?: 'practice' | 'race' | 'other'
 }
 
 export type PlanWeek = {

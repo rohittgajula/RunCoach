@@ -294,6 +294,18 @@ def plan_summary(plan: TrainingPlan, today: dt.date) -> dict:
         "goal": plan.goal,
         "status": plan.status,
         "race": RaceSerializer(plan.race).data if plan.race else None,
+        # What this plan is FOR, when it is not for a race. A practice plan has
+        # no race row at all, so anything reading `race` to decide what to show
+        # would fall through to an empty header on the one plan that most needs
+        # to say what it is building toward.
+        "milestone": ({
+            "label": (plan.summary or {}).get("milestone_label"),
+            "seconds": (plan.summary or {}).get("milestone_s"),
+            "distance_m": (plan.summary or {}).get("milestone_distance_m"),
+            "index": (plan.summary or {}).get("milestone_index"),
+            "total": (plan.summary or {}).get("milestone_total"),
+        } if (plan.summary or {}).get("kind") == "practice" else None),
+        "kind": (plan.summary or {}).get("kind") or ("race" if plan.race_id else "other"),
         "phase_count": len(phases),
         "start": phases[0].start if phases else None,
         "end": phases[-1].end if phases else None,

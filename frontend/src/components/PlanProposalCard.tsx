@@ -16,8 +16,26 @@ export function PlanProposalCard({ plan }: { plan: PlanSummary }) {
         <h3 className="proposal-name">{plan.name}</h3>
         <p className="muted">
           {plan.phase_count} phase{plan.phase_count === 1 ? '' : 's'}
-          {plan.race ? ` · ${plan.race.name}` : ''}
+          {plan.race
+            ? ` · ${plan.race.name}`
+            : plan.milestone?.label
+              ? ` · building to ${plan.milestone.label}`
+              : ''}
         </p>
+        {/* A practice plan has no race to name, and the milestone is the thing it
+            is for. Without this the one plan that most needs to say what it is
+            building toward says the least. */}
+        {!plan.race && plan.milestone?.label && (
+          <p className="proposal-milestone">
+            <strong>{plan.milestone.label}</strong>
+            {plan.milestone.distance_m
+              ? ` · about ${(plan.milestone.distance_m / 1000).toFixed(1)} km at your pace`
+              : ''}
+            {plan.milestone.index != null && plan.milestone.total
+              ? ` · step ${plan.milestone.index + 1} of ${plan.milestone.total}`
+              : ''}
+          </p>
+        )}
         {plan.goal && <p className="proposal-goal">{plan.goal}</p>}
         <PlanTimeline phases={plan.phases} />
 

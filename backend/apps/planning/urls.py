@@ -8,7 +8,7 @@ from .plan_views import (
 from .checkin_views import today, today_apply, today_explain
 from .garmin_views import plan_garmin, workout_garmin
 from .month_views import calendar_month
-from . import calendar_feed, edit_views, r13_views, r14_views, reset_views
+from . import calendar_feed, edit_views, r13_views, r14_views, race_predict_views, reset_views
 from .views import (
     RaceDetail, RaceList, plan_weeks, predictions, today_mode, today_session_view,
 )
@@ -20,6 +20,8 @@ urlpatterns = [
     # reads the persisted plan endpoints below.
     path("plan/today/", today_mode, name="plan-today"),
     path("plan/predictions/", predictions, name="plan-predictions"),
+    path("plan/race-predictions/", race_predict_views.race_predictions,
+         name="race-predictions"),
     path("plan/weeks/", plan_weeks, name="plan-weeks"),
     path("plan/session/", today_session_view, name="plan-session"),
     path("plan/calendar/", calendar, name="plan-calendar"),

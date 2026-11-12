@@ -18,7 +18,8 @@ import { addDays, dur, monthDay, parseDate, todayISO, weekday } from '../lib/for
 import { errorText, useActivePlan, useCalendar, useSync, useToday } from '../lib/queries'
 import type { ActivityCard, CalDay, CalWeek, Workout } from '../lib/types'
 
-import { BUILD_PLAN_PROMPT } from '../lib/prompts'
+import { BUILD_PLAN_PROMPT, PRACTICE_PLAN_PROMPT } from '../lib/prompts'
+import { RacePredictions } from '../components/plan/RacePredictions'
 import { canEditWorkout } from '../components/edit/EditedChip'
 export { BUILD_PLAN_PROMPT }
 
@@ -186,16 +187,33 @@ export default function Calendar() {
       {activePlan.data === null && (
         <section className="card banner">
           <p className="banner-title">No plan yet — ask the coach to build one</p>
-          <p className="muted small">Tell it your race or goal. It asks only what it can't work out from your Garmin data.</p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => navigate('/chat/new', { state: { prompt: BUILD_PLAN_PROMPT } })}
-          >
-            Ask the coach
-          </button>
+          <p className="muted small">
+            It asks only what it can't work out from your Garmin data. You don't
+            need a race: a practice plan builds toward the next unbroken block
+            instead of a date.
+          </p>
+          <div className="banner-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate('/chat/new', { state: { prompt: PRACTICE_PLAN_PROMPT } })}
+            >
+              I'm not racing
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => navigate('/chat/new', { state: { prompt: BUILD_PLAN_PROMPT } })}
+            >
+              I have a race
+            </button>
+          </div>
         </section>
       )}
+
+      {/* Both predictions, wherever the plan is. The question "how fast could I
+          go" belongs beside the plan that is meant to change the answer. */}
+      <RacePredictions />
 
       {activePlan.data && (
         <button type="button" className="card plan-strip" onClick={() => setPlanOpen(true)}>

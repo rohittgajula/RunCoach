@@ -31,7 +31,11 @@ CARD_KEYS = {"id", "name", "sport", "device", "start", "duration_s", "distance_m
              "run_distance_m", "walk_distance_m", "run_fraction", "longest_run_s", "steps",
              "journalled", "reviewed_thread_id", "unplanned"}
 SUMMARY_KEYS = {"id", "name", "goal", "status", "race", "phase_count", "start", "end",
-                "current_phase_id", "phases"}
+                "current_phase_id", "phases",
+                # R19: a practice plan has no race row, so `race` alone cannot say
+                # what a plan is for. `milestone` carries the unbroken block it
+                # builds toward; `kind` tells a client which of the two to read.
+                "milestone", "kind"}
 PHASE_KEYS = {"id", "order", "name", "kind", "start", "end", "description"}
 MEAL_KEYS = {"id", "eaten_at", "local_date", "meal_type", "description", "photo_url", "items",
              "kcal", "carbs_g", "protein_g", "fat_g", "source", "ai_confidence"}
