@@ -1,29 +1,26 @@
 /**
- * What the movement looks like, as one figure that actually does it.
+ * One figure doing the movement, rigged well enough to copy.
  *
- * The first version of this drew two frames, start and end, side by side. That
- * is a diagram, and a diagram is the thing a person glances at and believes
- * they have understood. The mistake in a squat is never in either end position
- * — it is in the path between them, and two still pictures are precisely the
- * view that hides it.
+ * Three versions of this now. Two still frames was a diagram, and a diagram is
+ * what somebody glances at, believes they understood, and then performs as a
+ * knees-forward squat. One figure morphing between two poses fixed that, and
+ * still moved like a puppet.
  *
- * So: one figure, rigged on a skeleton, moving between the two poses on a loop.
+ * The reason it moved like a puppet was not the joint count. It was that every
+ * limb started and stopped at the same instant. Real movement is staggered: in
+ * a squat the hips go back first and the knees follow a beat later, and the
+ * arms are last because they are reacting rather than driving. Perfect lockstep
+ * reads as mechanism; a quarter of a second of lag reads as a body. So each
+ * limb now carries its own `lead` — where in the cycle it arrives — and the
+ * easing is asymmetric, braking hard into the end position and drifting back.
  *
- * **Poses, not paths.** Each exercise is two sets of joint coordinates, and the
- * drawing is generated from them. Hand-written `d` strings cannot be morphed —
- * SMIL interpolates between two path strings only when their command sequences
- * match exactly, and keeping thirty hand-written strings in lockstep is a
- * promise nobody keeps past the third edit. A shared skeleton makes that
- * structural rather than a thing to remember.
+ * The skeleton grew to match: a two-segment spine so the torso can round, a
+ * foot so the ankle has something to pivot on, and a shoulder and wrist. A calf
+ * raise where the toe stays planted and everything above it rises is the detail
+ * that makes it read as a calf raise rather than a hop.
  *
- * **SMIL rather than a library.** `<animate>` on `d` is supported everywhere
- * this app runs, costs nothing, and keeps the figures working with no network
- * and no JavaScript — which is the normal condition in a gym basement. The
- * alternative was ~40 kB of animation library per figure, into a PWA already
- * precaching 1.7 MB.
- *
- * Reduced motion is honoured by rendering the end pose and no `<animate>` at
- * all, rather than by pausing: a paused animation still ships the machinery.
+ * Still SMIL, still no dependency. The alternative was ~250 kB of animation
+ * runtime plus 40–80 kB per exercise, into a PWA opened in a gym basement.
  */
 
 import { useEffect, useState } from 'react'
@@ -31,51 +28,52 @@ import { useEffect, useState } from 'react'
 type Point = [number, number]
 
 /**
- * One pose. Every exercise defines two, and every figure is drawn from the
- * same joints, so any two poses can morph into each other by construction.
+ * One pose. Every figure is drawn from the same joints, so any two poses morph
+ * into each other by construction — which is what stops thirty hand-written
+ * path strings from having to be kept in lockstep by hand.
  */
 type Pose = {
   head: Point
   neck: Point
+  chest: Point
   hip: Point
   knee: Point
   ankle: Point
-  // The far-side leg, drawn faded so it reads as depth rather than clutter.
+  toe: Point
   knee2: Point
   ankle2: Point
+  shoulder: Point
   elbow: Point
   wrist: Point
 }
 
-const spine = (p: Pose) => `M${p.neck[0]} ${p.neck[1]} L${p.hip[0]} ${p.hip[1]}`
-const legA = (p: Pose) =>
-  `M${p.hip[0]} ${p.hip[1]} L${p.knee[0]} ${p.knee[1]} L${p.ankle[0]} ${p.ankle[1]}`
-const legB = (p: Pose) =>
-  `M${p.hip[0]} ${p.hip[1]} L${p.knee2[0]} ${p.knee2[1]} L${p.ankle2[0]} ${p.ankle2[1]}`
-const arm = (p: Pose) =>
-  `M${p.neck[0]} ${p.neck[1]} L${p.elbow[0]} ${p.elbow[1]} L${p.wrist[0]} ${p.wrist[1]}`
+const at = (pose: Pose, joint: keyof Pose) => `${pose[joint][0]} ${pose[joint][1]}`
 
-/** Prop drawn behind the figure: a chair, a wall, a table. */
+/**
+ * Each limb is one path through a named chain of joints, with its own arrival
+ * time. The spread across these `lead` values is the whole realism budget.
+ */
+const CHAINS: {
+  key: string; joints: (keyof Pose)[]; width: number; lead: number; fade?: number
+}[] = [
+  // Far leg first and faded, so it reads as depth rather than clutter.
+  { key: 'legFar', joints: ['hip', 'knee2', 'ankle2'], width: 5, lead: 0.52, fade: 0.38 },
+  // The spine leads almost everything: the hips are what start a squat or a hinge.
+  { key: 'spine', joints: ['neck', 'chest', 'hip'], width: 5.5, lead: 0.46 },
+  { key: 'legNear', joints: ['hip', 'knee', 'ankle', 'toe'], width: 5, lead: 0.5 },
+  // Arms arrive last. On most of these they are reacting, and moving them in
+  // time with the hips is the single thing that most makes a figure look
+  // mechanical.
+  { key: 'arm', joints: ['shoulder', 'elbow', 'wrist'], width: 4, lead: 0.57 },
+]
+
 type Prop = { x: number; y: number; w: number; h: number }
 
 type Move = {
-  /** Seconds for one full out-and-back. Slow enough to copy, not so slow it stalls. */
   dur: number
   props?: Prop[]
-  /** Dashed reference line between two joints, when the cue is about alignment. */
   guide?: [keyof Pose, keyof Pose]
-  /**
-   * Which way the face points, as a unit-ish direction. A plain circle head has
-   * no front, and on the floor movements that made the whole figure ambiguous —
-   * you could not tell a glute bridge from a crab walk.
-   */
   facing: [number, number]
-  /**
-   * How the body meets the floor. "stand" draws a thin ground line under the
-   * feet; "lie" fills a band behind the whole body, because on a supine
-   * exercise the floor is what the back is pressed against and a line under the
-   * heels says nothing. "wall" adds the vertical surface instead.
-   */
   surface: 'stand' | 'lie' | 'wall' | 'under'
   a: Pose
   b: Pose
@@ -83,106 +81,131 @@ type Move = {
 
 const MOVES: Record<string, Move> = {
   'Box squat': {
-    dur: 3.4,
-    facing: [-1, 0], surface: 'stand',
-    props: [{ x: 62, y: 64, w: 32, h: 5 }, { x: 88, y: 64, w: 5, h: 28 }],
+    dur: 3.4, facing: [-1, 0], surface: 'stand',
+    props: [{ x: 60, y: 63, w: 34, h: 5 }, { x: 89, y: 63, w: 5, h: 29 }],
     a: {
-      head: [44, 20], neck: [44, 29], hip: [44, 57],
-      knee: [44, 75], ankle: [44, 92], knee2: [40, 75], ankle2: [40, 92],
-      elbow: [34, 42], wrist: [30, 54],
+      head: [44, 18], neck: [44, 27], chest: [44, 38], hip: [44, 57],
+      knee: [44, 74], ankle: [44, 90], toe: [35, 91],
+      knee2: [41, 74], ankle2: [41, 90],
+      shoulder: [44, 30], elbow: [38, 44], wrist: [36, 56],
     },
     b: {
-      // Hips back over the chair, shins near vertical, chest up. The hip
-      // travelling backwards rather than the knee travelling forwards is the
-      // entire movement, so it is the thing the animation has to show.
-      head: [36, 34], neck: [38, 42], hip: [60, 62],
-      knee: [46, 76], ankle: [44, 92], knee2: [42, 76], ankle2: [40, 92],
-      elbow: [44, 48], wrist: [54, 44],
+      // The hips travel BACK rather than down: the shin stays near vertical and
+      // the heel never leaves the floor. That is the whole movement, so it is
+      // what the animation has to make obvious.
+      head: [33, 33], neck: [36, 41], chest: [43, 50], hip: [58, 61],
+      knee: [46, 76], ankle: [44, 90], toe: [35, 91],
+      knee2: [43, 76], ankle2: [41, 90],
+      shoulder: [37, 43], elbow: [46, 50], wrist: [55, 46],
     },
   },
   'Wall push-up': {
-    dur: 3.0,
-    facing: [1, 0], surface: 'wall',
-    props: [{ x: 80, y: 8, w: 6, h: 84 }],
+    dur: 3.0, facing: [1, 0], surface: 'wall',
+    props: [{ x: 82, y: 6, w: 6, h: 86 }],
     a: {
-      head: [48, 26], neck: [52, 33], hip: [40, 66],
-      knee: [36, 80], ankle: [32, 92], knee2: [34, 80], ankle2: [30, 92],
-      elbow: [64, 29], wrist: [79, 26],
+      head: [46, 25], neck: [50, 32], chest: [48, 42], hip: [42, 62],
+      knee: [38, 78], ankle: [33, 90], toe: [27, 91],
+      knee2: [36, 78], ankle2: [31, 90],
+      shoulder: [52, 31], elbow: [64, 28], wrist: [79, 26],
     },
     b: {
-      head: [60, 28], neck: [63, 35], hip: [45, 68],
-      knee: [38, 80], ankle: [32, 92], knee2: [36, 80], ankle2: [30, 92],
-      elbow: [70, 40], wrist: [79, 27],
+      // One line from head to heels throughout: the body travels as a unit and
+      // only the elbow angle changes. Sagging hips is the error this rules out.
+      head: [58, 27], neck: [61, 34], chest: [56, 44], hip: [47, 64],
+      knee: [40, 79], ankle: [33, 90], toe: [27, 91],
+      knee2: [38, 79], ankle2: [31, 90],
+      shoulder: [63, 33], elbow: [70, 40], wrist: [79, 27],
     },
   },
   'Glute bridge': {
-    dur: 3.2,
-    facing: [0, -1], surface: 'lie',
-    guide: ['neck', 'knee'],
+    dur: 3.2, facing: [0, -1], surface: 'lie', guide: ['shoulder', 'knee'],
     a: {
-      head: [16, 80], neck: [25, 82], hip: [52, 84],
-      knee: [70, 76], ankle: [74, 92], knee2: [70, 80], ankle2: [76, 92],
-      elbow: [32, 90], wrist: [44, 91],
+      head: [16, 80], neck: [24, 81], chest: [36, 83], hip: [52, 84],
+      knee: [70, 77], ankle: [74, 90], toe: [81, 91],
+      knee2: [70, 80], ankle2: [76, 90],
+      shoulder: [25, 83], elbow: [33, 89], wrist: [43, 90],
     },
     b: {
-      head: [16, 80], neck: [25, 81], hip: [52, 64],
-      knee: [70, 74], ankle: [74, 92], knee2: [70, 78], ankle2: [76, 92],
-      elbow: [32, 90], wrist: [44, 91],
+      // Shoulders stay down, hips rise, knees barely move. The dashed guide runs
+      // shoulder to knee, because that straight line IS the cue.
+      head: [16, 80], neck: [24, 80], chest: [38, 71], hip: [54, 63],
+      knee: [71, 74], ankle: [74, 90], toe: [81, 91],
+      knee2: [71, 77], ankle2: [76, 90],
+      shoulder: [25, 82], elbow: [33, 89], wrist: [43, 90],
     },
   },
   'Calf raise': {
-    dur: 2.2,
-    facing: [-1, 0], surface: 'stand',
+    dur: 2.2, facing: [-1, 0], surface: 'stand',
     a: {
-      head: [50, 22], neck: [50, 31], hip: [50, 62],
-      knee: [50, 77], ankle: [50, 92], knee2: [46, 77], ankle2: [46, 92],
-      elbow: [40, 44], wrist: [38, 56],
+      head: [50, 21], neck: [50, 30], chest: [50, 40], hip: [50, 60],
+      knee: [50, 76], ankle: [50, 90], toe: [41, 91],
+      knee2: [47, 76], ankle2: [47, 90],
+      shoulder: [50, 32], elbow: [44, 45], wrist: [42, 57],
     },
     b: {
-      // The whole body rises; the ankle is the joint that does it.
-      head: [50, 13], neck: [50, 22], hip: [50, 53],
-      knee: [50, 68], ankle: [50, 84], knee2: [46, 68], ankle2: [46, 84],
-      elbow: [40, 35], wrist: [38, 47],
+      // The toe is the pivot and does not move; everything above it rises. The
+      // heel lifting away from a planted toe is what makes this a calf raise
+      // rather than a hop.
+      head: [50, 13], neck: [50, 22], chest: [50, 32], hip: [50, 52],
+      knee: [50, 68], ankle: [50, 83], toe: [41, 91],
+      knee2: [47, 68], ankle2: [47, 83],
+      shoulder: [50, 24], elbow: [44, 37], wrist: [42, 49],
     },
   },
   'Table row': {
-    dur: 3.0,
-    facing: [0, -1], surface: 'under',
-    props: [{ x: 6, y: 34, w: 88, h: 5 }],
+    dur: 3.0, facing: [0, -1], surface: 'under',
+    props: [{ x: 4, y: 34, w: 92, h: 5 }],
     a: {
-      head: [24, 76], neck: [32, 74], hip: [66, 79],
-      knee: [78, 86], ankle: [90, 92], knee2: [78, 88], ankle2: [90, 93],
-      elbow: [31, 58], wrist: [30, 40],
+      head: [24, 75], neck: [32, 74], chest: [44, 75], hip: [64, 78],
+      knee: [78, 85], ankle: [90, 90], toe: [96, 89],
+      knee2: [78, 87], ankle2: [90, 92],
+      shoulder: [32, 72], elbow: [31, 56], wrist: [30, 40],
     },
     b: {
-      head: [24, 60], neck: [32, 59], hip: [66, 72],
-      knee: [78, 82], ankle: [90, 92], knee2: [78, 84], ankle2: [90, 93],
-      elbow: [26, 50], wrist: [30, 40],
+      // Hands stay on the table; the body comes up to meet them, straight from
+      // shoulder to heel. The elbow is what bends.
+      head: [24, 60], neck: [32, 59], chest: [44, 64], hip: [64, 72],
+      knee: [78, 82], ankle: [90, 90], toe: [96, 89],
+      knee2: [78, 84], ankle2: [90, 92],
+      shoulder: [32, 57], elbow: [26, 49], wrist: [30, 40],
     },
   },
   'Dead bug': {
-    dur: 3.6,
-    facing: [0, -1], surface: 'lie',
-    guide: ['neck', 'hip'],
+    dur: 3.6, facing: [0, -1], surface: 'lie', guide: ['chest', 'hip'],
     a: {
-      head: [18, 70], neck: [27, 72], hip: [58, 74],
-      knee: [70, 58], ankle: [78, 48], knee2: [70, 86], ankle2: [80, 90],
-      elbow: [26, 60], wrist: [30, 48],
+      head: [18, 70], neck: [26, 71], chest: [40, 73], hip: [58, 74],
+      knee: [70, 58], ankle: [78, 48], toe: [84, 45],
+      knee2: [70, 85], ankle2: [80, 90],
+      shoulder: [27, 70], elbow: [32, 56], wrist: [36, 46],
     },
     b: {
-      // Opposite arm and leg reach away; the back must not lift to let them.
-      head: [18, 70], neck: [27, 72], hip: [58, 74],
-      knee: [74, 70], ankle: [88, 68], knee2: [70, 84], ankle2: [78, 90],
-      elbow: [18, 58], wrist: [10, 50],
+      // Opposite arm and leg reach away from each other while the trunk does
+      // not move at all — which is the exercise. The guide line stays put while
+      // everything attached to it travels.
+      head: [18, 70], neck: [26, 71], chest: [40, 73], hip: [58, 74],
+      knee: [74, 70], ankle: [88, 67], toe: [94, 66],
+      knee2: [70, 84], ankle2: [78, 90],
+      shoulder: [27, 71], elbow: [18, 60], wrist: [10, 52],
     },
   },
 }
 
-/** Patterns fall back to a related movement so a new rung is never a blank box. */
 const BY_PATTERN: Record<string, string> = {
   calf: 'Calf raise', squat: 'Box squat', hinge: 'Glute bridge',
   push: 'Wall push-up', pull: 'Table row', core: 'Dead bug',
 }
+
+/**
+ * Brake hard into the end position, drift back out.
+ *
+ * Asymmetric on purpose. The end position is where the athlete is meant to be
+ * looking, so the figure decelerates into it and sits there for an instant; the
+ * return is the uninteresting half and gets out of the way.
+ */
+const SPLINES = '0.33 0 0.15 1;0.5 0 0.4 1'
+
+/** The head rides with the spine, a fraction behind it. */
+const HEAD_LEAD = 0.47
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false)
@@ -196,43 +219,38 @@ function usePrefersReducedMotion(): boolean {
   return reduced
 }
 
-/** One limb, morphing between its two poses. */
-function Limb({
-  d, from, to, dur, animate, className, width = 5, opacity,
+function Chain({
+  chain, from, to, dur, animate,
 }: {
-  d: (p: Pose) => string
+  chain: (typeof CHAINS)[number]
   from: Pose
   to: Pose
   dur: number
   animate: boolean
-  className: string
-  width?: number
-  opacity?: number
 }) {
-  const start = d(from)
-  const end = d(to)
+  const draw = (pose: Pose) => 'M' + chain.joints.map((j) => at(pose, j)).join(' L')
+  const start = draw(from)
+  const end = draw(to)
+
   return (
     <path
       d={animate ? start : end}
-      className={className}
-      strokeWidth={width}
+      className="exfig-body"
+      strokeWidth={chain.width}
       strokeLinecap="round"
       strokeLinejoin="round"
       fill="none"
-      opacity={opacity}
+      opacity={chain.fade}
     >
       {animate && (
         <animate
           attributeName="d"
           values={`${start};${end};${start}`}
-          keyTimes="0;0.5;1"
+          keyTimes={`0;${chain.lead};1`}
           dur={`${dur}s`}
           repeatCount="indefinite"
           calcMode="spline"
-          // Ease out and back in: real movement decelerates into the end
-          // position and pauses there, which is also where the athlete is
-          // meant to be looking.
-          keySplines="0.4 0 0.2 1;0.4 0 0.2 1"
+          keySplines={SPLINES}
         />
       )}
     </path>
@@ -248,23 +266,20 @@ export function ExerciseFigure({
 
   const animate = !reduced
   const { a, b, dur } = move
-  // A pattern id has to be unique per figure or several on one page share the
+  // A pattern id has to be unique per figure, or several on one page share the
   // first one — which looks fine until a figure is removed and the rest lose
   // their floor.
   const hatchId = `hatch-${name.replace(/\W+/g, '-').toLowerCase()}`
-  // Lying movements need the floor behind the body, not under the feet.
   const floorY = move.surface === 'lie' ? 88 : move.surface === 'under' ? 90 : 92
 
-  const nose = (p: Pose) => {
+  const nose = (pose: Pose) => {
     const [fx, fy] = move.facing
-    return `M${p.head[0]} ${p.head[1]} L${p.head[0] + fx * 11} ${p.head[1] + fy * 11}`
+    return `M${pose.head[0]} ${pose.head[1]} L${pose.head[0] + fx * 11} ${pose.head[1] + fy * 11}`
   }
-  const faceFrom = nose(a)
-  const faceTo = nose(b)
   const guide = move.guide
     ? {
-        from: `M${a[move.guide[0]][0]} ${a[move.guide[0]][1]} L${a[move.guide[1]][0]} ${a[move.guide[1]][1]}`,
-        to: `M${b[move.guide[0]][0]} ${b[move.guide[0]][1]} L${b[move.guide[1]][0]} ${b[move.guide[1]][1]}`,
+        from: `M${at(a, move.guide[0])} L${at(a, move.guide[1])}`,
+        to: `M${at(b, move.guide[0])} L${at(b, move.guide[1])}`,
       }
     : null
 
@@ -278,44 +293,40 @@ export function ExerciseFigure({
           </pattern>
         </defs>
 
-        {/* The floor, drawn as a surface with thickness. A hairline under the
-            heels is enough for a standing figure and tells you nothing at all
-            about one lying down, which is how the supine movements became
-            unreadable. */}
+        {/* The floor as a surface with thickness. A hairline under the heels is
+            enough for a standing figure and tells you nothing about one lying
+            down, which is how the supine movements became unreadable. */}
         <rect x="0" y={floorY} width="100" height={100 - floorY}
               fill={`url(#${hatchId})`} className="exfig-floor" />
         <line x1="0" y1={floorY} x2="100" y2={floorY} className="exfig-ground" />
-
         {move.surface === 'wall' && (
-          <>
-            <rect x="0" y="0" width="100" height="100" fill="none" />
-            <line x1="86" y1="0" x2="86" y2={floorY} className="exfig-ground" />
-          </>
+          <line x1="88" y1="0" x2="88" y2={floorY} className="exfig-ground" />
         )}
-        {(move.props ?? []).map((p, i) => (
-          <rect key={i} x={p.x} y={p.y} width={p.w} height={p.h} rx="1.5" className="exfig-prop" />
+        {(move.props ?? []).map((prop, i) => (
+          <rect key={i} x={prop.x} y={prop.y} width={prop.w} height={prop.h}
+                rx="1.5" className="exfig-prop" />
         ))}
 
         {guide && (
           <path d={animate ? guide.from : guide.to} className="exfig-guide" fill="none">
             {animate && (
               <animate attributeName="d" values={`${guide.from};${guide.to};${guide.from}`}
-                       keyTimes="0;0.5;1" dur={`${dur}s`} repeatCount="indefinite" />
+                       keyTimes="0;0.46;1" dur={`${dur}s`} repeatCount="indefinite"
+                       calcMode="spline" keySplines={SPLINES} />
             )}
           </path>
         )}
 
-        <Limb d={legB} from={a} to={b} dur={dur} animate={animate} className="exfig-body" opacity={0.4} />
-        <Limb d={legA} from={a} to={b} dur={dur} animate={animate} className="exfig-body" />
-        <Limb d={spine} from={a} to={b} dur={dur} animate={animate} className="exfig-body" />
-        <Limb d={arm} from={a} to={b} dur={dur} animate={animate} className="exfig-body" width={4} />
+        {CHAINS.map((chain) => (
+          <Chain key={chain.key} chain={chain} from={a} to={b} dur={dur} animate={animate} />
+        ))}
 
-        <path d={animate ? faceFrom : faceTo} className="exfig-face" fill="none"
+        <path d={animate ? nose(a) : nose(b)} className="exfig-face" fill="none"
               strokeWidth={3} strokeLinecap="round">
           {animate && (
-            <animate attributeName="d" values={`${faceFrom};${faceTo};${faceFrom}`}
-                     keyTimes="0;0.5;1" dur={`${dur}s`} repeatCount="indefinite"
-                     calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1" />
+            <animate attributeName="d" values={`${nose(a)};${nose(b)};${nose(a)}`}
+                     keyTimes={`0;${HEAD_LEAD};1`} dur={`${dur}s`} repeatCount="indefinite"
+                     calcMode="spline" keySplines={SPLINES} />
           )}
         </path>
 
@@ -324,11 +335,11 @@ export function ExerciseFigure({
           {animate && (
             <>
               <animate attributeName="cx" values={`${a.head[0]};${b.head[0]};${a.head[0]}`}
-                       keyTimes="0;0.5;1" dur={`${dur}s`} repeatCount="indefinite"
-                       calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1" />
+                       keyTimes={`0;${HEAD_LEAD};1`} dur={`${dur}s`} repeatCount="indefinite"
+                       calcMode="spline" keySplines={SPLINES} />
               <animate attributeName="cy" values={`${a.head[1]};${b.head[1]};${a.head[1]}`}
-                       keyTimes="0;0.5;1" dur={`${dur}s`} repeatCount="indefinite"
-                       calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1" />
+                       keyTimes={`0;${HEAD_LEAD};1`} dur={`${dur}s`} repeatCount="indefinite"
+                       calcMode="spline" keySplines={SPLINES} />
             </>
           )}
         </circle>
