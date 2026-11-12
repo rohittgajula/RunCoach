@@ -211,10 +211,6 @@ export default function Calendar() {
         </section>
       )}
 
-      {/* Both predictions, wherever the plan is. The question "how fast could I
-          go" belongs beside the plan that is meant to change the answer. */}
-      <RacePredictions />
-
       {activePlan.data && (
         <button type="button" className="card plan-strip" onClick={() => setPlanOpen(true)}>
           <span className="grow">
@@ -238,6 +234,11 @@ export default function Calendar() {
           onReview={launch.review}
         />
       )}
+
+      {/* After the calendar, not before it. "What am I doing this month" is why
+          you opened this tab; "how fast could I go" is the question you have
+          once you have looked. */}
+      <RacePredictions />
 
       <div className="cal-list-wrap" hidden={view !== 'list'}>
       {calendar.isPending && (

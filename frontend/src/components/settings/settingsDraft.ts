@@ -30,6 +30,10 @@ export type Draft = {
   // R13
   auto_adjust_plan: boolean
   strength_per_week: number
+  // Which weekdays are gym days, and what is in the gym. Both decide the
+  // calendar and neither had a control until now.
+  gym_days: Record<string, boolean>
+  gym_equipment: string
   caffeine_on_today: boolean
   pain_daily_check: boolean
 }
@@ -64,6 +68,8 @@ export const toDraft = (a: Athlete): Draft => ({
   location_city: a.location_city || (a.location_source === 'city' ? a.location_name ?? '' : ''),
   auto_adjust_plan: a.auto_adjust_plan ?? true,
   strength_per_week: a.strength_per_week ?? 0,
+  gym_days: a.gym_days ?? {},
+  gym_equipment: a.gym_equipment ?? 'bodyweight',
   caffeine_on_today: !!a.caffeine_on_today,
   pain_daily_check: !!a.pain_daily_check,
 })
@@ -100,6 +106,8 @@ export function toPatch(draft: Draft, athlete: Athlete): Partial<Athlete> & { lo
   // R13 — only once touched (an older server never sees them).
   if (draft.auto_adjust_plan !== before.auto_adjust_plan) patch.auto_adjust_plan = draft.auto_adjust_plan
   if (draft.strength_per_week !== before.strength_per_week) patch.strength_per_week = draft.strength_per_week
+  if (JSON.stringify(draft.gym_days) !== JSON.stringify(before.gym_days)) patch.gym_days = draft.gym_days
+  if (draft.gym_equipment !== before.gym_equipment) patch.gym_equipment = draft.gym_equipment
   if (draft.caffeine_on_today !== before.caffeine_on_today) patch.caffeine_on_today = draft.caffeine_on_today
   if (draft.pain_daily_check !== before.pain_daily_check) patch.pain_daily_check = draft.pain_daily_check
   if (draft.location_source !== before.location_source || draft.location_city.trim() !== before.location_city.trim()) {

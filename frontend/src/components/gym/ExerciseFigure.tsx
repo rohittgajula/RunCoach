@@ -272,10 +272,19 @@ export function ExerciseFigure({
   const hatchId = `hatch-${name.replace(/\W+/g, '-').toLowerCase()}`
   const floorY = move.surface === 'lie' ? 88 : move.surface === 'under' ? 90 : 92
 
-  const nose = (pose: Pose) => {
+  // Which way the figure faces is carried by the head's OFFSET from the neck,
+  // not by a line drawn out of it.
+  //
+  // The first version drew a nose — a stroke sticking out of the skull — which
+  // read as a spike rather than a face. A head actually sits slightly forward
+  // of the spine, so nudging the circle in the facing direction says the same
+  // thing anatomically and disappears into the drawing instead of fighting it.
+  const facedHead = (pose: Pose): [number, number] => {
     const [fx, fy] = move.facing
-    return `M${pose.head[0]} ${pose.head[1]} L${pose.head[0] + fx * 11} ${pose.head[1] + fy * 11}`
+    return [pose.head[0] + fx * 2.5, pose.head[1] + fy * 2.5]
   }
+  const headA = facedHead(a)
+  const headB = facedHead(b)
   const guide = move.guide
     ? {
         from: `M${at(a, move.guide[0])} L${at(a, move.guide[1])}`,
@@ -321,23 +330,30 @@ export function ExerciseFigure({
           <Chain key={chain.key} chain={chain} from={a} to={b} dur={dur} animate={animate} />
         ))}
 
-        <path d={animate ? nose(a) : nose(b)} className="exfig-face" fill="none"
-              strokeWidth={3} strokeLinecap="round">
+        {/* Neck to head, so the skull is attached rather than floating. */}
+        <path
+          d={animate
+            ? `M${at(a, 'neck')} L${headA[0]} ${headA[1]}`
+            : `M${at(b, 'neck')} L${headB[0]} ${headB[1]}`}
+          className="exfig-body" strokeWidth={4.5} strokeLinecap="round" fill="none"
+        >
           {animate && (
-            <animate attributeName="d" values={`${nose(a)};${nose(b)};${nose(a)}`}
-                     keyTimes={`0;${HEAD_LEAD};1`} dur={`${dur}s`} repeatCount="indefinite"
-                     calcMode="spline" keySplines={SPLINES} />
+            <animate
+              attributeName="d"
+              values={`M${at(a, 'neck')} L${headA[0]} ${headA[1]};M${at(b, 'neck')} L${headB[0]} ${headB[1]};M${at(a, 'neck')} L${headA[0]} ${headA[1]}`}
+              keyTimes={`0;${HEAD_LEAD};1`} dur={`${dur}s`} repeatCount="indefinite"
+              calcMode="spline" keySplines={SPLINES} />
           )}
         </path>
 
-        <circle r="7" cx={animate ? a.head[0] : b.head[0]} cy={animate ? a.head[1] : b.head[1]}
+        <circle r="6.5" cx={animate ? headA[0] : headB[0]} cy={animate ? headA[1] : headB[1]}
                 className="exfig-head">
           {animate && (
             <>
-              <animate attributeName="cx" values={`${a.head[0]};${b.head[0]};${a.head[0]}`}
+              <animate attributeName="cx" values={`${headA[0]};${headB[0]};${headA[0]}`}
                        keyTimes={`0;${HEAD_LEAD};1`} dur={`${dur}s`} repeatCount="indefinite"
                        calcMode="spline" keySplines={SPLINES} />
-              <animate attributeName="cy" values={`${a.head[1]};${b.head[1]};${a.head[1]}`}
+              <animate attributeName="cy" values={`${headA[1]};${headB[1]};${headA[1]}`}
                        keyTimes={`0;${HEAD_LEAD};1`} dur={`${dur}s`} repeatCount="indefinite"
                        calcMode="spline" keySplines={SPLINES} />
             </>

@@ -16,6 +16,7 @@ import { HabitSettings } from './settings/HabitSettings'
 import { LocationSettings } from './settings/LocationSettings'
 import { RunsPerWeek } from './settings/RunsPerWeek'
 import { TrainingExtras } from './settings/TrainingExtras'
+import { GymDays } from './settings/GymDays'
 import { reflowText, toDraft, toPatch, type Draft } from './settings/settingsDraft'
 
 function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
@@ -281,7 +282,7 @@ export function SettingsSheet({ open, onClose, focus }: { open: boolean; onClose
           <p className="muted small">Weight and threshold pace live in Profile, with their history.</p>
         </Section>
 
-        <Section title="Training days" sub="Run days, long-run day, runs and strength per week" forceOpen={hasErrors}>
+        <Section title="Training days" sub="Run days, gym days, long run, and how many of each" forceOpen={hasErrors}>
           <DayPicker
             value={draft.available_days}
             onChange={(next) => set('available_days', next)}
@@ -296,6 +297,7 @@ export function SettingsSheet({ open, onClose, focus }: { open: boolean; onClose
           {errors.long_run_day && <p className="field-error">{errors.long_run_day}</p>}
           {athlete && <RunsPerWeek draft={draft} set={set} athlete={athlete} error={errors.runs_per_week} />}
           <TrainingExtras draft={draft} set={set} suggested={athlete?.strength_per_week_suggested ?? 2} errors={errors} />
+          <GymDays draft={draft} set={set} />
         </Section>
 
         <Section title="Sleep & routine" sub="Sleep need, usual run time, loop distance" initialOpen={focus === 'routine'}>

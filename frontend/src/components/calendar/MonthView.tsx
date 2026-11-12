@@ -33,7 +33,7 @@ const mins = (seconds: number) => `${Math.max(1, Math.round(seconds / 60))}m`
  * ahead the duration is the fact worth seeing, because that is what you have to
  * find time for.
  */
-function cellLines(cell: MonthDay): { kind: string; value: string } | null {
+function cellLines(cell: MonthDay): { kind: string; value: string; gymOnly?: boolean } | null {
   const done = cell.activities.find((a) => RUN_SPORTS.has(a.sport)) ?? cell.activities[0]
   if (done) {
     const km = (done.distance_m ?? 0) / 1000
@@ -46,6 +46,17 @@ function cellLines(cell: MonthDay): { kind: string; value: string } | null {
     return {
       kind: KIND_SHORT[cell.planned.kind] ?? cell.planned.kind.toLowerCase(),
       value: mins(cell.planned.duration_s),
+    }
+  }
+  // A gym day with no run on it was falling through to the generic status dot,
+  // so the one kind of day the strength plan adds looked like a day with
+  // nothing on it. The bar beneath marks "there is ALSO a gym session"; on a
+  // day that is only gym, the cell has to say so itself.
+  if (cell.strength) {
+    return {
+      kind: 'Gym',
+      value: cell.strength.duration_s ? mins(cell.strength.duration_s) : '·',
+      gymOnly: true,
     }
   }
   return null
@@ -131,14 +142,16 @@ export function MonthView({ today, ...handlers }: { today: string } & Handlers) 
             >
               <span className="month-num">{parseDate(cell.date).getDate()}</span>
               {lines ? (
-                <span className="month-lines">
+                <span className={`month-lines ${lines.gymOnly ? 'is-gym' : ''}`}>
                   <span className="month-kind">{lines.kind}</span>
                   <span className="month-value">{lines.value}</span>
                 </span>
               ) : (
                 <span className={`month-mark ${status && status !== 'rest' ? `is-${status}` : ''}`} />
               )}
-              {cell.strength && <span className="month-gym" title="Strength session">Gym</span>}
+              {cell.strength && !lines?.gymOnly && (
+                <span className="month-gym" title="Also a strength session">Gym</span>
+              )}
             </button>
           )
         })}

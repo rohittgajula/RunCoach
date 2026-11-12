@@ -20,6 +20,8 @@ import { dur, pace as fmtPace } from '../lib/format'
 import { PageHeader } from '../components/PageHeader'
 import { ErrorState, Loading, Skeleton } from '../components/States'
 import { BlockStrip, RunChart, clock, type Block, type SeriesPoint } from '../components/activity/RunChart'
+import { RunMapSection } from '../components/map/RunMapSection'
+import { RunShareButton } from '../components/share/RunShareButton'
 
 type Metrics = {
   run_distance_m: number
@@ -59,6 +61,31 @@ type Series = {
   has_hr: boolean
   has_cadence: boolean
   has_altitude: boolean
+}
+
+/**
+ * The share studio wants an ActivityCard; this page loads the fuller detail
+ * shape. Only the fields the card actually renders are mapped, rather than
+ * widening the detail query to carry a second representation of the same run.
+ */
+function shareCard(a: Detail, m: Metrics) {
+  return {
+    id: a.id,
+    name: a.sport.replace('_', ' '),
+    sport: a.sport,
+    device: '',
+    start: a.started_at,
+    duration_s: a.total_timer_s || a.total_elapsed_s,
+    distance_m: a.total_distance_m,
+    load: 0,
+    run_distance_m: m.run_distance_m,
+    walk_distance_m: m.walk_distance_m,
+    run_fraction: m.run_fraction,
+    longest_run_s: m.longest_run_s,
+    steps: null,
+    journalled: false,
+    reviewed_thread_id: null,
+  } as never
 }
 
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
@@ -103,9 +130,10 @@ export default function ActivityDetail() {
     <div className="page">
       <PageHeader
         title={date.toLocaleDateString(undefined, {
-          weekday: 'long', day: 'numeric', month: 'long',
+          weekday: 'short', day: 'numeric', month: 'short',
         })}
         back="/activities"
+        right={ran ? <RunShareButton activity={shareCard(a, m!)} /> : undefined}
       />
 
       {/* The disagreement, stated first. */}
@@ -219,34 +247,35 @@ export default function ActivityDetail() {
         )}
       </section>
 
+      <RunMapSection activityId={a.id} />
+
       {blocks.length > 0 && (
         <section className="card">
           <h2>Block by block</h2>
-          <div className="blocks-table">
-            <span className="bt-h">#</span>
-            <span className="bt-h">Kind</span>
-            <span className="bt-h r">Time</span>
-            <span className="bt-h r">Distance</span>
-            <span className="bt-h r">Pace</span>
-            <span className="bt-h r">HR</span>
+          {/* A list, not a table. Six grid columns in the ~307px a phone gives a
+              card left the kind column about five pixels wide. Each block is a
+              row that wraps instead. */}
+          <ol className="blocks">
             {blocks.map((b) => {
               const row = b as Block & {
-                distance_m: number; avg_pace_s_per_km: number | null; hr_avg: number | null
+                distance_m: number
+                avg_pace_s_per_km: number | null
+                hr_avg: number | null
               }
               return (
-                <Fragmentish key={b.index}>
-                  <span className="bt num">{b.index + 1}</span>
-                  <span className={`bt bt-kind bs-tag-${b.kind}`}>{b.kind}</span>
-                  <span className="bt r num">{dur(b.duration_s)}</span>
-                  <span className="bt r num">{Math.round(row.distance_m)} m</span>
-                  <span className="bt r num">
-                    {row.avg_pace_s_per_km ? `${fmtPace(row.avg_pace_s_per_km)}` : '—'}
+                <li key={b.index} className={`block bk-${b.kind}`}>
+                  <span className="block-no num">{b.index + 1}</span>
+                  <span className="block-kind">{b.kind}</span>
+                  <span className="block-dur num">{dur(b.duration_s)}</span>
+                  <span className="block-rest num">
+                    {Math.round(row.distance_m)} m
+                    {row.avg_pace_s_per_km ? ` · ${fmtPace(row.avg_pace_s_per_km)}/km` : ''}
+                    {row.hr_avg ? ` · ${row.hr_avg} bpm` : ''}
                   </span>
-                  <span className="bt r num">{row.hr_avg ?? '—'}</span>
-                </Fragmentish>
+                </li>
               )
             })}
-          </div>
+          </ol>
         </section>
       )}
 
@@ -255,8 +284,4 @@ export default function ActivityDetail() {
       </p>
     </div>
   )
-}
-
-function Fragmentish({ children }: { children: React.ReactNode }) {
-  return <>{children}</>
 }

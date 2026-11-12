@@ -219,6 +219,8 @@ export type Athlete = {
   // R13 — auto-adjust, strength, caffeine tile, daily pain check, savings goal.
   auto_adjust_plan?: boolean
   strength_per_week?: number
+  gym_days?: Record<string, boolean>
+  gym_equipment?: string
   strength_per_week_suggested?: number
   caffeine_on_today?: boolean
   pain_daily_check?: boolean
