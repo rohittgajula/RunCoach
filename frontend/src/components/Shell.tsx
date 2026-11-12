@@ -18,17 +18,18 @@ const TABS = [
   { to: '/chat', label: 'Coach', Icon: CoachIcon },
   { to: '/gym', label: 'Gym', Icon: GymIcon },
   { to: '/health', label: 'Health', Icon: HealthIcon },
-  // Six tabs at 375px is about 62px each, which is past the point where a label
-  // is readable. The rail has room, so Activities lives there and is reached on
-  // a phone from Today's last-run card and from a day in Plan.
-  { to: '/activities', label: 'Activities', Icon: ListIcon, railOnly: true },
+  // "Runs", not "Activities": shorter, and in a running app it is also the more
+  // direct word. The short label is what makes six tabs fit a 375px phone at
+  // all — the first version hid this tab on mobile entirely, which put the list
+  // of your own runs behind a desktop.
+  { to: '/activities', label: 'Runs', Icon: ListIcon },
 ]
 
 type ShellValue = { openSettings: (focus?: unknown) => void }
 const ShellContext = createContext<ShellValue>({ openSettings: () => {} })
 export const useShell = () => useContext(ShellContext)
 
-/** Five tabs — Today · Plan · Coach · Gym · Health. Me sits behind the avatar.
+/** Six tabs — Today · Plan · Coach · Gym · Runs · Health. Me sits behind the avatar.
  *
  * Diet held this slot and came out: the app had drifted away from the one job
  * Rohit uses it for. Gym takes it, because strength is the half of the training
@@ -130,11 +131,10 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="app">
         <main className="shell-main">{children}</main>
         <nav className="tabbar" aria-label="Main">
-          {TABS.map(({ to, label, Icon, railOnly }, index) => (
+          {TABS.map(({ to, label, Icon }, index) => (
             <NavLink
               key={to}
               to={to}
-              data-rail-only={railOnly ? 'true' : undefined}
               className={({ isActive }) => `tab ${(pending ? pending === to : isActive) ? 'is-active' : ''}`}
               onClick={(event) => onTab(event, to, index)}
               {...intentHandlers(to)}

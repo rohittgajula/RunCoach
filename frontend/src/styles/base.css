@@ -526,7 +526,14 @@ select.select-pill { width: auto; appearance: none; }
   .month-num { font-size: 16px; }
   .month-kind { font-size: 11px; }
   .month-value { font-size: 13px; }
-  .month-gym { font-size: 10px; }
+  /* The cell has room for the word again at this width, so the marker stops
+     being a bar and becomes a label. */
+  .month-gym {
+    position: static; height: auto; left: auto; right: auto; bottom: auto;
+    font-size: 10px; line-height: 1.4; color: var(--accent);
+    background: none; border: 1px solid var(--accent); border-radius: 4px;
+    padding: 0 4px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  }
 }
 
 /* Wider still: the column stops growing and the window takes the slack, because

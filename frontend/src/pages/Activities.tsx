@@ -27,6 +27,7 @@ import { api } from '../lib/auth'
 import { dur, pace as fmtPace } from '../lib/format'
 import { PageHeader } from '../components/PageHeader'
 import { ErrorState, Loading, Skeleton } from '../components/States'
+import { CompareChart } from '../components/activity/CompareChart'
 
 const MAX_COMPARE = 4
 
@@ -254,6 +255,11 @@ function ComparePanel({
           </Fragmentish>
         ))}
       </div>
+
+      {/* The table says the pace fell 2%. The chart says where — whether the
+          whole run was slower, or the first half matched and it fell apart at
+          twelve minutes. Different problems, different answers. */}
+      <CompareChart activities={activities.map((a) => ({ id: a.id, date: a.date }))} />
 
       {review?.available ? (
         <div className="compare-review">

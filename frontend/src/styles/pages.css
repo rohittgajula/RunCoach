@@ -631,10 +631,14 @@ button.metric-cell { cursor: pointer; }
 .compare-review ul { margin: 0; padding-left: 18px; }
 .compare-review li { font-size: 0.88rem; margin-bottom: 3px; }
 
-/* Activities is a rail destination only; six tabs on a phone is about 62px
-   each, which is past where a label can be read. */
-.tab[data-rail-only] { display: none; }
-@media (min-width: 1024px) { .tab[data-rail-only] { display: flex; } }
+/* Six tabs on a 375px phone is about 62px each. That works with a short label
+   and a smaller pill, and it beats the alternative: hiding the list of your own
+   runs behind a desktop. */
+@media (max-width: 440px) {
+  .tabbar { gap: 0; padding-left: 4px; padding-right: 4px; }
+  .tab { font-size: 11px; }
+  .tab-icon { width: min(46px, 100%); height: 30px; }
+}
 
 /* --- One run, in full --------------------------------------------------------
  *
@@ -735,3 +739,10 @@ button.metric-cell { cursor: pointer; }
 .pred-why { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 7px; }
 .pred-why p { margin: 0; }
 .pred-gap { background: var(--run-tint); color: var(--run-ink); border-radius: 10px; padding: 9px 11px; }
+
+/* Overlaid traces under the comparison table. */
+.cmp-chart { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.cmp-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.cmp-metrics { display: flex; gap: 6px; flex-wrap: wrap; }
+.cmp-metrics .chip-btn { padding: 5px 11px; font-size: 0.8rem; }
+.cmp-chart-none { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
