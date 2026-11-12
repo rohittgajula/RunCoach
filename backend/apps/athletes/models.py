@@ -166,6 +166,14 @@ class Athlete(models.Model):
     # Per pattern rather than one number, because almost nobody can squat and
     # press at the same level, and a single figure makes one of them wrong.
     strength_levels = models.JSONField(default=dict, blank=True)
+    # What is actually available to train with. Not a mode — a ceiling on the
+    # ladders in planning/strength.py. Defaults to the honest answer for someone
+    # who has just joined a gym and has not worked out what is in it yet.
+    gym_equipment = models.CharField(
+        max_length=12, default="bodyweight",
+        choices=[("bodyweight", "Bodyweight only"), ("dumbbells", "Dumbbells"),
+                 ("gym", "Full gym")],
+    )
     caffeine_on_today = models.BooleanField(default=False)
     pain_daily_check = models.BooleanField(default=False)
     savings_goal_name = models.CharField(max_length=60, blank=True, default="")

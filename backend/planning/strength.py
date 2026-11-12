@@ -176,6 +176,48 @@ LADDERS: list[tuple[str, str, str, list[tuple]]] = [
 
 PATTERNS: tuple[str, ...] = tuple(key for key, _, _, _ in LADDERS)
 
+# How far up each ladder you can climb with what you actually have.
+#
+# This is why the ladders are the right shape: "bodyweight only" is not a
+# separate programme or a mode to maintain, it is a ceiling on an existing one.
+# Every rung 1 is bodyweight, so a beginner with nothing starts in exactly the
+# same place as one with a full gym — they just stop climbing sooner.
+#
+# The consequence that matters: nothing can prescribe a goblet squat before the
+# athlete has said they have a dumbbell. The alternative, prescribing it and
+# hoping they improvise, is how a plan loses someone in week five.
+EQUIPMENT: tuple[str, ...] = ("bodyweight", "dumbbells", "gym")
+
+EQUIPMENT_CEILING: dict[str, dict[str, int]] = {
+    # A table, a wall and a chair. Pull is the limited one — there is no way to
+    # train a horizontal pull without something to hang under, and a table row
+    # is genuinely the whole answer until there is.
+    "bodyweight": {"calf": 4, "squat": 2, "hinge": 2, "push": 5, "pull": 1, "core": 3},
+    # A pair of dumbbells covers most of it. Barbell deadlifts and the machines
+    # stay out of reach, which is correct: both want a gym and one wants a coach.
+    "dumbbells": {"calf": 5, "squat": 5, "hinge": 4, "push": 5, "pull": 3, "core": 3},
+    # Everything.
+    "gym": {},
+}
+
+
+def ceiling_for(equipment: str, pattern: str) -> int:
+    return EQUIPMENT_CEILING.get(equipment, {}).get(pattern, MAX_LEVEL)
+
+
+def cap_levels(levels: dict[str, int], equipment: str) -> dict[str, int]:
+    """Hold each pattern at what the available equipment can actually do.
+
+    Capped rather than refused: somebody who reaches the top of what a table and
+    a chair allow should keep training there, not be told to stop. The cap is
+    also the natural prompt to change the setting — "you are at the top of this
+    one" is a better nudge than a toggle buried in settings.
+    """
+    return {
+        key: max(1, min(int(levels.get(key, 1)), ceiling_for(equipment, key)))
+        for key in PATTERNS
+    }
+
 REST_S = 30
 
 
@@ -190,7 +232,8 @@ def level_for(start: dt.date, day: dt.date) -> int:
     return min(1 + weeks // LEVEL_EVERY_WEEKS, MAX_LEVEL)
 
 
-def exercises(level: int, levels: dict[str, int] | None = None) -> list[dict]:
+def exercises(level: int, levels: dict[str, int] | None = None,
+              equipment: str = "gym") -> list[dict]:
     """The session, one entry per movement pattern.
 
     `level` is the programme's own clock — how long this athlete has been
@@ -205,6 +248,8 @@ def exercises(level: int, levels: dict[str, int] | None = None) -> list[dict]:
 
     for key, label, why, rungs in LADDERS:
         rung = max(1, min(int(levels.get(key, level)), MAX_LEVEL))
+        # What you have beats where the programme thinks you are.
+        rung = min(rung, ceiling_for(equipment, key))
         name, reps, seconds, per_side, load, cue, graduate = rungs[rung - 1]
         out.append({
             "key": key,
@@ -220,6 +265,8 @@ def exercises(level: int, levels: dict[str, int] | None = None) -> list[dict]:
             "why": why,
             "level": rung,
             "max_level": MAX_LEVEL,
+            "ceiling": ceiling_for(equipment, key),
+            "at_ceiling": rung >= ceiling_for(equipment, key) < MAX_LEVEL,
             "graduate_when": graduate,
         })
     return out

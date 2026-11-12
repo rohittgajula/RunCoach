@@ -107,7 +107,10 @@ def place_for(athlete) -> dict:
             # bodyweight squats comfortably may still be on wall push-ups, and
             # one number for the whole session cannot say both.
             fields = {"title": rules.title_for(level), "level": level,
-                      "exercises": rules.exercises(level, athlete.strength_levels or {}),
+                      "exercises": rules.exercises(
+                          level, athlete.strength_levels or {},
+                          equipment=athlete.gym_equipment,
+                      ),
                       "after_run": after,
                       "duration_s": rules.DURATION_S, "plan": plan}
             session = kept.get(day)
