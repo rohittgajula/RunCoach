@@ -109,10 +109,24 @@ def strength_list(request):
     if (end - start).days + 1 > MAX_STRENGTH_DAYS:
         return _bad(f"At most {MAX_STRENGTH_DAYS} days per request.")
     send = can_send(athlete)
-    return Response({"per_week": athlete.strength_per_week, "suggested": SUGGESTED_PER_WEEK,
-                     "can_send_to_watch": send,
-                     "sessions": [strength_json(s, send)
-                                  for s in sessions_between(athlete, start, end)]})
+    from planning.strength import EQUIPMENT, cap_levels, ladders
+
+    levels = cap_levels(athlete.strength_levels or {}, athlete.gym_equipment)
+    return Response({
+        "per_week": athlete.strength_per_week, "suggested": SUGGESTED_PER_WEEK,
+        "can_send_to_watch": send,
+        "gym_days": athlete.gym_days or {},
+        "equipment": athlete.gym_equipment,
+        "equipment_options": list(EQUIPMENT),
+        # Where the athlete stands on each movement, and what the equipment they
+        # have lets them reach. Both are needed: a bar that is full because the
+        # ladder ended and one that is full because there is no dumbbell in the
+        # room mean completely different things.
+        "levels": levels,
+        "ladders": ladders(),
+        "sessions": [strength_json(s, send)
+                     for s in sessions_between(athlete, start, end)],
+    })
 
 
 @api_view(["PATCH"])

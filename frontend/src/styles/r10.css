@@ -189,13 +189,15 @@ input:focus, select:focus, textarea:focus { border-color: var(--run); }
 .phase-peak, :root[data-theme='dark'] .phase-peak { color: var(--habits-ink); }
 .phase-taper, :root[data-theme='dark'] .phase-taper { color: var(--recovery-ink); }
 .phase-race, :root[data-theme='dark'] .phase-race { color: var(--fuel-ink); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .phase-base { color: var(--run-ink); }
-  :root:not([data-theme='light']) .phase-build { color: var(--sleep); }
-  :root:not([data-theme='light']) .phase-peak { color: var(--habits-ink); }
-  :root:not([data-theme='light']) .phase-taper { color: var(--recovery-ink); }
-  :root:not([data-theme='light']) .phase-race { color: var(--fuel-ink); }
-}
+/* Was wrapped in `@media (prefers-color-scheme: dark)`. The app is dark unless
+   light is explicitly pinned, so these apply by default and the media query
+   would have silenced them on a machine set to light. */
+:root:not([data-theme='light']) .phase-base { color: var(--run-ink); }
+:root:not([data-theme='light']) .phase-build { color: var(--sleep); }
+:root:not([data-theme='light']) .phase-peak { color: var(--habits-ink); }
+:root:not([data-theme='light']) .phase-taper { color: var(--recovery-ink); }
+:root:not([data-theme='light']) .phase-race { color: var(--fuel-ink); }
+
 
 /* verdict pills (morning check-in) */
 .verdict-pill { font-size: 11px; padding: 3px 10px; }
@@ -235,7 +237,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--run); }
   box-shadow: var(--shadow); border: 1px solid transparent; color: inherit; font: inherit;
 }
 :root[data-theme='dark'] .mt { border-color: var(--line); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .mt { border-color: var(--line); } }
+/* Was wrapped in `@media (prefers-color-scheme: dark)`. The app is dark unless
+   light is explicitly pinned, so these apply by default and the media query
+   would have silenced them on a machine set to light. */
+:root:not([data-theme='light']) .mt { border-color: var(--line); }
+
 button.mt { cursor: pointer; }
 button.mt:active { transform: scale(0.98); }
 .mt-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; min-width: 0; }
@@ -280,9 +286,11 @@ button.mt:active { transform: scale(0.98); }
   box-shadow: 0 6px 18px rgba(16, 20, 24, 0.18); font-size: 12px; font-weight: 700;
 }
 :root[data-theme='dark'] .chart-tip { background: var(--tip-bg); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .chart-tip { background: var(--tip-bg); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
-}
+/* Was wrapped in `@media (prefers-color-scheme: dark)`. The app is dark unless
+   light is explicitly pinned, so these apply by default and the media query
+   would have silenced them on a machine set to light. */
+:root:not([data-theme='light']) .chart-tip { background: var(--tip-bg); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
+
 .chart-tip-title { color: inherit; opacity: 0.7; font-weight: 600; }
 .chart-tip-line i { box-shadow: 0 0 0 1.5px var(--tip-bg); }
 .chart .recharts-cartesian-grid line { stroke: var(--line); }

@@ -7,7 +7,7 @@ import { prefetchTab } from '../lib/queries'
 import { SyncingPill, useAutoSync } from '../lib/r16'
 import { UpdateBanner } from '../lib/r18'
 import { useAuth } from '../lib/AuthContext'
-import { CoachIcon, HealthIcon, PlanIcon, TodayIcon } from './Icons'
+import { CoachIcon, GymIcon, HealthIcon, PlanIcon, TodayIcon } from './Icons'
 import { BadgeToast } from './me/Badges'
 import { GlobalToast } from './GlobalToast'
 import { SettingsSheet } from './SettingsSheet'
@@ -16,6 +16,7 @@ const TABS = [
   { to: '/today', label: 'Today', Icon: TodayIcon },
   { to: '/plan', label: 'Plan', Icon: PlanIcon },
   { to: '/chat', label: 'Coach', Icon: CoachIcon },
+  { to: '/gym', label: 'Gym', Icon: GymIcon },
   { to: '/health', label: 'Health', Icon: HealthIcon },
 ]
 
@@ -23,11 +24,12 @@ type ShellValue = { openSettings: (focus?: unknown) => void }
 const ShellContext = createContext<ShellValue>({ openSettings: () => {} })
 export const useShell = () => useContext(ShellContext)
 
-/** Four tabs — Today · Plan · Coach · Health. Me sits behind the avatar.
+/** Five tabs — Today · Plan · Coach · Gym · Health. Me sits behind the avatar.
  *
- * Diet was the fifth. It came out because the app had drifted away from the one
- * job Rohit uses it for: running, the strength work that supports it, and the
- * schedule both sit on. The backend, the models and every meal already logged are
+ * Diet held this slot and came out: the app had drifted away from the one job
+ * Rohit uses it for. Gym takes it, because strength is the half of the training
+ * he is newest at and the half read standing up between sets — a different act
+ * from glancing at tomorrow's run, and so a different tab. The backend, the models and every meal already logged are
  * untouched — this is a navigation change, not a deletion, and `/diet` redirects
  * rather than 404s so an old bookmark still lands somewhere sensible.
  */

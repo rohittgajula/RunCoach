@@ -1,6 +1,8 @@
 /**
- * Theme override. "system" removes data-theme and lets prefers-color-scheme decide;
- * light/dark pin it. The choice is a per-device convenience, so localStorage is fine.
+ * Theme override. The app is dark; "system" no longer means "ask the OS",
+ * because the OS is not what decides this — it means "no explicit choice", and
+ * with no explicit choice the stylesheet gives you dark. light/dark pin it.
+ * The choice is a per-device convenience, so localStorage is fine.
  */
 export type ThemePref = 'system' | 'light' | 'dark'
 
@@ -16,8 +18,10 @@ export function getThemePref(): ThemePref {
 }
 
 function effective(pref: ThemePref): 'light' | 'dark' {
-  if (pref !== 'system') return pref
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  // Anything that is not an explicit "light" renders dark, which is what the
+  // stylesheet does. These two must agree or the Android status bar ends up a
+  // different colour from the page under it.
+  return pref === 'light' ? 'light' : 'dark'
 }
 
 export function applyTheme(pref: ThemePref = getThemePref()) {
@@ -40,5 +44,7 @@ export function setThemePref(pref: ThemePref) {
 }
 
 export function watchSystemTheme() {
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme())
+  // Nothing to watch any more: the OS does not decide the theme. Kept as a
+  // no-op so callers do not need changing, and so the next person to look for
+  // the OS listener finds this note instead of its absence.
 }

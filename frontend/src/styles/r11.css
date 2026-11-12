@@ -124,11 +124,13 @@
 :root[data-theme='dark'] .route-map-canvas .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88); }
 :root[data-theme='dark'] .route-map .leaflet-bar a, :root[data-theme='dark'] .route-map .leaflet-control-attribution { background: var(--card); color: var(--fg); }
 :root[data-theme='dark'] .route-map .leaflet-control-attribution a { color: var(--run); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .route-map-canvas .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88); }
-  :root:not([data-theme='light']) .route-map .leaflet-bar a, :root:not([data-theme='light']) .route-map .leaflet-control-attribution { background: var(--card); color: var(--fg); }
-  :root:not([data-theme='light']) .route-map .leaflet-control-attribution a { color: var(--run); }
-}
+/* Was wrapped in `@media (prefers-color-scheme: dark)`. The app is dark unless
+   light is explicitly pinned, so these apply by default and the media query
+   would have silenced them on a machine set to light. */
+:root:not([data-theme='light']) .route-map-canvas .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88); }
+:root:not([data-theme='light']) .route-map .leaflet-bar a, :root:not([data-theme='light']) .route-map .leaflet-control-attribution { background: var(--card); color: var(--fg); }
+:root:not([data-theme='light']) .route-map .leaflet-control-attribution a { color: var(--run); }
+
 
 /* settings toggle row */
 .toggle-row { display: flex; align-items: center; gap: 12px; min-height: 56px; }

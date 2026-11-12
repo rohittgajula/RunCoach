@@ -25,9 +25,11 @@
 .phase-recovery { background: var(--card-2); color: var(--muted); }
 .phase-race { background: color-mix(in srgb, #e0464f 30%, transparent); color: #8f1820; }
 :root[data-theme='dark'] .phase-pill:not(.phase-recovery) { color: var(--fg); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .phase-pill:not(.phase-recovery) { color: var(--fg); }
-}
+/* Was wrapped in `@media (prefers-color-scheme: dark)`. The app is dark unless
+   light is explicitly pinned, so these apply by default and the media query
+   would have silenced them on a machine set to light. */
+:root:not([data-theme='light']) .phase-pill:not(.phase-recovery) { color: var(--fg); }
+
 .tag {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;

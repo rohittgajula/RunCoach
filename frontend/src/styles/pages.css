@@ -519,3 +519,37 @@ button.metric-cell { cursor: pointer; }
 .exfig-floor { opacity: 0.5; }
 .exfig-hatch { stroke: var(--muted); stroke-width: 1; opacity: 0.45; }
 .exfig-face { stroke: var(--fg); }
+
+/* --- Gym tab ----------------------------------------------------------------
+ *
+ * Read standing up, between sets, one exercise at a time. That shapes it: the
+ * figure leads, the dose is the only thing in colour, and each exercise is a
+ * block you can find again after looking away. */
+.gym-summary .row { align-items: flex-end; }
+.gym-equip { text-align: right; }
+.gym-equip strong { display: block; font-size: 0.92rem; }
+.gym-note { background: var(--run-tint); color: var(--run-ink); border-radius: 10px; padding: 9px 11px; margin: 10px 0 0; }
+
+.gym-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 14px; }
+.gym-ex { border-top: 1px solid var(--line); padding-top: 13px; }
+.gym-ex:first-child { border-top: 0; padding-top: 0; }
+.gym-ex-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.gym-ex-pattern { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.gym-ex-dose { font-size: 0.95rem; font-weight: 800; color: var(--accent); white-space: nowrap; }
+.gym-ex-name { font-size: 1.05rem; font-weight: 700; margin: 2px 0 0; }
+.gym-ex-cue { font-size: 0.88rem; margin: 8px 0 0; }
+.gym-ex-load { margin: 4px 0 0; }
+.gym-ex-next { margin: 6px 0 0; }
+
+/* A rung that is beyond the equipment you have is drawn differently from one
+   you simply have not reached. One is progress still to make; the other is a
+   dumbbell away, and a single "empty" state would hide which. */
+.rungs { display: flex; gap: 3px; margin-top: 8px; }
+.rungs i { height: 4px; flex: 1; border-radius: 2px; background: var(--line); }
+.rungs i.on { background: var(--accent); }
+.rungs i.locked { background: transparent; border: 1px dashed var(--line); height: 4px; box-sizing: border-box; }
+
+.gym-why { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.gym-why strong { font-size: 0.9rem; }
+.gym-why p { margin: 2px 0 0; }
+.gym-fat { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }

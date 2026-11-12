@@ -24,6 +24,10 @@ class AthleteSerializer(serializers.ModelSerializer):
     location_city = serializers.CharField(max_length=120, allow_blank=True, required=False)
     # R13
     strength_per_week = serializers.IntegerField(min_value=0, max_value=3, required=False)
+    gym_days = serializers.DictField(child=serializers.BooleanField(), required=False)
+    gym_equipment = serializers.ChoiceField(
+        choices=["bodyweight", "dumbbells", "gym"], required=False,
+    )
     strength_per_week_suggested = serializers.SerializerMethodField()
     savings_goal_name = serializers.CharField(max_length=60, allow_blank=True, required=False)
     savings_goal_amount = serializers.FloatField(min_value=1, max_value=10_000_000,
@@ -167,6 +171,7 @@ class AthleteSerializer(serializers.ModelSerializer):
             "map_hide_endpoints",
             # R13
             "auto_adjust_plan", "strength_per_week", "strength_per_week_suggested",
+            "gym_days", "gym_equipment",
             "caffeine_on_today", "pain_daily_check", "savings_goal_name", "savings_goal_amount",
             # R14
             "today_layout", "weather_auto_apply",

@@ -1,9 +1,15 @@
-/* Tokens. DARK IS THE DEFAULT; light follows the system unless pinned via data-theme.
+/* Tokens. THE APP IS DARK. Light exists only as an explicit choice.
  *
- * Flipped from light-first in R19. The app is opened before a run — early, often
- * in the dark, usually on an OLED phone where a near-black ground is pixels that
- * are genuinely off. A light screen at 5am is a worse experience than a dark one
- * at noon, so the default follows the harder case.
+ * First attempt at this flipped the default and kept a `prefers-color-scheme:
+ * light` override, which was not dark-first at all — browsers report light or
+ * dark essentially always, so on a machine set to light the system still won and
+ * nothing changed. "Default to dark" and "follow the OS" cannot both be true.
+ *
+ * So the OS no longer decides. The app is opened before a run: early, often in
+ * the dark, usually on an OLED phone where a near-black ground is pixels that
+ * are genuinely off. That is a visual identity, the way Garmin's own app has
+ * one, not a preference to be negotiated with the desktop at noon. Anyone who
+ * wants light picks it in Settings and `data-theme` pins it.
  *
  * Colour by topic, never for good/bad: running · recovery · sleep · habits · fuel.
  * Better/worse is green/red AND always a ▲/▼ shape.
@@ -68,76 +74,6 @@
   --maxw: 560px;
   --font: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color-scheme: dark;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) {
-
-    --bg: #f4f5f7;
-    --card: #ffffff;
-    --card-2: #eef0f3;
-    --fg: #101418;
-    --muted: #5b6573;
-    --faint: #a3abb7;
-    --axis: #7a8494;
-    --line: #e6e8ec;
-    --line-soft: #edeff2;
-    --shadow: 0 1px 2px rgba(16, 20, 24, 0.05), 0 6px 20px rgba(16, 20, 24, 0.05);
-    --shadow-lg: 0 8px 30px rgba(16, 20, 24, 0.16);
-    --primary: #101418;
-    --on-primary: #ffffff;
-    --accent: #2f6bff;
-    --ok: #12a150;
-    --warn: #d98a0b;
-    --bad: #e5533d;
-    --extra: #7a5af8;
-
-    /* topics */
-    --run: #2f6bff;
-    --run-tint: #e3eeff;
-    --run-soft: #c9d8ff;
-    --run-ink: #1f4fcc;
-    --recovery: #7a5af8;
-    --recovery-tint: #efebff;
-    --recovery-ink: #5b3fd9;
-    --sleep: #0e9f9a;
-    --sleep-tint: #e2f5f4;
-    --sleep-deep: #0b6e6a;
-    --sleep-light: #5fc9c4;
-    --sleep-rem: #2ca7a2;
-    --sleep-awake: #e8a08a;
-    --habits: #f2a516;
-    --habits-tint: #fff4dc;
-    --habits-ink: #9a6400;
-    --fuel: #f26b3a;
-    --fuel-tint: #ffe7dc;
-    --fuel-ink: #b4481c;
-
-    /* better / worse / neutral chips */
-    --good-bg: #e3f6ea;
-    --good-fg: #12793b;
-    --bad-bg: #fde9e5;
-    --bad-fg: #b8341c;
-    --flat-bg: #eef0f3;
-    --flat-fg: #4a5361;
-
-    /* chart tooltip */
-    --tip-bg: #101418;
-    --tip-fg: #ffffff;
-
-    /* workout intensity (running topic) */
-    --easy: #c9d8ff;
-    --easy-2: #6e96ff;
-    --moderate: #2f6bff;
-    --hard: #f26b3a;
-    --walk: #d5dae1;
-
-    --carbs: #f2a516;
-    --protein: #f26b3a;
-    --fat: #7a5af8;
-
-    color-scheme: light;
-  }
 }
 
 :root[data-theme='light'] {
@@ -383,9 +319,7 @@ textarea { resize: vertical; min-height: 80px; }
   border: 1px solid transparent;
 }
 .card { border-color: var(--line); }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) .card { border-color: var(--line-soft); }
-}
+:root[data-theme='light'] .card { border-color: var(--line-soft); }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .card-title { font-size: 20px; font-weight: 700; }
 .card-title-lg { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }

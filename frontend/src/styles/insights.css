@@ -127,9 +127,11 @@
   font-size: 12px; line-height: 1.35; white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 :root[data-theme='dark'] .chart-tip { background: var(--card-2); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .chart-tip { background: var(--card-2); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
-}
+/* Was wrapped in `@media (prefers-color-scheme: dark)`. The app is dark unless
+   light is explicitly pinned, so these apply by default and the media query
+   would have silenced them on a machine set to light. */
+:root:not([data-theme='light']) .chart-tip { background: var(--card-2); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
+
 .chart-tip-title { color: var(--muted); font-weight: 600; }
 .chart-tip-line { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .chart-tip-line i { width: 8px; height: 8px; border-radius: 50%; flex: none; }

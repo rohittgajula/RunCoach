@@ -50,6 +50,14 @@ export const ProfileIcon = (p: IconProps) => (
   </Svg>
 )
 
+export const GymIcon = (p: IconProps) => (
+  <Svg {...p}>
+    {/* A dumbbell: two plates, a bar, and the collars. Reads at 20px, which
+        rules out anything more literal. */}
+    <path d="M6.5 8.5v7M3.5 10v4M17.5 8.5v7M20.5 10v4M6.5 12h11" />
+  </Svg>
+)
+
 export const GearIcon = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="3" />
