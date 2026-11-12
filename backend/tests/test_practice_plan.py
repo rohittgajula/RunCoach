@@ -225,3 +225,46 @@ def test_a_distance_beyond_the_continuous_ceiling_says_so_without_a_date():
                           baseline(), PlanConfig())
     assert verdict.achievable is False
     assert verdict.earliest_date is None
+
+
+@pytest.mark.django_db
+def test_the_demonstrated_best_is_all_time_not_recent(athlete):
+    """The input the regain rate runs on, and it was wrong.
+
+    It was wired to history_baseline's recent window, which for Rohit returned
+    exactly his current block — so demonstrated == current and the regain branch
+    could never fire. The number it was meant to carry was 13:57 from 20 August.
+
+    The failure was silent and expensive: the plan quoted Christmas Day for a
+    milestone he can reach in a fortnight, because it was treating ground he had
+    already held as new ground.
+    """
+    import datetime as dt
+
+    from django.utils import timezone
+
+    from apps.activities.models import Activity, ActivityMetrics
+    from apps.planning.plan_store import _practice_baseline
+
+    today = athlete.local_today
+    # One big block months ago, small ones since — the shape of a layoff.
+    for day, longest in ((today - dt.timedelta(days=84), 837.0),
+                         (today - dt.timedelta(days=3), 392.0)):
+        activity = Activity.objects.create(
+            athlete=athlete, source=Activity.Source.GARMIN_SYNC, sport="running",
+            started_at=timezone.now(), local_date=day,
+            total_distance_m=2400, total_timer_s=1400,
+        )
+        ActivityMetrics.objects.create(
+            activity=activity, algorithm_version=1,
+            run_distance_m=1200, walk_distance_m=1200, run_fraction=0.5,
+            run_duration_s=725, walk_duration_s=675, stop_duration_s=0,
+            run_block_count=3, longest_run_m=400, longest_run_s=longest,
+            run_pace_s_per_km=604, walk_pace_s_per_km=700, blended_pace_s_per_km=845,
+        )
+
+    baseline = _practice_baseline(athlete, None, None)
+    assert baseline.demonstrated_longest_s == 837.0
+    assert baseline.demonstrated_longest_s > baseline.longest_run_s, (
+        "ground already held must be distinguishable from ground not yet broken"
+    )

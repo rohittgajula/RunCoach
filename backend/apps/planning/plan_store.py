@@ -510,6 +510,25 @@ PRACTICE_PHASE_NAMES: dict[str, tuple[str, str]] = {
 }
 
 
+
+def _all_time_longest_run_s(athlete: Athlete) -> float:
+    """The longest unbroken block this athlete has ever recorded.
+
+    Deliberately unbounded in time. Every other figure in a baseline is recent
+    on purpose — fitness decays and a plan built on last spring would start
+    above the athlete. This one is the exception: it is not a claim about
+    current fitness, it is a record of what the body has done before, and that
+    does not expire. The decay is applied separately, by longest_run_s.
+    """
+    from django.db.models import Max
+
+    from apps.activities.models import ActivityMetrics
+
+    return ActivityMetrics.objects.filter(
+        activity__athlete=athlete,
+    ).aggregate(best=Max("longest_run_s"))["best"] or 0.0
+
+
 def _practice_baseline(athlete: Athlete, available_days, long_run_day):
     """The baseline both no-race modes start from.
 
@@ -525,12 +544,22 @@ def _practice_baseline(athlete: Athlete, available_days, long_run_day):
             run_km_per_week=max(baseline.run_km_per_week, BEGINNER_RUN_KM_PER_WEEK),
             run_pace_s_per_km=(athlete.easy_pace_min + athlete.easy_pace_max) / 2,
         )
-    # The best unbroken block ever recorded: the difference between ground being
-    # regained and ground being broken for the first time.
+    # The best unbroken block EVER recorded, which is the whole input the regain
+    # rate runs on.
+    #
+    # This was wired to history.best_longest_run_s, which is scoped to the recent
+    # window history_baseline looks at — for Rohit it returned 392 s, exactly his
+    # current block, so demonstrated == current and the regain branch could never
+    # fire. The number it was meant to carry is 837 s, from 20 August. The
+    # consequence was silent and large: a plan quoting Christmas Day for a
+    # milestone he can reach in a fortnight, because it was treating ground he
+    # had already held as new.
     baseline = dataclasses.replace(
         baseline,
         demonstrated_longest_s=max(
-            float(history.best_longest_run_s or 0.0), baseline.longest_run_s,
+            float(_all_time_longest_run_s(athlete)),
+            float(history.best_longest_run_s or 0.0),
+            baseline.longest_run_s,
         ),
     )
     days = _normalise_days(available_days)
