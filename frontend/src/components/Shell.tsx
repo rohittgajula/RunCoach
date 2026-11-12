@@ -7,7 +7,7 @@ import { prefetchTab } from '../lib/queries'
 import { SyncingPill, useAutoSync } from '../lib/r16'
 import { UpdateBanner } from '../lib/r18'
 import { useAuth } from '../lib/AuthContext'
-import { CoachIcon, GymIcon, HealthIcon, PlanIcon, TodayIcon } from './Icons'
+import { CoachIcon, GymIcon, HealthIcon, ListIcon, PlanIcon, TodayIcon } from './Icons'
 import { BadgeToast } from './me/Badges'
 import { GlobalToast } from './GlobalToast'
 import { SettingsSheet } from './SettingsSheet'
@@ -18,6 +18,10 @@ const TABS = [
   { to: '/chat', label: 'Coach', Icon: CoachIcon },
   { to: '/gym', label: 'Gym', Icon: GymIcon },
   { to: '/health', label: 'Health', Icon: HealthIcon },
+  // Six tabs at 375px is about 62px each, which is past the point where a label
+  // is readable. The rail has room, so Activities lives there and is reached on
+  // a phone from Today's last-run card and from a day in Plan.
+  { to: '/activities', label: 'Activities', Icon: ListIcon, railOnly: true },
 ]
 
 type ShellValue = { openSettings: (focus?: unknown) => void }
@@ -126,10 +130,11 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="app">
         <main className="shell-main">{children}</main>
         <nav className="tabbar" aria-label="Main">
-          {TABS.map(({ to, label, Icon }, index) => (
+          {TABS.map(({ to, label, Icon, railOnly }, index) => (
             <NavLink
               key={to}
               to={to}
+              data-rail-only={railOnly ? 'true' : undefined}
               className={({ isActive }) => `tab ${(pending ? pending === to : isActive) ? 'is-active' : ''}`}
               onClick={(event) => onTab(event, to, index)}
               {...intentHandlers(to)}

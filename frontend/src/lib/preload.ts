@@ -26,6 +26,7 @@ export const pages = {
   calendar: once(() => import('../pages/Calendar')),
   chat: once(() => import('../pages/Chat')),
   gym: once(() => import('../pages/Gym')),
+  activities: once(() => import('../pages/Activities')),
   insights: once(() => import('../pages/Insights')),
   me: once(() => import('../pages/Me')),
   weather: once(() => import('../pages/Weather')),
@@ -80,7 +81,7 @@ export function preloadTabs() {
   if (done) return
   done = true
   const queue: Loader[] = [
-    pages.calendar, pages.gym, pages.insights, pages.chat, pages.me,
+    pages.calendar, pages.gym, pages.activities, pages.insights, pages.chat, pages.me,
     ...SECTION_ORDER.map((key): Loader => () => healthSections().then((m): Promise<unknown> => m.sections[key]())),
     pages.weather,
   ]
