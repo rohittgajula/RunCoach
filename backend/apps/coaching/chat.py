@@ -154,6 +154,24 @@ def system_prompt(athlete: Athlete) -> str:
     habits = chat_context(athlete)
     if habits:
         context["habits"] = habits
+
+    # Whether any of the above is still true.
+    #
+    # The coach spent five weeks answering questions about Rohit's training with
+    # complete confidence while his watch had been disconnected since 10 October.
+    # Every figure it was given was real; none of it was current, and it had no
+    # way to know. A model cannot caveat what it has not been told.
+    from apps.health.freshness import sync_json
+
+    sync = sync_json(athlete, athlete.local_today, athlete.local_now)
+    if sync["level"] != "ok":
+        context["data_is_stale"] = {
+            **{k: sync[k] for k in
+               ("level", "connected", "days_since_activity", "last_activity_date")},
+            "note": "Say so before answering anything that depends on recent "
+                    "training. Do not present these figures as current, and do "
+                    "not guess at what has happened since.",
+        }
     return f"{PERSONA}\n\nContext (already calculated):\n{json.dumps(context, default=str)}"
 
 

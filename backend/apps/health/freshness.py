@@ -10,7 +10,7 @@ import datetime as dt
 
 from django.utils import timezone
 
-from analysis.freshness import RECENT_DAYS, assess
+from analysis.freshness import RECENT_DAYS, assess, sync_verdict
 
 
 def _local_now(athlete):
@@ -51,7 +51,11 @@ def freshness_json(athlete) -> dict:
     return {"as_of": timezone.now(), "today": today, **verdict,
             "latest_sleep_date": latest["sleep"],
             "latest_readiness_date": latest["readiness"],
-            "last_sync_at": athlete.garmin_last_sync}
+            "last_sync_at": athlete.garmin_last_sync,
+            # Whether the watch is still talking at all, which is a different
+            # question from whether today's sleep has landed — and a louder one,
+            # because every figure on the screen depends on the answer.
+            "sync": sync_json(athlete, today, now)}
 
 
 def reason_dates(athlete, today: dt.date, reasons: list[dict]) -> list[dict]:
@@ -75,3 +79,27 @@ def reason_dates(athlete, today: dt.date, reasons: list[dict]) -> list[dict]:
              "rhr": recent("resting_hr"), "body_battery": recent("body_battery_high"),
              "rpe": yesterday, "alcohol": yesterday}
     return [{**r, "date": dates.get(r.get("signal"), today)} for r in reasons]
+
+
+def sync_json(athlete, today: dt.date, now) -> dict:
+    """The Garmin-silence verdict, from stored fields only.
+
+    No network probe: this rides on /today/, which is loaded on every visit, and
+    a banner that costs a round trip to Garmin is a banner that makes the app
+    slower for everybody to tell one person their watch is off.
+    """
+    from apps.activities.models import Activity
+
+    last_activity = (
+        Activity.objects.filter(athlete=athlete)
+        .order_by("-local_date")
+        .values_list("local_date", flat=True)
+        .first()
+    )
+    return sync_verdict(
+        today=today,
+        connected=bool(athlete.garmin_connected),
+        last_sync_at=athlete.garmin_last_sync,
+        last_activity_date=last_activity,
+        now=now,
+    )

@@ -54,6 +54,21 @@ export type Freshness = {
   latest_sleep_date: ISODate | null
   latest_readiness_date: ISODate | null
   last_sync_at: ISODateTime | null
+  /**
+   * Whether the watch is still talking at all — a different, louder question
+   * than whether last night's sleep has landed. See analysis/freshness.py.
+   */
+  sync?: {
+    level: 'ok' | 'quiet' | 'stale' | 'broken'
+    connected: boolean
+    hours_since_sync: number | null
+    days_since_activity: number | null
+    last_sync_at: ISODateTime | null
+    last_activity_date: ISODate | null
+    headline: string
+    detail: string
+    action: 'reconnect' | 'sync' | ''
+  } | null
 }
 
 /**

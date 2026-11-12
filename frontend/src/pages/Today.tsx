@@ -15,6 +15,7 @@ import { ErrorState } from '../components/States'
 import { ForecastCard } from '../components/today/ForecastCard'
 import { TodayHero } from '../components/today/TodayHero'
 import { StaleNotice } from '../components/today/StaleNotice'
+import { SyncBanner } from '../components/today/SyncBanner'
 import { resolveLayout, type TodayCardKey } from '../components/today/todayLayout'
 import { TodaySoFar } from '../components/today/TodaySoFar'
 import { ThisWeek } from '../components/today/ThisWeek'
@@ -119,6 +120,10 @@ export default function Today() {
         <ErrorState message={errorText(week.error, 'Today’s plan did not load.')} onRetry={() => week.refetch()} />
       )}
       <PullToRefresh />
+      {/* Above everything, including the session. If the watch stopped talking,
+          that fact outranks whatever the plan thinks you should do today —
+          because the plan was computed from the data that stopped arriving. */}
+      <SyncBanner onSync={runSync} />
       <WaitingForRun />
       <StaleNotice onSync={runSync} />
       {illness ? <IllnessHero illness={illness} /> : <TodayHero day={day} loading={week.isPending} />}
