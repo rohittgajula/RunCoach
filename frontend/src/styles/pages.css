@@ -635,3 +635,50 @@ button.metric-cell { cursor: pointer; }
    each, which is past where a label can be read. */
 .tab[data-rail-only] { display: none; }
 @media (min-width: 1024px) { .tab[data-rail-only] { display: flex; } }
+
+/* --- One run, in full --------------------------------------------------------
+ *
+ * The blocks are the organising idea. They get a strip of their own, they sit
+ * behind every trace, and they colour the table — so the same fact is readable
+ * three ways without being explained three times. */
+.run-headline .run-truth { font-size: 1.05rem; line-height: 1.5; margin: 0 0 8px; }
+.run-headline .run-truth strong { font-weight: 800; }
+
+.blockstrip { display: flex; height: 14px; border-radius: 7px; overflow: hidden; gap: 1px; margin: 4px 0 16px; background: var(--card-2); }
+.blockstrip i { display: block; min-width: 2px; }
+.bs-run { background: var(--run); }
+.bs-walk { background: var(--walk); }
+.bs-stop { background: transparent; }
+
+.run-legend { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; }
+.run-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: middle; }
+
+.run-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 14px; }
+.run-stat { display: flex; flex-direction: column; min-width: 0; }
+.run-stat-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.run-stat-value { font-size: 1.15rem; font-weight: 800; margin-top: 1px; }
+.run-stat-note { font-size: 0.73rem; color: var(--muted); margin-top: 1px; }
+
+.run-charts { display: grid; gap: 18px; }
+.runchart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
+.runchart h3 { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.runchart-empty { padding: 8px 0; }
+
+.blocks-table { display: grid; grid-template-columns: 28px 1fr repeat(4, minmax(56px, auto)); gap: 0 10px; font-size: 0.86rem; }
+.blocks-table .bt-h { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); padding-bottom: 7px; border-bottom: 1px solid var(--line); }
+.blocks-table .bt-h.r, .blocks-table .bt.r { text-align: right; }
+.blocks-table .bt { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.blocks-table > *:nth-last-child(-n+6) { border-bottom: 0; }
+.bt-kind { font-weight: 700; text-transform: capitalize; }
+.bs-tag-run { color: var(--run-ink); }
+.bs-tag-walk { color: var(--muted); }
+.bs-tag-stop { color: var(--faint); }
+
+.run-review p { font-size: 0.92rem; line-height: 1.6; margin: 0; }
+
+@media (min-width: 1024px) {
+  /* Two charts abreast: the pace/HR relationship is the one worth reading
+     together, and on a phone they are simply too narrow to stack usefully. */
+  .run-charts { grid-template-columns: 1fr 1fr; }
+  .run-charts > :only-child { grid-column: 1 / -1; }
+}

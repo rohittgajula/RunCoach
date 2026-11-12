@@ -14,6 +14,7 @@ const Plan = lazy(pages.calendar)
 const Chat = lazy(pages.chat)
 const Gym = lazy(pages.gym)
 const Activities = lazy(pages.activities)
+const ActivityDetail = lazy(pages.activityDetail)
 const ChatIndex = lazy(() => pages.chat().then((m) => ({ default: m.ChatIndex })))
 const Health = lazy(pages.insights)
 const Me = lazy(pages.me)
@@ -77,6 +78,7 @@ export default function App() {
                 <Route path="/chat" element={<ChatIndex />} />
                 <Route path="/gym" element={<Gym />} />
                 <Route path="/activities" element={<Activities />} />
+                <Route path="/activities/:id" element={<ActivityDetail />} />
                 <Route path="/chat/:threadId" element={<Chat />} />
                 {/* Removed from the tab bar; kept as a redirect for old links. */}
                 <Route path="/diet" element={<Navigate to="/today" replace />} />

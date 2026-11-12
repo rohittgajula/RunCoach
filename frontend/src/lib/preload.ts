@@ -27,6 +27,7 @@ export const pages = {
   chat: once(() => import('../pages/Chat')),
   gym: once(() => import('../pages/Gym')),
   activities: once(() => import('../pages/Activities')),
+  activityDetail: once(() => import('../pages/ActivityDetail')),
   insights: once(() => import('../pages/Insights')),
   me: once(() => import('../pages/Me')),
   weather: once(() => import('../pages/Weather')),
