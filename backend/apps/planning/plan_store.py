@@ -495,3 +495,149 @@ def rebuild_active_plan(athlete: Athlete) -> TrainingPlan:
         distance_km=race.distance_km, is_target=race.is_target,
     )
     return accept_plan(proposal)
+
+
+# --- practice plans (R19) -----------------------------------------------------
+
+
+PRACTICE_PHASE_NAMES: dict[str, tuple[str, str]] = {
+    "FOUNDATION": ("Getting going again",
+                   "Short, frequent, easy. The aim is consistency and letting the "
+                   "tendons catch up with the enthusiasm."),
+    "AEROBIC": ("Building the base",
+                "The long run's unbroken block grows week by week. This is the "
+                "phase that moves the number you are actually chasing."),
+}
+
+
+@transaction.atomic
+def propose_practice_plan(
+    athlete: Athlete,
+    *,
+    available_days=None,
+    long_run_day: int | None = None,
+    weeks: int | None = None,
+    chat_message=None,
+) -> TrainingPlan:
+    """A plan with no race, built toward the next milestone.
+
+    Everything `propose_plan` does except the race: no Race row is created, no
+    taper, no race week, and the thing the plan is measured against is the next
+    unbroken block rather than a date. Accepting it uses the same `accept_plan`,
+    so it archives the old plan and clears its future exactly as a race plan does
+    — which is what removes the phantom 11 January race week.
+    """
+    from planning.practice import HORIZON_WEEKS, generate_practice, milestone_for
+
+    today = athlete.local_today
+    start = today + dt.timedelta(days=1)
+    horizon = max(4, min(int(weeks or HORIZON_WEEKS), 26))
+
+    days = _normalise_days(available_days)
+    history = history_baseline(athlete)
+    baseline = baseline_for(athlete)
+    beginner = history.source != "history"
+    if beginner:
+        baseline = dataclasses.replace(
+            baseline,
+            run_km_per_week=max(baseline.run_km_per_week, BEGINNER_RUN_KM_PER_WEEK),
+            run_pace_s_per_km=(athlete.easy_pace_min + athlete.easy_pace_max) / 2,
+        )
+    # The best unbroken block ever recorded, which is what separates ground being
+    # REGAINED from ground being broken for the first time. history_baseline has
+    # tracked it all along; nothing had asked for it.
+    baseline = dataclasses.replace(
+        baseline,
+        demonstrated_longest_s=max(
+            float(history.best_longest_run_s or 0.0), baseline.longest_run_s,
+        ),
+    )
+    if days is not None:
+        baseline = dataclasses.replace(baseline, available_days=days)
+    if long_run_day is not None:
+        baseline = dataclasses.replace(baseline, long_run_day=int(long_run_day))
+    if not baseline.available_days.get(str(baseline.long_run_day), False):
+        available = [d for d in range(7) if baseline.available_days.get(str(d))]
+        baseline = dataclasses.replace(
+            baseline, long_run_day=available[-1] if available else 6,
+        )
+    if athlete.runs_per_week:
+        baseline = dataclasses.replace(baseline, runs_per_week=int(athlete.runs_per_week))
+
+    generated = generate_practice(start, baseline, config_from_settings(), weeks=horizon)
+    milestone = milestone_for(baseline.longest_run_s, baseline.run_pace_s_per_km)
+
+    plan = TrainingPlan.objects.create(
+        athlete=athlete,
+        race=None,
+        name=f"Practice block — {milestone.label}"[:160],
+        goal=(
+            f"Build toward running {milestone.label} without stopping "
+            f"(about {milestone.distance_m / 1000:.1f} km at your pace). "
+            "No race, no date to miss."
+        ),
+        status=TrainingPlan.Status.PROPOSED,
+        generator_version=GENERATOR_VERSION,
+        chat_message=chat_message,
+        summary={
+            "kind": "practice",
+            "weeks": generated.weeks_available,
+            "peak_run_km": generated.peak_run_km,
+            "ideal_peak_run_km": generated.ideal_peak_run_km,
+            "peak_continuous_s": generated.peak_continuous_s,
+            "milestone_s": milestone.seconds,
+            "milestone_label": milestone.label,
+            "milestone_distance_m": round(milestone.distance_m),
+            "milestone_index": milestone.index,
+            "milestone_total": milestone.total,
+            "warnings": (
+                ["No running history yet, so this starts from beginner defaults. "
+                 "It adapts once your runs sync."] if beginner else []
+            ) + ([history.warning] if history.warning else []) + generated.warnings,
+            "baseline_source": "beginner_defaults" if beginner else "history",
+            "gap_days": history.gap_days,
+            "detraining_factor": history.detraining_factor,
+            "available_days": baseline.available_days,
+            "long_run_day": baseline.long_run_day,
+            "runs_per_week": athlete.runs_per_week,
+            "baseline": {
+                "run_km_per_week": round(baseline.run_km_per_week, 1),
+                "longest_run_s": round(baseline.longest_run_s),
+                "demonstrated_longest_s": round(baseline.demonstrated_longest_s),
+                "run_pace_s_per_km": round(baseline.run_pace_s_per_km),
+            },
+        },
+    )
+
+    horizon_end = start + dt.timedelta(days=horizon * 7)
+    merged = _merge_phases(generated, horizon_end)
+    phases: list[PlanPhase] = []
+    for order, block in enumerate(merged):
+        name, description = PRACTICE_PHASE_NAMES.get(
+            block["generator_phase"], (block["generator_phase"].title(), ""),
+        )
+        phases.append(PlanPhase.objects.create(
+            plan=plan, order=order, name=name, description=description,
+            kind=PHASE_KIND[block["generator_phase"]],
+            generator_phase=block["generator_phase"],
+            start=block["start"], end=block["end"],
+        ))
+
+    bands = bands_for(athlete)
+    weight = athlete.weight_kg or FALLBACK_WEIGHT_KG
+    rows: list[PlannedWorkout] = []
+    for week, phase in _weeks_with_phases(generated.weeks, phases):
+        for session in week.sessions:
+            if session.optional or session.kind == "RACE" or session.date < start:
+                continue
+            spec = build_workout(session, bands, week.phase)
+            rows.append(PlannedWorkout(
+                athlete=athlete, plan=plan, phase=phase, date=session.date,
+                title=spec.title[:120], kind=spec.kind, duration_s=spec.duration_s,
+                load=spec.load, steps=[s.as_dict() for s in spec.steps],
+                description=spec.description, purpose=spec.purpose,
+                target_zone=spec.target_zone,
+                fueling=fueling_for(spec.kind, spec.duration_s, weight).as_dict(),
+            ))
+    PlannedWorkout.objects.bulk_create(rows)
+    return plan

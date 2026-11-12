@@ -45,6 +45,23 @@ PEAK_VOLUME_MULTIPLE = 2.2
 MAX_CONTINUOUS_INCREASE_PCT = 10.0
 MAX_CONTINUOUS_INCREASE_MIN = 2.0
 
+# Coming BACK to a level you have already held is not the same as reaching it the
+# first time, and treating them identically is a real error rather than a
+# conservative one. The tendons, the mitochondria and the pacing judgement were
+# all built once; after a layoff they are reduced, not absent.
+#
+# The cost of ignoring it is concrete. Rohit held 11:39 unbroken on 9 October,
+# took four weeks off, and came back at 6:32. Rebuilding to 11:39 at 10% a week
+# takes eight calendar weeks of training to arrive back where he already was; at
+# the regain rate it takes about three and a half. Those five weeks are the
+# difference between a plan that matches his experience and one he stops
+# believing.
+#
+# Above the demonstrated best these rates stop, because past that line it is new
+# tissue again.
+REGAIN_INCREASE_PCT = 25.0
+REGAIN_INCREASE_MIN = 3.0
+
 # Beyond this there is no benefit to a beginner training for a 10K; the long run
 # stops progressing and the volume goes elsewhere.
 CONTINUOUS_CEILING_MIN = 75.0
@@ -85,6 +102,10 @@ class Baseline:
     # The athlete's own choice of run days a week (R8 §A); None = the coach default
     # (`run_day_limit`). The weekly volume never changes with it — only how it is split.
     runs_per_week: int | None = None
+    # The longest unbroken block this athlete has EVER recorded, undecayed. The gap
+    # between this and longest_run_s is exactly the ground they are REGAINING rather
+    # than breaking, and the two progress at very different speeds.
+    demonstrated_longest_s: float = 0.0
 
 
 @dataclass
@@ -274,7 +295,8 @@ def _volume_curve(
 
 
 def _continuous_curve(
-    phases: list[Phase], baseline_s: float, config: PlanConfig
+    phases: list[Phase], baseline_s: float, config: PlanConfig,
+    demonstrated_s: float = 0.0,
 ) -> tuple[list[float], float]:
     """Per-week target for the long run's unbroken block.
 
@@ -287,7 +309,6 @@ def _continuous_curve(
     not the highest prescribed value — a cutback week prescribes less without
     unlearning anything.
     """
-    growth = 1 + MAX_CONTINUOUS_INCREASE_PCT / 100
     ceiling = CONTINUOUS_CEILING_MIN * 60
     capability = max(baseline_s, 120.0)   # floor: everyone can run two minutes
     targets: list[float] = []
@@ -310,9 +331,17 @@ def _continuous_curve(
         # down week jumped by two steps at once — 363 s to 439 s, a 21% rise against
         # a 10% cap.
         if build_index > 1 and not is_cutback:
+            # Below what they have already done this is regaining; above it,
+            # building. The two have different speed limits.
+            regaining = capability < demonstrated_s
+            pct = REGAIN_INCREASE_PCT if regaining else MAX_CONTINUOUS_INCREASE_PCT
+            step = REGAIN_INCREASE_MIN if regaining else MAX_CONTINUOUS_INCREASE_MIN
             capability = min(
-                capability * growth,
-                capability + MAX_CONTINUOUS_INCREASE_MIN * 60,
+                capability * (1 + pct / 100),
+                capability + step * 60,
+                # The week that arrives back at the old best lands ON it, not past
+                # it: beyond that line the conservative cap resumes.
+                max(demonstrated_s, capability) if regaining else ceiling,
                 ceiling,
             )
 
