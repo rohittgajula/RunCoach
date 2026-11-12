@@ -572,41 +572,64 @@ button.metric-cell { cursor: pointer; }
 .chip-btn.on { background: var(--card-2); color: var(--fg); border-color: var(--line); }
 .act-count { margin-left: auto; color: var(--accent); font-weight: 700; }
 
-.act-head, .act-row { display: grid; grid-template-columns: 28px 52px 1fr auto; gap: 10px; align-items: center; }
-.act-head { padding: 0 0 9px; border-bottom: 1px solid var(--line); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; }
+/* The list.
+ *
+ * It was a four-column grid that hid columns at phone width — which left the
+ * remaining text in tracks about forty pixels wide, breaking words down the
+ * middle. A row is two lines instead: what you ran, then the numbers beneath
+ * it. Nothing is hidden and nothing has to fit a track it cannot.
+ */
+.act-head { display: none; }
 .act-list { list-style: none; margin: 0; padding: 0; }
-.act-row { padding: 0; border-bottom: 1px solid var(--line); }
+.act-row {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr);
+  gap: 2px 11px; align-items: start;
+  padding: 11px 0; border-bottom: 1px solid var(--line);
+}
 .act-row:last-child { border-bottom: 0; }
-.act-row.is-selected { background: var(--card-2); border-radius: 10px; }
+.act-row.is-selected { background: var(--card-2); border-radius: 10px; padding-left: 8px; padding-right: 8px; }
 
 .act-tick {
   width: 19px; height: 19px; border-radius: 6px; border: 2px solid var(--line);
-  background: none; cursor: pointer; justify-self: center; padding: 0;
+  background: none; cursor: pointer; padding: 0; margin-top: 2px; justify-self: center;
 }
 .act-tick.on { background: var(--accent); border-color: var(--accent); }
 .act-tick:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.act-link { display: contents; color: inherit; text-decoration: none; }
-.act-when { display: flex; flex-direction: column; padding: 11px 0; }
-.act-main { display: flex; flex-direction: column; min-width: 0; padding: 11px 0; }
+/* The link spans the second column and lays its own two lines out, rather than
+   dissolving into the parent grid with `display: contents`. */
+.act-link { grid-column: 2; min-width: 0; color: inherit; text-decoration: none; display: block; }
+.act-when { display: none; }
+.act-main { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .act-primary { font-weight: 700; font-size: 0.95rem; }
-.act-stats { display: grid; grid-template-columns: repeat(4, minmax(52px, auto)); gap: 12px; text-align: right; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
-.act-head .act-stats { font-size: 0.68rem; }
-/* Four stat columns do not fit a phone. Pace is the one worth keeping. */
-@media (max-width: 560px) {
-  .act-head, .act-row { grid-template-columns: 26px 1fr auto; }
-  .act-when { display: none; }
-  .act-head > span:nth-child(2) { display: none; }
-  .act-stats > span:not(:nth-child(2)) { display: none; }
-  /* The date column is hidden at this width, so the date moves inside the main
-     cell rather than vanishing — a list of runs with no dates on it is not a
-     list of runs. */
-  .act-main::before {
-    content: attr(data-date);
-    font-size: 0.72rem; font-weight: 700; color: var(--muted);
-    letter-spacing: 0.04em; text-transform: uppercase;
-  }
+.act-main .small { font-size: 0.76rem; }
+.act-main::before {
+  content: attr(data-date);
+  font-size: 0.72rem; font-weight: 700; color: var(--muted);
+  letter-spacing: 0.04em; text-transform: uppercase; flex: none;
 }
+.act-stats {
+  display: flex; gap: 14px; flex-wrap: wrap; margin-top: 3px;
+  font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.act-stats span::before { content: attr(data-label) ' '; color: var(--faint); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+@media (min-width: 720px) {
+  /* Room for a proper table again: a header row and aligned columns. */
+  .act-head {
+    display: grid; grid-template-columns: 24px 56px minmax(0, 1fr) auto; gap: 11px;
+    padding: 0 0 9px; border-bottom: 1px solid var(--line);
+    font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint);
+  }
+  .act-row { grid-template-columns: 24px 56px minmax(0, 1fr) auto; align-items: center; }
+  .act-link { display: contents; }
+  .act-when { display: flex; flex-direction: column; }
+  .act-main { flex-direction: column; align-items: flex-start; gap: 0; }
+  .act-main::before { display: none; }
+  .act-stats { margin-top: 0; justify-content: flex-end; min-width: 230px; }
+  .act-stats span::before { display: none; }
+}
+
 .act-foot { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
 
 /* --- comparison --- */
@@ -670,28 +693,34 @@ button.metric-cell { cursor: pointer; }
 
 /* Blocks as rows that wrap, not a six-column table.
  *
+ * Named `run-block`, not `block`. `.block { display: block }` is a utility this
+ * codebase has used since R10 — on Settings section subtitles, on the share
+ * sheet's option descriptions — and defining a grid under the same name later
+ * in the file hijacked every one of them into a 22px first column. One word per
+ * line, across three screens, from one class name.
+ *
  * The table version gave the kind column about five pixels on a phone: 28px +
  * four 56px columns + five 10px gaps is 302 of the ~307 a card has to give. A
  * run's blocks are a list of things that happened, and a list is what they
  * should have been. */
-.blocks { list-style: none; margin: 10px 0 0; padding: 0; counter-reset: none; }
-.block {
+.run-blocks { list-style: none; margin: 10px 0 0; padding: 0; counter-reset: none; }
+.run-block {
   display: grid; grid-template-columns: 22px auto 1fr; gap: 2px 10px;
   align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--line);
 }
-.block:last-child { border-bottom: 0; padding-bottom: 0; }
-.block-no { font-size: 0.74rem; color: var(--faint); font-variant-numeric: tabular-nums; }
-.block-kind { font-weight: 700; font-size: 0.88rem; text-transform: capitalize; }
-.block-dur { font-weight: 700; font-size: 0.88rem; text-align: right; font-variant-numeric: tabular-nums; }
+.run-block:last-child { border-bottom: 0; padding-bottom: 0; }
+.run-block-no { font-size: 0.74rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+.run-block-kind { font-weight: 700; font-size: 0.88rem; text-transform: capitalize; }
+.run-block-dur { font-weight: 700; font-size: 0.88rem; text-align: right; font-variant-numeric: tabular-nums; }
 /* The detail line takes the full width under the first row, so a long one
    wraps instead of squeezing the kind out of existence. */
-.block-rest {
+.run-block-rest {
   grid-column: 2 / -1; font-size: 0.78rem; color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.block.bk-run .block-kind { color: var(--run-ink); }
-.block.bk-walk .block-kind { color: var(--muted); }
-.block.bk-stop .block-kind { color: var(--faint); }
+.run-block.bk-run .run-block-kind { color: var(--run-ink); }
+.run-block.bk-walk .run-block-kind { color: var(--muted); }
+.run-block.bk-stop .run-block-kind { color: var(--faint); }
 
 .run-review p { font-size: 0.92rem; line-height: 1.6; margin: 0; }
 
@@ -848,3 +877,30 @@ button.metric-cell { cursor: pointer; }
 .seg-label { display: block; font-weight: 700; font-size: 0.88rem; }
 .seg-hint { display: block; font-size: 0.74rem; color: var(--muted); margin-top: 1px; }
 .seg-btn.is-on .seg-label { color: var(--run-ink); }
+
+/* --- Health overview rings ---------------------------------------------------
+ *
+ * Three rings share the width, so each label gets about 105px on a 375px
+ * phone. "Readiness · yesterday" plus an info button is nearer 120px, and the
+ * label was a non-wrapping flex row — so it spilled sideways and sat on top of
+ * the next ring's title. The S of "Sleep score" was behind Readiness's info
+ * icon.
+ *
+ * Wrapping, rather than shrinking: a date suffix belongs on its own line at
+ * this width, and cutting the words down would cost more than the second line
+ * does. */
+.ring-row .ring-name.title-info {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+  column-gap: 4px; row-gap: 0; max-width: 100%; min-width: 0;
+  line-height: 1.25; overflow-wrap: anywhere;
+}
+.ring-row .ring-name .date-suffix { font-weight: 500; color: var(--muted); }
+.ring-row > div { overflow: hidden; }
+/* The info button must not be what pushes the label over the edge. */
+.ring-row .ring-name .info-btn { flex: none; }
+
+@media (max-width: 380px) {
+  .ring-row { gap: 6px; }
+  .ring-row .ring-name { font-size: 11px; }
+  .ring-row .ring-caption { font-size: 10px; }
+}

@@ -255,7 +255,7 @@ export default function ActivityDetail() {
           {/* A list, not a table. Six grid columns in the ~307px a phone gives a
               card left the kind column about five pixels wide. Each block is a
               row that wraps instead. */}
-          <ol className="blocks">
+          <ol className="run-blocks">
             {blocks.map((b) => {
               const row = b as Block & {
                 distance_m: number
@@ -263,11 +263,11 @@ export default function ActivityDetail() {
                 hr_avg: number | null
               }
               return (
-                <li key={b.index} className={`block bk-${b.kind}`}>
-                  <span className="block-no num">{b.index + 1}</span>
-                  <span className="block-kind">{b.kind}</span>
-                  <span className="block-dur num">{dur(b.duration_s)}</span>
-                  <span className="block-rest num">
+                <li key={b.index} className={`run-block bk-${b.kind}`}>
+                  <span className="run-block-no num">{b.index + 1}</span>
+                  <span className="run-block-kind">{b.kind}</span>
+                  <span className="run-block-dur num">{dur(b.duration_s)}</span>
+                  <span className="run-block-rest num">
                     {Math.round(row.distance_m)} m
                     {row.avg_pace_s_per_km ? ` · ${fmtPace(row.avg_pace_s_per_km)}/km` : ''}
                     {row.hr_avg ? ` · ${row.hr_avg} bpm` : ''}

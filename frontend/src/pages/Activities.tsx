@@ -152,11 +152,17 @@ function ActivityRow({
           )}
         </div>
 
+        {/* Labelled via data-label, which the phone layout prints and the
+            table layout hides — so one list serves both without two renders. */}
         <div className="act-stats">
-          <span className="num">{dur(row.total_timer_s)}</span>
-          <span className="num">{m?.run_pace_s_per_km ? `${fmtPace(m.run_pace_s_per_km)}/km` : '—'}</span>
-          <span className="num">{m?.longest_run_s ? dur(m.longest_run_s) : '—'}</span>
-          <span className="num">{row.avg_hr ? `${row.avg_hr}` : '—'}</span>
+          <span className="num" data-label="time">{dur(row.total_timer_s)}</span>
+          <span className="num" data-label="pace">
+            {m?.run_pace_s_per_km ? `${fmtPace(m.run_pace_s_per_km)}/km` : '—'}
+          </span>
+          <span className="num" data-label="longest">
+            {m?.longest_run_s ? dur(m.longest_run_s) : '—'}
+          </span>
+          <span className="num" data-label="hr">{row.avg_hr ? `${row.avg_hr}` : '—'}</span>
         </div>
       </Link>
     </li>
