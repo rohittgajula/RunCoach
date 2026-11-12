@@ -155,6 +155,17 @@ class Athlete(models.Model):
     # daily "Anything hurting?" (§3) and the quit-smoking savings goal (§8).
     auto_adjust_plan = models.BooleanField(default=True)
     strength_per_week = models.PositiveSmallIntegerField(default=0)
+    # Which weekdays are gym days, "0" (Monday) .. "6". Empty means "you decide" —
+    # planning/strength.place() then picks days around the running, which is the
+    # old behaviour and still the right default for someone who has not said.
+    # Once it is set it is honoured: a gym membership has opening hours and a
+    # commute, and a plan that puts the session on a day you cannot go is wrong
+    # however well it is spaced.
+    gym_days = models.JSONField(default=dict, blank=True)
+    # Where this athlete stands on each movement ladder — see planning/strength.py.
+    # Per pattern rather than one number, because almost nobody can squat and
+    # press at the same level, and a single figure makes one of them wrong.
+    strength_levels = models.JSONField(default=dict, blank=True)
     caffeine_on_today = models.BooleanField(default=False)
     pain_daily_check = models.BooleanField(default=False)
     savings_goal_name = models.CharField(max_length=60, blank=True, default="")

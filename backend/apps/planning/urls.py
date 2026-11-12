@@ -8,7 +8,7 @@ from .plan_views import (
 from .checkin_views import today, today_apply, today_explain
 from .garmin_views import plan_garmin, workout_garmin
 from .month_views import calendar_month
-from . import calendar_feed, edit_views, r13_views, r14_views
+from . import calendar_feed, edit_views, r13_views, r14_views, reset_views
 from .views import (
     RaceDetail, RaceList, plan_weeks, predictions, today_mode, today_session_view,
 )
@@ -27,6 +27,7 @@ urlpatterns = [
     path("plans/", PlanList.as_view(), name="plans"),
     path("plans/active/", active_plan, name="plan-active"),
     path("plans/active/rebuild/", plan_rebuild, name="plan-rebuild"),
+    path("plans/reset/", reset_views.reset, name="plan-reset"),
     path("plans/<int:pk>/", plan_view, name="plan-detail"),
     path("plans/<int:pk>/accept/", plan_accept, name="plan-accept"),
     path("plans/<int:pk>/decline/", plan_decline, name="plan-decline"),

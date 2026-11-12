@@ -30,22 +30,71 @@ ITERATIONS = {"conditionTypeId": 7, "conditionTypeKey": "iterations", "displayOr
 NO_TARGET = {"workoutTargetTypeId": 1, "workoutTargetTypeKey": "no.target",
              "displayOrder": 1}
 
-# Guides key -> (category, exerciseName) from garminconnect.exercises.
-CATALOGUE = {
-    "calf": ("CALF_RAISE", "STANDING_CALF_RAISE"),
-    "bridge": ("HIP_RAISE", "HIP_RAISE"),
-    "split": ("LUNGE", "LUNGE"),
-    "plank": ("PLANK", "PLANK"),
-    "side": ("PLANK", "SIDE_PLANK"),
-    "clam": ("HIP_STABILITY", "HIP_STABILITY"),
-    "askip": ("WARM_UP", "WALKING_HIGH_KNEES"),
-    "hipflexor": ("WARM_UP", "STRETCH_LUNGING_HIP_FLEXOR"),
+# Pattern + rung -> (category, exerciseName), taken from garminconnect.exercises
+# rather than guessed. The rung matters: a wall push-up and a full push-up are the
+# same pattern and completely different sessions, and sending the watch one name
+# for both makes the history on it meaningless.
+#
+# Three rungs have no exact match in Garmin's catalogue — wall and knee push-ups,
+# and the Pallof press. They fall back to the nearest real movement, and the step's
+# own description carries the actual name, so the watch still shows "Wall push-up"
+# while the logged exercise is the closest thing Garmin knows about.
+CATALOGUE: dict[tuple[str, int], tuple[str, str]] = {
+    ("calf", 1): ("CALF_RAISE", "CALF_RAISE"),
+    ("calf", 2): ("CALF_RAISE", "CALF_RAISE"),
+    ("calf", 3): ("CALF_RAISE", "SINGLE_LEG_STANDING_CALF_RAISE"),
+    ("calf", 4): ("CALF_RAISE", "SINGLE_LEG_STANDING_CALF_RAISE"),
+    ("calf", 5): ("CALF_RAISE", "SINGLE_LEG_STANDING_DUMBBELL_CALF_RAISE"),
+
+    ("squat", 1): ("SQUAT", "AIR_SQUAT"),
+    ("squat", 2): ("SQUAT", "AIR_SQUAT"),
+    ("squat", 3): ("SQUAT", "GOBLET_SQUAT"),
+    ("squat", 4): ("LUNGE", "BARBELL_SPLIT_SQUAT"),
+    ("squat", 5): ("LUNGE", "DUMBBELL_BULGARIAN_SPLIT_SQUAT"),
+
+    ("hinge", 1): ("HIP_RAISE", "HIP_RAISE"),
+    ("hinge", 2): ("HIP_RAISE", "HIP_RAISE"),
+    ("hinge", 3): ("DEADLIFT", "ROMANIAN_DEADLIFT"),
+    ("hinge", 4): ("DEADLIFT", "SINGLE_LEG_ROMANIAN_DEADLIFT_WITH_DUMBBELL"),
+    ("hinge", 5): ("DEADLIFT", "DEADLIFT"),
+
+    ("push", 1): ("PUSH_UP", "INCLINE_PUSH_UP"),   # no wall push-up in the catalogue
+    ("push", 2): ("PUSH_UP", "INCLINE_PUSH_UP"),
+    ("push", 3): ("PUSH_UP", "INCLINE_PUSH_UP"),
+    ("push", 4): ("PUSH_UP", "INCLINE_PUSH_UP"),   # no knee push-up either
+    ("push", 5): ("PUSH_UP", "PUSH_UP"),
+
+    ("pull", 1): ("ROW", "INVERTED_ROW"),
+    ("pull", 2): ("ROW", "SEATED_CABLE_ROW"),
+    ("pull", 3): ("ROW", "DUMBBELL_ROW"),
+    ("pull", 4): ("PULL_UP", "CLOSE_GRIP_LAT_PULLDOWN"),
+    ("pull", 5): ("PULL_UP", "BAND_ASSISTED_PULL_UP"),
+
+    ("core", 1): ("HIP_STABILITY", "DEAD_BUG"),
+    ("core", 2): ("PLANK", "PLANK"),
+    ("core", 3): ("PLANK", "SIDE_PLANK"),
+    ("core", 4): ("PLANK", "PLANK"),               # no Pallof press in the catalogue
+    ("core", 5): ("LEG_RAISE", "HANGING_KNEE_RAISE"),
 }
+
+
+def catalogue_entry(exercise: dict) -> tuple[str, str] | None:
+    """The Garmin category and name for one prescribed exercise, or None.
+
+    Falls back to the pattern's rung 1 rather than dropping the exercise: a
+    session that silently arrives on the watch missing half its movements is
+    worse than one whose fifth rung is logged under a slightly easier name.
+    """
+    key = exercise.get("key")
+    level = int(exercise.get("level") or 1)
+    return CATALOGUE.get((key, level)) or CATALOGUE.get((key, 1))
+
+
 MAX_NAME = 60
 
 
 def _exercise_step(exercise: dict, order: int, child: int) -> dict:
-    category, name = CATALOGUE[exercise["key"]]
+    category, name = catalogue_entry(exercise)
     reps = exercise.get("reps")
     seconds = exercise.get("seconds")
     per_side = 2 if exercise.get("per_side") else 1
@@ -70,7 +119,7 @@ def build_payload(session: dict) -> dict:
     child = 0
     steps = []
     for exercise in session.get("exercises") or []:
-        if exercise.get("key") not in CATALOGUE:
+        if catalogue_entry(exercise) is None:
             continue
         sets = max(1, int(exercise.get("sets") or 1))
         order += 1

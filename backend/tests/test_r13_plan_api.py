@@ -7,6 +7,7 @@ import pytest
 
 from apps.planning import auto_adjust
 from apps.planning.models import PlannedWorkout, Race, StrengthSession, WorkoutAdjustment
+from planning import strength
 from tests.r10_helpers import run
 from tests.r7_helpers import active_plan, make_workout, wellness
 
@@ -293,7 +294,7 @@ def test_strength_choice_places_sessions(api, other_api, athlete, plan_weeks):
     run_days = {w.date: w.kind for w in PlannedWorkout.objects.filter(athlete=athlete)}
     for s in sessions:
         assert run_days.get(s.date + dt.timedelta(days=1)) not in ("LONG", "INTERVALS", "TEMPO")
-        assert s.date > athlete.local_today and s.duration_s == 1200
+        assert s.date > athlete.local_today and s.duration_s == strength.DURATION_S
     body = api.get("/api/strength/").json()
     assert body["per_week"] == 2 and body["can_send_to_watch"] is False
     first = body["sessions"][0]
@@ -363,8 +364,14 @@ def test_garmin_catalogue_pairs_exist_and_payload_validates():
     from planning.garmin_strength import CATALOGUE, build_payload
 
     known = {(e["category"], e["exercise"]) for e in EXERCISES}
-    assert set(CATALOGUE.values()) <= known
-    assert set(CATALOGUE) == {key for key, *_ in strength.EXERCISES}
+    assert set(CATALOGUE.values()) <= known, "every mapping must be a real Garmin exercise"
+    # Every pattern, at every rung, has somewhere to go. A gap here is a session
+    # that arrives on the watch missing a movement.
+    assert set(CATALOGUE) == {
+        (key, level)
+        for key in strength.PATTERNS
+        for level in range(1, strength.MAX_LEVEL + 1)
+    }
     payload = build_payload({"title": "S", "duration_s": 1200, "exercises": strength.exercises(4)})
     workout = StrengthWorkout.model_validate(payload)
     assert workout.to_dict()["sportType"]["sportTypeKey"] == "strength_training"

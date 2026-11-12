@@ -88,7 +88,11 @@ def place_for(athlete) -> dict:
             # The week may have started before tomorrow: count what is already placed.
             days = [rules.Day(d, tuple(k)) for d, k in kinds.items()]
             race_date = plan.race.date if plan.race else None
-            wanted = rules.place(days, athlete.strength_per_week, first, last, race_date)
+            gym_days = {
+                int(key) for key, on in (athlete.gym_days or {}).items() if on
+            }
+            wanted = rules.place(days, athlete.strength_per_week, first, last, race_date,
+                                 gym_days=gym_days)
             wanted = _minus_existing_this_week(athlete, wanted, first)
         wanted_dates = {d: after for d, after in wanted}
         removed = [s for s in future if s.date not in wanted_dates]
@@ -99,8 +103,12 @@ def place_for(athlete) -> dict:
         created = 0
         for day, after in sorted(wanted_dates.items()):
             level = rules.level_for(start, day)
+            # Per-pattern rungs override the programme clock: somebody doing
+            # bodyweight squats comfortably may still be on wall push-ups, and
+            # one number for the whole session cannot say both.
             fields = {"title": rules.title_for(level), "level": level,
-                      "exercises": rules.exercises(level), "after_run": after,
+                      "exercises": rules.exercises(level, athlete.strength_levels or {}),
+                      "after_run": after,
                       "duration_s": rules.DURATION_S, "plan": plan}
             session = kept.get(day)
             if session is None:

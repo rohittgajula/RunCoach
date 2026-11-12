@@ -194,9 +194,18 @@ def test_strength_levels_progress_every_two_weeks():
     one, three = strength.exercises(1), strength.exercises(3)
     calf1 = next(e for e in one if e["key"] == "calf")
     calf3 = next(e for e in three if e["key"] == "calf")
-    assert calf3["reps"] > calf1["reps"] and calf3["sets"] == 3 and calf1["sets"] == 2
-    plank3 = next(e for e in three if e["key"] == "plank")
-    assert plank3["seconds"] > 20 and plank3["reps"] is None
+
+    # Progression is by MOVEMENT, not by rep count. This assertion used to read
+    # `calf3["reps"] > calf1["reps"]`, which was right for a circuit that got
+    # longer and wrong for a ladder that gets harder: ten single-leg calf raises
+    # are a great deal more than twelve on two legs, and counting reps says the
+    # opposite. Sets still step up, because that part was always about volume.
+    assert calf3["name"] != calf1["name"]
+    assert calf3["level"] > calf1["level"]
+    assert calf3["sets"] == 3 and calf1["sets"] == 2
+
+    core3 = next(e for e in three if e["key"] == "core")
+    assert core3["seconds"] and core3["reps"] is None, "rung 3 core is a timed hold"
 
 
 def test_garmin_strength_payload_shape_and_hash():
@@ -205,16 +214,32 @@ def test_garmin_strength_payload_shape_and_hash():
     payload = garmin_strength.build_payload(session)
     assert payload["sportType"]["sportTypeKey"] == "strength_training"
     steps = payload["workoutSegments"][0]["workoutSteps"]
-    assert len(steps) == len(strength.EXERCISES)
+    # One group per movement pattern. Every one must survive the trip: an
+    # exercise Garmin has no name for is mapped to the nearest real movement
+    # rather than dropped, so a session on the watch is never quietly short.
+    assert len(steps) == len(strength.PATTERNS) == len(session["exercises"])
     orders = [steps[0]["stepOrder"]] + [s["stepOrder"] for s in steps[0]["workoutSteps"]]
     assert orders == [1, 2, 3]
     calf = steps[0]["workoutSteps"][0]
     assert calf["category"] == "CALF_RAISE" and calf["endCondition"]["conditionTypeKey"] == "reps"
-    plank = next(s for s in steps if s["workoutSteps"][0]["category"] == "PLANK"
-                 and s["workoutSteps"][0]["exerciseName"] == "PLANK")
-    assert plank["workoutSteps"][0]["endCondition"]["conditionTypeKey"] == "time"
-    split = next(s for s in steps if s["workoutSteps"][0]["category"] == "LUNGE")
-    assert split["workoutSteps"][0]["endConditionValue"] == 12.0      # 6 per side
+    # Rung 1 core is a dead bug, which is counted per side rather than held.
+    core = steps[-1]["workoutSteps"][0]
+    assert core["category"] == "HIP_STABILITY" and core["exerciseName"] == "DEAD_BUG"
+    assert core["endCondition"]["conditionTypeKey"] == "reps"
+    timed = garmin_strength.build_payload(
+        {"title": "t", "duration_s": 1200, "exercises": strength.exercises(2)}
+    )["workoutSegments"][0]["workoutSteps"][-1]["workoutSteps"][0]
+    assert timed["endCondition"]["conditionTypeKey"] == "time", "rung 2 core is a plank"
+    # A per-side movement sends the watch BOTH sides as one step, so the rep
+    # count doubles. Getting this wrong halves every single-leg exercise, which
+    # is most of the ones that matter for running.
+    per_side = next(e for e in session["exercises"] if e["per_side"])
+    step = next(
+        s["workoutSteps"][0] for s in steps
+        if s["workoutSteps"][0]["description"].startswith(per_side["name"])
+    )
+    assert step["endConditionValue"] == float(per_side["reps"] * 2)
+    assert step["description"].endswith("(each side)")
     a = garmin_strength.payload_hash(payload, "2026-10-08")
     assert a == garmin_strength.payload_hash(payload, "2026-10-08")
     assert a != garmin_strength.payload_hash(payload, "2026-10-09")
