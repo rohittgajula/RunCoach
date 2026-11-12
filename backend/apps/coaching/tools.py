@@ -182,6 +182,21 @@ TOOLS = [
          "expected_days": {"type": "integer", "minimum": 1, "maximum": 60},
          "note": {"type": "string"}},
         ["type"]),
+    _fn("rebuild_rest_of_plan",
+        "Carry an interruption through EVERY remaining week, not just the next "
+        "session. Call this after illness, injury, a missed stretch, or when the "
+        "athlete says they cannot train for a while — the thing that makes "
+        "December change, not only Thursday. The remaining weeks are rebuilt "
+        "forward from what was actually done, under the same weekly increase "
+        "cap, so a missed week is lost rather than owed and the ramp restarts "
+        "from reality. It only ever reduces. Needs confirmation first: tell the "
+        "athlete roughly what will change, then call again with confirmed=true.",
+        {"achieved_minutes": {"type": "number",
+                              "description": "Running actually done in the interrupted "
+                                             "week, in minutes. 0 if nothing."},
+         "reason": {"type": "string", "description": "Short, in the athlete's own words."},
+         "confirmed": {"type": "boolean"}},
+        ["achieved_minutes"]),
     _fn("recover_illness",
         "The athlete says they are better: end illness mode and build the easy "
         "return-to-run block (then the plan resumes).",
@@ -543,6 +558,34 @@ class ToolRunner:
         return {"status": "started", "illness": {"id": ill.pk, "type": ill.type,
                                                  "start_date": str(ill.start_date)},
                 "paused": ill.paused_count}
+
+    def t_rebuild_rest_of_plan(self, achieved_minutes, reason="", confirmed=False):
+        """The one the athlete kept asking for: change the whole rest of it."""
+        from apps.planning.cascade_service import cascade
+        from apps.planning.models import TrainingPlan
+
+        plan = TrainingPlan.objects.filter(
+            athlete=self.athlete, status=TrainingPlan.Status.ACTIVE
+        ).first()
+        if plan is None:
+            return {"ok": False, "detail": "There is no active plan to rebuild."}
+
+        if not confirmed:
+            return {
+                "needs_confirmation": True,
+                "detail": "This rebuilds every remaining week from what you "
+                          "actually did, under the same weekly cap. It only ever "
+                          "reduces, and nothing missed is added back later. Tell "
+                          "the athlete that, and call again with confirmed=true "
+                          "if they agree.",
+            }
+
+        result = cascade(plan, self.athlete, round(float(achieved_minutes) * 60), reason)
+        if not result["changed"]:
+            return {"ok": True, "changed": 0,
+                    "detail": "Nothing needed to move — the rest of the plan already "
+                              "matches what you have been doing."}
+        return {"ok": True, **result}
 
     def t_recover_illness(self, date=None):
         from apps.health.illness import IllnessError, active, recover

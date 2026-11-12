@@ -462,3 +462,75 @@ select.select-pill { width: auto; appearance: none; }
  * everything — a date or a step count inside a sentence is prose, not data. */
 .num { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .stat-value, .big-num, .month-value, .ex-set { font-variant-numeric: tabular-nums; letter-spacing: -0.015em; }
+
+/* ---------- desktop (R19) ----------------------------------------------------
+ *
+ * The app was built phone-first and stayed a 560px column on a 27-inch screen:
+ * a bottom tab bar four inches from anything, and three quarters of the window
+ * empty. Garmin Connect is the reference Rohit gave and it is the right one —
+ * nav down the left, content in columns, and enough room to put two periods
+ * side by side so a comparison is a glance rather than a memory test.
+ *
+ * Above 1024px the tab bar becomes a rail and the column opens up. Below it,
+ * nothing changes: the phone layout is untouched, because that is still where
+ * the app is used before a run.
+ *
+ * One breakpoint, not three. A second one would mean maintaining a layout
+ * nobody has ever opened the app at. */
+@media (min-width: 1024px) {
+  :root { --maxw: 1180px; --rail-w: 232px; }
+
+  .shell-main {
+    padding-bottom: 32px;
+    padding-left: var(--rail-w);
+  }
+  .page { padding: 0 32px 40px; }
+
+  /* The tab bar becomes a vertical rail, using the same markup. A separate
+     desktop nav component would be a second list of tabs to keep in step with
+     the first, and they would drift the first time one changed. */
+  .tabbar {
+    top: 0; bottom: 0; right: auto;
+    width: var(--rail-w);
+    flex-direction: column; justify-content: flex-start; gap: 4px;
+    padding: 24px 12px;
+    border-top: 0; border-right: 1px solid var(--line);
+    background: var(--card);
+  }
+  .tab {
+    flex: none; width: 100%;
+    flex-direction: row; justify-content: flex-start; gap: 12px;
+    padding: 10px 12px; border-radius: 10px; font-size: 15px;
+  }
+  .tab-icon { width: 24px; height: 24px; border-radius: 8px; }
+  .tab.is-active { background: var(--card-2); }
+  .tab.is-active .tab-icon { background: none; }
+
+  /* Cards flow into columns rather than stacking into a ribbon. `dense` lets a
+     short card fill a gap a tall one left, which is what stops a two-column
+     grid of mixed-height cards looking like a broken shelf. */
+  .page { display: block; }
+  .page > * { margin-bottom: 20px; }
+  .page-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px; align-items: start; grid-auto-flow: dense;
+  }
+  .page-grid > .wide { grid-column: 1 / -1; }
+
+  /* Figures have room to be looked at properly. */
+  .exfig svg { max-width: 220px; }
+  .gym-list { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+
+  /* The month grid stops being a thumbnail. */
+  .month-cell { aspect-ratio: 1 / 0.86; border-radius: 12px; }
+  .month-num { font-size: 16px; }
+  .month-kind { font-size: 11px; }
+  .month-value { font-size: 13px; }
+  .month-gym { font-size: 10px; }
+}
+
+/* Wider still: the column stops growing and the window takes the slack, because
+   a 1600px line of body text is unreadable however much room there is. */
+@media (min-width: 1500px) {
+  :root { --maxw: 1320px; }
+}
