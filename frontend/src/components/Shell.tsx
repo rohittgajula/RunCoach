@@ -15,7 +15,6 @@ import { SettingsSheet } from './SettingsSheet'
 const TABS = [
   { to: '/today', label: 'Today', Icon: TodayIcon },
   { to: '/plan', label: 'Plan', Icon: PlanIcon },
-  { to: '/chat', label: 'Coach', Icon: CoachIcon },
   { to: '/gym', label: 'Gym', Icon: GymIcon },
   { to: '/health', label: 'Health', Icon: HealthIcon },
   // "Runs", not "Activities": shorter, and in a running app it is also the more
@@ -29,7 +28,13 @@ type ShellValue = { openSettings: (focus?: unknown) => void }
 const ShellContext = createContext<ShellValue>({ openSettings: () => {} })
 export const useShell = () => useContext(ShellContext)
 
-/** Six tabs — Today · Plan · Coach · Gym · Runs · Health. Me sits behind the avatar.
+/** Five tabs — Today · Plan · Gym · Runs · Health — and the coach as a bubble.
+ *
+ * Six tabs on a 375px phone was about 62px each and read as congested. Coach is
+ * the one that leaves most willingly: it is not a place you browse, it is a
+ * thing you start, and a floating button says that better than a tab does. It
+ * also sits above whatever you were looking at, so you can ask about the screen
+ * you are on rather than leaving it first.
  *
  * Diet held this slot and came out: the app had drifted away from the one job
  * Rohit uses it for. Gym takes it, because strength is the half of the training
@@ -69,7 +74,9 @@ export function Shell({ children }: { children: ReactNode }) {
     const run = () => {
       // Let the screen on show finish its own requests first.
       if (client.isFetching() > 0 && tries++ < 5) return void setTimeout(() => whenIdle(run, 3000), 800)
-      for (const to of ['/plan', '/chat', '/diet']) prefetchTab(client, to)
+      // '/diet' was in this list after the route stopped existing — a warm-up
+      // for a page nobody can reach. '/chat' stays: the bubble opens it.
+      for (const to of ['/plan', '/chat', '/activities']) prefetchTab(client, to)
       prefetchHealth(client)
     }
     whenIdle(run, 6000)
@@ -152,6 +159,28 @@ export function Shell({ children }: { children: ReactNode }) {
           ))}
         </nav>
       </div>
+
+      {/* The coach, as a bubble rather than a tab.
+       *
+       * It sits above whatever you are looking at, which is the point: a
+       * question about this week's plan is best asked from the plan, not after
+       * navigating away from it. Hidden on the coach's own screens, where a
+       * button that takes you where you already are is just clutter. */}
+      {!location.pathname.startsWith('/chat') && (
+        <NavLink
+          to="/chat"
+          className="coach-fab"
+          aria-label="Ask the coach"
+          {...intentHandlers('/chat')}
+          onPointerDown={() => {
+            intentHandlers('/chat').onPointerDown()
+            prefetchTab(client, '/chat')
+          }}
+        >
+          <CoachIcon size={24} />
+        </NavLink>
+      )}
+
       {tab !== 'today' && <div className="sync-float"><SyncingPill /></div>}
       <UpdateBanner />
       <BadgeToast />

@@ -124,7 +124,7 @@ export function MonthView({ today, ...handlers }: { today: string } & Handlers) 
             <button
               key={cell.date}
               type="button"
-              className={`month-cell ${cell.date === now ? 'is-today' : ''} ${cell.date < now ? 'is-past' : ''} ${loadingDate === cell.date ? 'is-loading' : ''}`}
+              className={`month-cell ${cell.date === now ? 'is-today' : ''} ${cell.date < now ? 'is-past' : ''} ${loadingDate === cell.date ? 'is-loading' : ''} ${cell.planned?.kind === 'RACE' ? 'is-race' : ''}`}
               disabled={!tappable}
               aria-label={label}
               onClick={() => open(cell)}

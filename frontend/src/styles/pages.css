@@ -746,3 +746,52 @@ button.metric-cell { cursor: pointer; }
 .cmp-metrics { display: flex; gap: 6px; flex-wrap: wrap; }
 .cmp-metrics .chip-btn { padding: 5px 11px; font-size: 0.8rem; }
 .cmp-chart-none { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* --- the coach bubble --------------------------------------------------------
+ *
+ * Coach left the tab bar because six tabs on a 375px phone is about 62px each
+ * and reads as congested. It is also the tab that leaves most willingly: it is
+ * not a place you browse, it is a thing you start.
+ *
+ * Bottom right, clear of the tab bar and the home indicator. */
+.coach-fab {
+  position: fixed; z-index: 29;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom, 0px));
+  width: 54px; height: 54px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--accent); color: var(--on-primary, #06101f);
+  box-shadow: var(--shadow-lg); text-decoration: none;
+  transition: transform 0.15s ease;
+}
+.coach-fab:active { transform: scale(0.94); }
+.coach-fab:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .coach-fab { transition: none; } }
+
+@media (min-width: 1024px) {
+  /* No tab bar to clear, and the rail already holds the width. */
+  .coach-fab { bottom: 28px; right: 28px; width: 58px; height: 58px; }
+}
+
+/* --- race day versus gym day -------------------------------------------------
+ *
+ * A race rendered as the word "Race" in the same grey as "Easy", while a gym
+ * session got a coloured bar — so the most important day in a plan was less
+ * visible than an optional strength session. These must not be told apart by
+ * reading.
+ *
+ * A race takes the whole cell: tinted ground, a full border and its label in
+ * the race colour. A gym day keeps the thin bar, because it is an addition to
+ * a day rather than the day itself. */
+.month-cell.is-race {
+  background: var(--warn-bg);
+  border-color: var(--warn);
+}
+.month-cell.is-race .month-kind,
+.month-cell.is-race .month-value { color: var(--warn); font-weight: 800; }
+.month-cell.is-race .month-num { color: var(--warn); }
+
+/* The gym bar is deliberately quieter than a race, and sits at the very bottom
+   so the two can never be confused at a glance. */
+.month-gym { background: var(--accent); opacity: 0.9; }
+.month-cell.is-race .month-gym { background: var(--warn); }

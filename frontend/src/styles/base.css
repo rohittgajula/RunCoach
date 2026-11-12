@@ -54,6 +54,9 @@
   --fuel-tint: #3a2216;
   --fuel-ink: #ffab8a;
   --good-bg: #123322;
+  /* Race day. There was no warn ground token, so the one cell that must be
+     unmistakable had nothing to be tinted with. */
+  --warn-bg: #35270f;
   --good-fg: #5fd894;
   --bad-bg: #3a1a15;
   --bad-fg: #ff9581;
@@ -120,6 +123,7 @@
 
   /* better / worse / neutral chips */
   --good-bg: #e3f6ea;
+  --warn-bg: #fdf1dd;
   --good-fg: #12793b;
   --bad-bg: #fde9e5;
   --bad-fg: #b8341c;
