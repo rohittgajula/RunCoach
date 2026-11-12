@@ -29,7 +29,8 @@ def test_week_one_is_doable_by_someone_who_cannot_do_a_pushup():
     session contains a push-up is therefore not a beginner programme, however
     beginner it looks from the outside.
     """
-    session = {e["key"]: e for e in rules.exercises(1)}
+    lifts = [e for e in rules.exercises(1) if not e.get("is_warmup")]
+    session = {e["key"]: e for e in lifts}
 
     assert session["push"]["name"] == "Wall push-up"
     assert session["squat"]["name"] == "Box squat"
@@ -38,6 +39,11 @@ def test_week_one_is_doable_by_someone_who_cannot_do_a_pushup():
     for entry in session.values():
         assert "barbell" not in entry["load"].lower()
         assert entry["sets"] == 2, "week one is two sets, not three"
+
+    # And the warm-up is there, ahead of the lifting.
+    warm = [e for e in rules.exercises(1) if e.get("is_warmup")]
+    assert warm, "a beginner's first loaded session needs a warm-up"
+    assert rules.exercises(1)[: len(warm)] == warm
 
 
 def test_every_pattern_is_present_in_every_session():
@@ -48,7 +54,7 @@ def test_every_pattern_is_present_in_every_session():
     half once a week, which is below the threshold where anything adapts.
     """
     for level in range(1, rules.MAX_LEVEL + 1):
-        keys = [e["key"] for e in rules.exercises(level)]
+        keys = [e["key"] for e in rules.exercises(level) if not e.get("is_warmup")]
         assert keys == list(rules.PATTERNS)
 
 
@@ -58,7 +64,8 @@ def test_patterns_climb_independently():
     Almost nobody can squat and press at the same level. One programme number
     forces one of the two to be wrong.
     """
-    session = {e["key"]: e for e in rules.exercises(1, {"squat": 4, "push": 1})}
+    session = {e["key"]: e for e in rules.exercises(1, {"squat": 4, "push": 1})
+               if not e.get("is_warmup")}
     assert session["squat"]["level"] == 4
     assert session["push"]["level"] == 1
     assert session["push"]["name"] == "Wall push-up"

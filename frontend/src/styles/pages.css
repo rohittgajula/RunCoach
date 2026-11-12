@@ -904,3 +904,37 @@ button.metric-cell { cursor: pointer; }
   .ring-row .ring-name { font-size: 11px; }
   .ring-row .ring-caption { font-size: 10px; }
 }
+
+/* --- gym: warm-up, session, review ------------------------------------------
+ *
+ * Three blocks in one page, because a gym session is three different acts. The
+ * warm-up leads it: it is the part people skip, and burying it under six lifts
+ * is how it gets skipped. */
+.gym-group { margin-top: 18px; }
+.gym-group:first-of-type { margin-top: 12px; }
+.gym-group-title {
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--fg); margin: 0 0 2px;
+}
+.gym-group-title .muted { font-weight: 600; letter-spacing: 0.02em; text-transform: none; }
+.gym-group-why { margin: 0 0 4px; }
+
+/* The warm-up is quieter than the lifting: no figures, tighter rows, no rung
+   bars. It is a checklist, not a programme. */
+.gym-list.is-warmup .exfig,
+.gym-list.is-warmup .rungs,
+.gym-list.is-warmup .gym-ex-next { display: none; }
+.gym-list.is-warmup { gap: 0; }
+.gym-list.is-warmup .gym-ex { border-top: 1px solid var(--line); padding-top: 9px; margin-top: 9px; }
+.gym-list.is-warmup .gym-ex-name { font-size: 0.92rem; }
+.gym-list.is-warmup .gym-ex-pattern { display: none; }
+.gym-list.is-warmup .gym-ex-cue { margin-top: 3px; }
+
+.gym-review { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.gym-how, .gym-pattern-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+.gym-per-pattern { margin-top: 14px; }
+.gym-review-save { margin-top: 14px; width: 100%; }
+.gym-review.is-done { background: var(--good-bg); border: 1px solid var(--ok); border-radius: 12px; padding: 13px 15px; border-top-width: 1px; }
+.gym-review.is-done strong { color: var(--good-fg); font-size: 0.94rem; }
+.gym-review.is-done ul { margin: 8px 0 0; padding-left: 18px; }
+.gym-review.is-done li { font-size: 0.86rem; color: var(--good-fg); margin-bottom: 3px; }

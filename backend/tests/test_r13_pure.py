@@ -217,7 +217,12 @@ def test_garmin_strength_payload_shape_and_hash():
     # One group per movement pattern. Every one must survive the trip: an
     # exercise Garmin has no name for is mapped to the nearest real movement
     # rather than dropped, so a session on the watch is never quietly short.
-    assert len(steps) == len(strength.PATTERNS) == len(session["exercises"])
+    # The lifting, not the warm-up: a wrist timer prompting you through leg
+    # swings is noise. Every LIFT must survive the trip, though — an exercise
+    # Garmin has no name for is mapped to the nearest real movement rather than
+    # dropped, so a session on the watch is never quietly short.
+    lifts = [e for e in session["exercises"] if not e.get("is_warmup")]
+    assert len(steps) == len(strength.PATTERNS) == len(lifts)
     orders = [steps[0]["stepOrder"]] + [s["stepOrder"] for s in steps[0]["workoutSteps"]]
     assert orders == [1, 2, 3]
     calf = steps[0]["workoutSteps"][0]
@@ -233,7 +238,7 @@ def test_garmin_strength_payload_shape_and_hash():
     # A per-side movement sends the watch BOTH sides as one step, so the rep
     # count doubles. Getting this wrong halves every single-leg exercise, which
     # is most of the ones that matter for running.
-    per_side = next(e for e in session["exercises"] if e["per_side"])
+    per_side = next(e for e in lifts if e["per_side"])
     step = next(
         s["workoutSteps"][0] for s in steps
         if s["workoutSteps"][0]["description"].startswith(per_side["name"])

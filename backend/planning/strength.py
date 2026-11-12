@@ -37,7 +37,10 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
-DURATION_S = 35 * 60          # six patterns, two or three sets, 60-90 s rest
+#: Five minutes of warm-up plus the lifting. Declared here with the other
+#: constants; WARMUP_S is defined with the warm-up itself further down.
+WARMUP_S = 5 * 60
+DURATION_S = WARMUP_S + 35 * 60
 MAX_PER_WEEK = 3
 SUGGESTED_PER_WEEK = 2
 LEVEL_EVERY_WEEKS = 2
@@ -174,6 +177,60 @@ LADDERS: list[tuple[str, str, str, list[tuple]]] = [
     ]),
 ]
 
+
+# --- the warm-up --------------------------------------------------------------
+#
+# These are the drills the old circuit was made of — A-skips, leg swings, the
+# clamshell, the hip-flexor stretch. Replacing that circuit with a strength
+# programme left them out, and that was a loss: they were never much of a
+# strength session, and they are a genuinely good warm-up. They come back here,
+# doing the job they were always suited to.
+#
+# A warm-up before lifting is not optional for somebody whose tendons have never
+# been loaded. It is also the part people skip, so it is short, it is specific,
+# and nothing in it needs equipment or floor space.
+#
+# Ordered deliberately: pulse first so the rest happens warm, then the joints
+# that are about to be asked for range, then one drill that rehearses the
+# pattern of the session itself.
+
+WARMUP: tuple[tuple[str, str, int | None, int | None, bool, str], ...] = (
+    # key, name, reps | None, seconds | None, per_side, cue
+    ("march", "March on the spot", None, 60, False,
+     "Knees to hip height, arms swinging. Just get warm — this is not training."),
+    ("legswing", "Leg swings", 10, None, True,
+     "Forwards and back, then side to side. Hold a wall. Loose, not forced."),
+    ("anklerock", "Ankle rocks", 10, None, True,
+     "Knee forward over the toes, heel down. The joint that limits a squat most."),
+    ("clam", "Clamshell", 12, None, True,
+     "Heels together, open the top knee, don't roll back. Wakes the glute up."),
+    ("hipflexor", "Hip-flexor stretch", None, 20, True,
+     "Tuck the pelvis, then push the hips forward. Sitting all day shortens these."),
+    ("askip", "A-skip", None, 20, False,
+     "Knee to hip height, land under you, quick and light. Rehearses the stride."),
+)
+
+
+def warmup_block() -> list[dict]:
+    """The warm-up, as the same shape the session's exercises use.
+
+    Same shape on purpose: the screen renders one list, and a warm-up that
+    needed its own renderer would be the first thing to fall out of step with
+    the rest of the session.
+    """
+    return [
+        {
+            "key": key, "pattern": "Warm-up", "name": name,
+            "sets": 1, "reps": reps, "seconds": seconds, "per_side": per_side,
+            "rest_s": 0, "load": "Bodyweight", "cue": cue,
+            "why": "Warm tissue tolerates load; cold tissue tears. Five minutes.",
+            "level": 1, "max_level": 1, "ceiling": 1, "at_ceiling": False,
+            "graduate_when": "", "is_warmup": True,
+        }
+        for key, name, reps, seconds, per_side, cue in WARMUP
+    ]
+
+
 PATTERNS: tuple[str, ...] = tuple(key for key, _, _, _ in LADDERS)
 
 # How far up each ladder you can climb with what you actually have.
@@ -269,7 +326,9 @@ def exercises(level: int, levels: dict[str, int] | None = None,
             "at_ceiling": rung >= ceiling_for(equipment, key) < MAX_LEVEL,
             "graduate_when": graduate,
         })
-    return out
+    # The warm-up leads the list. It is the part people skip, and burying it
+    # under six lifts is how it gets skipped.
+    return warmup_block() + out
 
 
 def ladders() -> list[dict]:
@@ -283,6 +342,20 @@ def ladders() -> list[dict]:
         }
         for key, label, why, rungs in LADDERS
     ]
+
+
+def rung_name(pattern: str, level: int) -> str:
+    """The movement one rung of one pattern prescribes.
+
+    LADDERS is a list of tuples here, so a caller that wants "what is squat at
+    rung 3" has to walk it. Doing that at the call site is how a `[pattern]`
+    lookup written from memory ends up shipping against the wrong shape.
+    """
+    level = max(1, min(int(level), MAX_LEVEL))
+    for key, _label, _why, rungs in LADDERS:
+        if key == pattern:
+            return rungs[level - 1][0]
+    return pattern
 
 
 def graduate(levels: dict[str, int], pattern: str, direction: int = 1) -> dict[str, int]:

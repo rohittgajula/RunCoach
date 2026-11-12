@@ -280,6 +280,25 @@ class StrengthSession(OwnedByAthlete):
         "activities.Activity", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="strength_sessions")
     auto_completed = models.BooleanField(default=False)
+
+    # How it went, in the athlete's own words.
+    #
+    # A watch records a strength session as a heart-rate trace with no idea
+    # which exercises were in it, so the only honest source for "was that hard"
+    # is the person who did it. Without this the ladders only ever moved from a
+    # settings screen, which means they did not move: a programme that cannot
+    # hear "the wall push-ups were easy" is a PDF with a calendar attached.
+    difficulty = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text="1 too easy – 3 about right – 5 could not finish.",
+    )
+    notes = models.TextField(blank=True, default="")
+    # Patterns the athlete said were too easy, and ones they could not manage.
+    # Per pattern rather than per session, because "that was easy" about six
+    # movements says nothing about which of them it was easy for.
+    moved_up = models.JSONField(default=list, blank=True)
+    moved_down = models.JSONField(default=list, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
     paused_by_illness = models.PositiveIntegerField(null=True, blank=True)
     garmin_workout_id = models.BigIntegerField(null=True, blank=True)
     garmin_schedule_id = models.BigIntegerField(null=True, blank=True)

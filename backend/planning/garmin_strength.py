@@ -119,6 +119,13 @@ def build_payload(session: dict) -> dict:
     child = 0
     steps = []
     for exercise in session.get("exercises") or []:
+        # The warm-up stays off the watch. Being prompted through leg swings by
+        # a wrist timer is noise; the lifting is the part that benefits from
+        # one. This used to happen by accident — the warm-up keys are simply
+        # absent from CATALOGUE — which would have silently started sending them
+        # the first time somebody added a mapping.
+        if exercise.get("is_warmup"):
+            continue
         if catalogue_entry(exercise) is None:
             continue
         sets = max(1, int(exercise.get("sets") or 1))

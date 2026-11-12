@@ -8,7 +8,10 @@ from .plan_views import (
 from .checkin_views import today, today_apply, today_explain
 from .garmin_views import plan_garmin, workout_garmin
 from .month_views import calendar_month
-from . import calendar_feed, edit_views, r13_views, r14_views, race_predict_views, reset_views
+from . import (
+    calendar_feed, edit_views, r13_views, r14_views, race_predict_views, reset_views,
+    strength_review,
+)
 from .views import (
     RaceDetail, RaceList, plan_weeks, predictions, today_mode, today_session_view,
 )
@@ -53,6 +56,8 @@ urlpatterns = [
     path("strength/", r13_views.strength_list, name="strength"),
     path("strength/<int:pk>/", r13_views.strength_detail, name="strength-detail"),
     path("strength/<int:pk>/garmin/", r13_views.strength_garmin, name="strength-garmin"),
+    path("strength/<int:pk>/review/", strength_review.strength_review,
+         name="strength-review"),
     # R14
     path("plan/weather-suggestions/", r14_views.weather_suggestions,
          name="weather-suggestions"),

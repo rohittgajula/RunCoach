@@ -298,7 +298,12 @@ def test_strength_choice_places_sessions(api, other_api, athlete, plan_weeks):
     body = api.get("/api/strength/").json()
     assert body["per_week"] == 2 and body["can_send_to_watch"] is False
     first = body["sessions"][0]
-    assert first["exercises"][0]["key"] == "calf" and first["garmin_status"] == "none"
+    # The warm-up leads the list now; calf is still the first thing lifted,
+    # because it is the tissue most likely to end a beginner's build and the
+    # one people drop when they run out of time.
+    assert first["exercises"][0]["is_warmup"] is True
+    lifts = [e for e in first["exercises"] if not e.get("is_warmup")]
+    assert lifts[0]["key"] == "calf" and first["garmin_status"] == "none"
     # Calendar items.
     cal = api.get(f"/api/calendar/?start={first['date']}&end={first['date']}").json()
     assert any(i["type"] == "strength" for i in cal["days"][0]["items"])

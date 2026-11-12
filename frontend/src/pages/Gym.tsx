@@ -12,7 +12,8 @@
  * only part of this screen that can prevent that.
  */
 
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/auth'
 import { dur } from '../lib/format'
 import { PageHeader } from '../components/PageHeader'
@@ -37,6 +38,7 @@ type Exercise = {
   ceiling: number
   at_ceiling: boolean
   graduate_when: string
+  is_warmup?: boolean
 }
 
 type Session = {
@@ -121,6 +123,127 @@ function ExerciseCard({ exercise }: { exercise: Exercise }) {
   )
 }
 
+
+const PATTERN_LABEL: Record<string, string> = {
+  calf: 'Calf', squat: 'Squat', hinge: 'Hinge', push: 'Push', pull: 'Pull', core: 'Core',
+}
+
+const HOW: { value: number; label: string }[] = [
+  { value: 1, label: 'Too easy' },
+  { value: 2, label: 'Easy' },
+  { value: 3, label: 'About right' },
+  { value: 4, label: 'Hard' },
+  { value: 5, label: "Couldn't finish" },
+]
+
+/**
+ * How it went, and what that changes.
+ *
+ * Two questions, because they are different ones. The overall rating is for the
+ * ends of the scale only — "about right" is the common answer and has to be
+ * cheap to give. The per-movement ticks are what actually move a ladder, since
+ * "that was easy" about six exercises says nothing about which of them it was
+ * easy for.
+ *
+ * The response names what moved, so the athlete sees the programme respond
+ * rather than being told it was noted.
+ */
+function SessionReview({ sessionId, patterns }: { sessionId: number; patterns: string[] }) {
+  const client = useQueryClient()
+  const [how, setHow] = useState<number | null>(null)
+  const [easy, setEasy] = useState<string[]>([])
+  const [hard, setHard] = useState<string[]>([])
+
+  const send = useMutation({
+    mutationFn: () => api<{ moved: { pattern: string; direction: string; to: string }[]; detail: string }>(
+      `/strength/${sessionId}/review/`,
+      { method: 'POST', body: JSON.stringify({ difficulty: how, easy, hard }) },
+    ),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['strength'] }),
+  })
+
+  const pick = (pattern: string, list: 'easy' | 'hard') => {
+    const [get, set, other, setOther] = list === 'easy'
+      ? [easy, setEasy, hard, setHard] as const
+      : [hard, setHard, easy, setEasy] as const
+    set(get.includes(pattern) ? get.filter((p) => p !== pattern) : [...get, pattern])
+    // A movement cannot be both, and the server refuses it — so the UI should
+    // not let you build a request it will reject.
+    if (other.includes(pattern)) setOther(other.filter((p) => p !== pattern))
+  }
+
+  if (send.data) {
+    return (
+      <div className="gym-review is-done">
+        <strong>{send.data.detail}</strong>
+        {send.data.moved.length > 0 && (
+          <ul>
+            {send.data.moved.map((m) => (
+              <li key={m.pattern}>
+                {PATTERN_LABEL[m.pattern] ?? m.pattern}{' '}
+                {m.direction === 'up' ? 'moves up to' : 'steps back to'}{' '}
+                <strong>{m.to}</strong>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="gym-review">
+      <h3 className="gym-group-title">How did it go?</h3>
+      <div className="gym-how">
+        {HOW.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={`chip-btn ${how === option.value ? 'on' : ''}`}
+            onClick={() => setHow(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      {how != null && how !== 3 && (
+        <div className="gym-per-pattern">
+          <p className="small muted">
+            Which movements? Leave blank to change all of them.
+          </p>
+          <div className="gym-pattern-row">
+            {patterns.map((pattern) => {
+              const list = how <= 2 ? 'easy' : 'hard'
+              const on = (list === 'easy' ? easy : hard).includes(pattern)
+              return (
+                <button
+                  key={pattern}
+                  type="button"
+                  className={`chip-btn ${on ? 'on' : ''}`}
+                  onClick={() => pick(pattern, list)}
+                >
+                  {PATTERN_LABEL[pattern] ?? pattern}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="btn btn-primary gym-review-save"
+        disabled={how == null || send.isPending}
+        onClick={() => send.mutate()}
+      >
+        {send.isPending ? 'Saving…' : 'Save and adjust'}
+      </button>
+      {send.isError && <p className="small bad">That did not save. Try again.</p>}
+    </div>
+  )
+}
+
 export default function Gym() {
   const query = useQuery<Payload>({
     queryKey: ['strength', 'gym'],
@@ -136,6 +259,10 @@ export default function Gym() {
   const today = new Date().toISOString().slice(0, 10)
   const next = sessions.find((s) => s.date >= today && s.status === 'planned') ?? sessions[0]
   const days = DOW.filter((_, i) => gym_days[String(i)])
+  // The warm-up arrives in the same list as the lifts, flagged, so the screen
+  // can group them without the API having to send two shapes.
+  const warmup = (next?.exercises ?? []).filter((e) => e.is_warmup)
+  const main = (next?.exercises ?? []).filter((e) => !e.is_warmup)
 
   return (
     <div className="page">
@@ -181,9 +308,31 @@ export default function Gym() {
                 tomorrow matters more than how this session went.
               </p>
 
-              <ul className="gym-list">
-                {next.exercises.map((e) => <ExerciseCard key={e.key} exercise={e} />)}
-              </ul>
+              {warmup.length > 0 && (
+                <div className="gym-group">
+                  <h3 className="gym-group-title">
+                    Warm up <span className="muted">· 5 min</span>
+                  </h3>
+                  <p className="small muted gym-group-why">
+                    Warm tissue tolerates load; cold tissue tears. This is the part
+                    people skip, so it goes first.
+                  </p>
+                  <ul className="gym-list is-warmup">
+                    {warmup.map((e) => <ExerciseCard key={e.key} exercise={e} />)}
+                  </ul>
+                </div>
+              )}
+
+              <div className="gym-group">
+                <h3 className="gym-group-title">
+                  The session <span className="muted">· {main[0]?.sets ?? 2} sets</span>
+                </h3>
+                <ul className="gym-list">
+                  {main.map((e) => <ExerciseCard key={e.key} exercise={e} />)}
+                </ul>
+              </div>
+
+              <SessionReview sessionId={next.id} patterns={main.map((e) => e.key)} />
             </section>
           ) : (
             <section className="card">
