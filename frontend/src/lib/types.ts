@@ -238,6 +238,9 @@ export type MonthDay = {
   date: ISODate
   planned: { kind: string; title: string; duration_s: number; id?: number } | null
   status: MonthDayStatus | null
+  // Sent by the month endpoint since R13 §4 and simply never declared here, so
+  // the grid could not show a gym day even though it was being told about one.
+  strength?: { id: number; title?: string; duration_s?: number } | null
   activities: Array<{ id: number; sport: string; duration_s: number; distance_m: number }>
 }
 
