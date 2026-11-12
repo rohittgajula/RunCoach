@@ -5,8 +5,8 @@
  * on here only adds a shortcut.
  */
 export type TodayCardKey =
-  | 'weather_swap' | 'experiment' | 'checkins' | 'injury' | 'review' | 'mood'
-  | 'weather' | 'log' | 'fuel'
+  | 'weather_swap' | 'checkins' | 'injury' | 'review' | 'mood'
+  | 'weather' | 'log'
   | 'wake' | 'so_far' | 'this_week' | 'tomorrow' | 'adjustments' | 'weekly_report'
 
 export type TodayCardDef = { key: TodayCardKey; label: string; hint: string; on: boolean }
@@ -17,10 +17,8 @@ export const TODAY_CARDS: TodayCardDef[] = [
   { key: 'injury', label: 'Injury watch', hint: 'Only at moderate or high risk', on: true },
   { key: 'review', label: 'Run review', hint: 'For 24 h after a run', on: true },
   { key: 'mood', label: 'Mood & energy', hint: 'Until you answer today', on: true },
-  { key: 'experiment', label: 'Experiment progress', hint: 'While one is running', on: true },
   { key: 'weather', label: 'Weather', hint: 'Now, best time to run', on: true },
   { key: 'log', label: 'Log now', hint: 'Habits, cravings, caffeine', on: true },
-  { key: 'fuel', label: 'Fuel & water', hint: 'Calories and water today', on: true },
   { key: 'wake', label: 'Tonight → tomorrow', hint: 'Evenings · also in Health → Sleep', on: false },
   { key: 'so_far', label: 'Today so far', hint: 'Steps, stress · also in Health → Day', on: false },
   { key: 'this_week', label: 'This week', hint: 'Runs and km · also in Plan', on: false },

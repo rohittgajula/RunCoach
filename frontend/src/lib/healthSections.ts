@@ -26,22 +26,18 @@ export const sections = {
   dayTrends: once(() => import('../components/day/DayTrendsSection')),
   guides: once(() => import('../components/guides/GuidesSection')),
   habits: once(() => import('../components/habits/HabitsSection')),
-  compare: once(() => import('../components/health/CompareSection')),
   fitness: once(() => import('../components/health/FitnessSection')),
-  reports: once(() => import('../components/health/ReportsSection')),
   sleep: once(() => import('../components/health/SleepSection')),
   progress: once(() => import('../components/progress/ProgressSection')),
   more: once(() => import('../components/health/MoreSection')),
-  experiments: once(() => import('../components/experiments/ExperimentsSection')),
   goals: once(() => import('../components/goals/GoalsSection')),
   heart: once(() => import('../components/heart/HeartSection')),
 }
 
 const BY_PATH: Record<string, Loader> = {
   day: sections.day, 'day/trends': sections.dayTrends, guides: sections.guides, habits: sections.habits,
-  compare: sections.compare, fitness: sections.fitness, reports: sections.reports, sleep: sections.sleep,
-  progress: sections.progress, more: sections.more, experiments: sections.experiments,
-  goals: sections.goals, heart: sections.heart,
+  fitness: sections.fitness, sleep: sections.sleep, progress: sections.progress,
+  more: sections.more, goals: sections.goals, heart: sections.heart,
 }
 
 /** `rest` = the path segments after /health. Overview ships with the Health chunk. */

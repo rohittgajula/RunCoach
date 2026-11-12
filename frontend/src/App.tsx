@@ -13,7 +13,6 @@ import Today from './pages/Today'
 const Plan = lazy(pages.calendar)
 const Chat = lazy(pages.chat)
 const ChatIndex = lazy(() => pages.chat().then((m) => ({ default: m.ChatIndex })))
-const Diet = lazy(pages.diet)
 const Health = lazy(pages.insights)
 const Me = lazy(pages.me)
 // R14: weather report and the staff-only admin panel, each its own chunk.
@@ -75,7 +74,8 @@ export default function App() {
                 <Route path="/plan" element={<Plan />} />
                 <Route path="/chat" element={<ChatIndex />} />
                 <Route path="/chat/:threadId" element={<Chat />} />
-                <Route path="/diet" element={<Diet />} />
+                {/* Removed from the tab bar; kept as a redirect for old links. */}
+                <Route path="/diet" element={<Navigate to="/today" replace />} />
                 <Route path="/health/*" element={<Health />} />
                 <Route path="/me/*" element={<Me />} />
                 <Route path="/weather" element={<Weather />} />

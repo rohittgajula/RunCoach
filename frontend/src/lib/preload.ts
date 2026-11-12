@@ -40,8 +40,8 @@ export function prefetchHealth(client: QueryClient, key = 'overview') {
 }
 
 const SECTION_ORDER = [
-  'day', 'sleep', 'fitness', 'habits', 'progress', 'more', 'dayTrends', 'guides', 'reports',
-  'compare', 'experiments', 'goals', 'heart',
+  'day', 'sleep', 'fitness', 'habits', 'progress', 'more', 'dayTrends', 'guides',
+  'goals', 'heart',
 ] as const
 
 const quiet = (p: Promise<unknown>) => p.catch(() => undefined)
@@ -80,7 +80,7 @@ export function preloadTabs() {
   if (done) return
   done = true
   const queue: Loader[] = [
-    pages.calendar, pages.insights, pages.chat, pages.diet, pages.me,
+    pages.calendar, pages.insights, pages.chat, pages.me,
     ...SECTION_ORDER.map((key): Loader => () => healthSections().then((m): Promise<unknown> => m.sections[key]())),
     pages.weather,
   ]

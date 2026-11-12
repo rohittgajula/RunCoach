@@ -17,15 +17,11 @@ const DaySection = lazy(() => sections.day().then((m) => ({ default: m.DaySectio
 const DayTrendsSection = lazy(() => sections.dayTrends().then((m) => ({ default: m.DayTrendsSection })))
 const GuidesSection = lazy(() => sections.guides().then((m) => ({ default: m.GuidesSection })))
 const HabitsPage = lazy(() => sections.habits().then((m) => ({ default: m.HabitsPage })))
-const CompareSection = lazy(() => sections.compare().then((m) => ({ default: m.CompareSection })))
 const FitnessSection = lazy(() => sections.fitness().then((m) => ({ default: m.FitnessSection })))
-const ReportsSection = lazy(() => sections.reports().then((m) => ({ default: m.ReportsSection })))
-const MonthlyReportsPage = lazy(() => sections.reports().then((m) => ({ default: m.MonthlyReportsPage })))
 const SleepSection = lazy(() => sections.sleep().then((m) => ({ default: m.SleepSection })))
 const ProgressSection = lazy(() => sections.progress().then((m) => ({ default: m.ProgressSection })))
 // R14: More → Experiments, Goals, Heart (each its own chunk).
 const MoreSection = lazy(() => sections.more().then((m) => ({ default: m.MoreSection })))
-const ExperimentsSection = lazy(() => sections.experiments().then((m) => ({ default: m.ExperimentsSection })))
 const GoalsSection = lazy(() => sections.goals().then((m) => ({ default: m.GoalsSection })))
 const HeartSection = lazy(() => sections.heart().then((m) => ({ default: m.HeartSection })))
 
@@ -44,9 +40,6 @@ const SECTIONS: Array<{ key: string; to: string; label: string; end?: boolean; r
   { key: 'day/trends', to: '/health/day/trends', label: 'Day trends', range: '4w', chip: false },
   // R14: grouped under More (their chip shows "More" as active).
   { key: 'guides', to: '/health/guides', label: 'Guides', chip: false, more: true },
-  { key: 'compare', to: '/health/compare', label: 'Compare', range: '3m', chip: false, more: true },
-  { key: 'reports', to: '/health/reports', label: 'Reports', chip: false, more: true },
-  { key: 'experiments', to: '/health/experiments', label: 'Experiments', chip: false, more: true },
   { key: 'goals', to: '/health/goals', label: 'Goals', chip: false, more: true },
   { key: 'heart', to: '/health/heart', label: 'Heart', range: '3m', chip: false, more: true },
 ]
@@ -134,14 +127,8 @@ export default function Health() {
           <Route path="progress" element={<ProgressSection />} />
           <Route path="guides" element={<GuidesSection />} />
           <Route path="more" element={<MoreSection />} />
-          <Route path="experiments" element={<ExperimentsSection />} />
           <Route path="goals" element={<GoalsSection />} />
           <Route path="heart" element={<HeartSection />} />
-          <Route path="compare" element={<CompareSection />} />
-          <Route path="reports" element={<ReportsSection />} />
-          <Route path="reports/monthly" element={<MonthlyReportsPage />} />
-          <Route path="reports/monthly/:month" element={<MonthlyReportsPage />} />
-          <Route path="reports/:week" element={<ReportsSection />} />
           <Route path="*" element={<Navigate to="/health" replace />} />
         </Routes>
         </Suspense>

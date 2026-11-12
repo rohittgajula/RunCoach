@@ -7,11 +7,9 @@ import { CoachMemory } from '../components/me/CoachMemory'
 import { DeletedActivities } from '../components/me/DeletedActivities'
 import { IllnessLauncher } from '../components/illness/IllnessLauncher'
 import { ReviewLauncher } from '../components/quality/ReviewEntry'
-import { RemindersSection } from '../components/me/Reminders'
-import { ShoesSection } from '../components/me/Shoes'
 import { Row, RowGroup } from '../components/Disclose'
 import {
-  BandageIcon, BellIcon, CalendarIcon, ChevronRight, GearIcon, HealthIcon, HelpIcon, LockIcon, MedalIcon, ShoeIcon, SparkIcon,
+  BandageIcon, CalendarIcon, ChevronRight, GearIcon, HealthIcon, HelpIcon, LockIcon, MedalIcon, SparkIcon,
   TodayIcon, TrashIcon, WatchIcon,
 } from '../components/Icons'
 import { initialOf } from '../components/Kit'
@@ -20,7 +18,7 @@ import { RacesCard } from '../components/profile/RacesCard'
 import { useShell } from '../components/Shell'
 import { Skeleton } from '../components/States'
 import { useAuth } from '../lib/AuthContext'
-import { useAchievements, useGear, useReminders, useWatchAlarms } from '../lib/queries'
+import { useAchievements, useWatchAlarms } from '../lib/queries'
 import { useDataReview, useIllness } from '../lib/r17'
 import { ProfileCards } from './Profile'
 
@@ -32,8 +30,6 @@ export default function Me() {
     <Routes>
       <Route index element={<MeHome />} />
       <Route path="races" element={<SubPage title="Races"><RacesCard /></SubPage>} />
-      <Route path="shoes" element={<SubPage title="Shoes"><ShoesSection /></SubPage>} />
-      <Route path="reminders" element={<SubPage title="Reminders"><RemindersSection /></SubPage>} />
       <Route path="alarms" element={<SubPage title="Watch alarms"><WatchAlarmsCard link /></SubPage>} />
       <Route path="badges" element={<SubPage title="Badges"><BadgesSection /></SubPage>} />
       <Route path="calendar" element={<SubPage title="Calendar sync"><Suspense fallback={<section className="card"><Skeleton lines={4} /></section>}><CalendarSync /></Suspense></SubPage>} />
@@ -57,19 +53,9 @@ function SubPage({ title, children }: { title: string; children: React.ReactNode
 function MeHome() {
   const { athlete, username, isStaff } = useAuth()
   const { openSettings } = useShell()
-  const gear = useGear()
-  const reminders = useReminders()
   const ach = useAchievements()
   const alarms = useWatchAlarms()
 
-  const shoes = (gear.data?.shoes ?? []).filter((s) => !s.retired)
-  const shoe = shoes.find((s) => s.is_default) ?? shoes[0]
-  const due = shoes.filter((s) => s.replace_soon || s.replace_due)
-  const shoeSub = due.length
-    ? `${due.some((s) => s.replace_due) ? 'Time to replace' : 'Replace soon'}: ${due.map((s) => s.name).join(', ')}`
-    : shoe ? `${shoe.name} · ${Math.round(shoe.distance_km)} of ${shoe.retire_km} km` : 'Track kilometres per pair'
-  const on = [...(reminders.data?.reminders ?? []), ...(reminders.data?.nudges ?? [])].filter((r) => r.enabled)
-  const remSub = on.length ? on.map((r) => r.label).join(' · ') : 'Check-in, habit log, water, weekly report'
   const earned = (ach.data?.badges ?? []).filter((b) => b.earned)
   const badgeSub = ach.data ? `${earned.length} of ${ach.data.badges.length} earned` : 'Streaks and personal records'
   const alarmCount = (alarms.data?.alarms ?? []).filter((a) => a.enabled).length
@@ -96,8 +82,6 @@ function MeHome() {
       <ProfileCards />
 
       <RowGroup title="Gear & reminders">
-        <Row to="/me/shoes" icon={<ShoeIcon size={20} />} title="Shoes" sub={shoeSub} />
-        <Row to="/me/reminders" icon={<BellIcon size={20} />} title="Reminders" sub={remSub} />
         <Row to="/me/alarms" icon={<WatchIcon size={20} />} title="Watch alarms" sub={alarmSub} />
         <Row to="/me/calendar" icon={<CalendarIcon size={20} />} title="Calendar sync" sub="See planned runs in Google or Apple Calendar" />
         <Row

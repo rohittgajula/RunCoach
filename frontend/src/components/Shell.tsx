@@ -7,7 +7,7 @@ import { prefetchTab } from '../lib/queries'
 import { SyncingPill, useAutoSync } from '../lib/r16'
 import { UpdateBanner } from '../lib/r18'
 import { useAuth } from '../lib/AuthContext'
-import { CoachIcon, ForkIcon, HealthIcon, PlanIcon, TodayIcon } from './Icons'
+import { CoachIcon, HealthIcon, PlanIcon, TodayIcon } from './Icons'
 import { BadgeToast } from './me/Badges'
 import { GlobalToast } from './GlobalToast'
 import { SettingsSheet } from './SettingsSheet'
@@ -17,14 +17,20 @@ const TABS = [
   { to: '/plan', label: 'Plan', Icon: PlanIcon },
   { to: '/chat', label: 'Coach', Icon: CoachIcon },
   { to: '/health', label: 'Health', Icon: HealthIcon },
-  { to: '/diet', label: 'Diet', Icon: ForkIcon },
 ]
 
 type ShellValue = { openSettings: (focus?: unknown) => void }
 const ShellContext = createContext<ShellValue>({ openSettings: () => {} })
 export const useShell = () => useContext(ShellContext)
 
-/** Five tabs — Today · Plan · Coach · Health · Diet. Me sits behind the avatar. */
+/** Four tabs — Today · Plan · Coach · Health. Me sits behind the avatar.
+ *
+ * Diet was the fifth. It came out because the app had drifted away from the one
+ * job Rohit uses it for: running, the strength work that supports it, and the
+ * schedule both sit on. The backend, the models and every meal already logged are
+ * untouched — this is a navigation change, not a deletion, and `/diet` redirects
+ * rather than 404s so an old bookmark still lands somewhere sensible.
+ */
 export function Shell({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   // R14: a settings group to open (and scroll to) straight away, e.g. "today".

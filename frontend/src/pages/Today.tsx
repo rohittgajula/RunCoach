@@ -6,7 +6,6 @@ import { RecentReviewCard } from '../components/review/RunReview'
 import { PendingCheckins } from '../components/checkin/PendingCheckins'
 import { QuickLogRow } from '../components/habits/QuickLogRow'
 import { ChipButton } from '../components/ChipButton'
-import { ExperimentChip } from '../components/experiments/ExperimentChip'
 import { RefreshIcon } from '../components/Icons'
 import { AvatarButton } from '../components/Kit'
 import { MoodCard } from '../components/mood/MoodCard'
@@ -14,7 +13,6 @@ import { IllnessHero, TodayMore } from '../components/illness/IllnessEntry'
 import { RecoveryCard } from '../components/recovery/RecoveryEntry'
 import { ErrorState } from '../components/States'
 import { ForecastCard } from '../components/today/ForecastCard'
-import { FuelToday } from '../components/today/FuelToday'
 import { TodayHero } from '../components/today/TodayHero'
 import { StaleNotice } from '../components/today/StaleNotice'
 import { resolveLayout, type TodayCardKey } from '../components/today/todayLayout'
@@ -84,7 +82,6 @@ export default function Today() {
 
   const cards: Record<TodayCardKey, ReactNode> = {
     weather_swap: <WeatherSwapChips />,
-    experiment: <ExperimentChip />,
     checkins: <PendingCheckins />,
     injury: <TodayInjury />,
     review: <RecentReviewCard />,
@@ -95,7 +92,6 @@ export default function Today() {
         <QuickLogRow label="Log now" aside={<SmokeFree />} />
       </section>
     ),
-    fuel: <FuelToday />,
     wake: <EveningWakeCard />,
     so_far: <TodaySoFar />,
     this_week: <ThisWeek week={week.data} />,
