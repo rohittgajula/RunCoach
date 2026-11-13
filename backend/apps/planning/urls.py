@@ -1,5 +1,6 @@
 from django.urls import path, re_path
 
+from .arc_views import training_arc
 from .calendar_views import calendar
 from .plan_views import (
     PlanList, active_plan, activity_ai_review, activity_review, calendar_days, plan_accept,
@@ -68,6 +69,8 @@ urlpatterns = [
     path("plan/weather-suggestions/<int:pk>/dismiss/", r14_views.weather_suggestion_dismiss,
          name="weather-suggestion-dismiss"),
     path("calendar-feed/", calendar_feed.feed_view, name="calendar-feed"),
+    # R18: the whole arc — past weeks and planned weeks on one axis.
+    path("arc/", training_arc, name="training-arc"),
     # R16
     path("workouts/<int:pk>/edit/", edit_views.workout_edit, name="workout-edit"),
     path("workouts/<int:pk>/edit/undo/", edit_views.workout_edit_undo,

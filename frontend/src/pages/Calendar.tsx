@@ -15,7 +15,7 @@ import { PlanDetailSheet } from '../components/profile/PlanDetailSheet'
 import { ErrorState, Loading, Skeleton } from '../components/States'
 import { useCoachLaunch } from '../components/useCoachLaunch'
 import { addDays, dur, monthDay, parseDate, todayISO, weekday } from '../lib/format'
-import { errorText, useActivePlan, useCalendar, useSync, useToday } from '../lib/queries'
+import { errorText, useActivePlan, useCalendar, useSync, useToday, useTrainingArc } from '../lib/queries'
 import type { ActivityCard, CalDay, CalWeek, Workout } from '../lib/types'
 
 import { BUILD_PLAN_PROMPT, PRACTICE_PLAN_PROMPT } from '../lib/prompts'
@@ -24,6 +24,13 @@ import { canEditWorkout } from '../components/edit/EditedChip'
 export { BUILD_PLAN_PROMPT }
 
 // R16 §A: "Edit week" is its own chunk (shares the editor's styles and steppers).
+import { ArcView } from '../components/arc/ArcView'
+
+/** Arc first: past and future in one picture, which is the only view here that
+ *  answers whether the training is going anywhere. List and Month stay for the
+ *  day-to-day questions they are actually good at. */
+type CalView = 'arc' | 'list' | 'month'
+
 const loadWeekEdit = () => import('../components/edit/WeekEditSheet')
 const WeekEditSheet = lazy(loadWeekEdit)
 
@@ -35,6 +42,7 @@ export default function Calendar() {
   const activePlan = useActivePlan()
   const sync = useSync()
   const checkin = useToday()
+  const arc = useTrainingArc()
   // Fallback for the "Adjusted" tag if the calendar copy predates `adjusted_by`.
   const adjustedId = checkin.data?.applied ? checkin.data.workout?.id ?? null : null
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -46,7 +54,7 @@ export default function Calendar() {
   const [openWorkout, setOpenWorkout] = useState<Workout | null>(null)
   const [openActivity, setOpenActivity] = useState<ActivityCard | null>(null)
   const [toast, setToast] = useState('')
-  const [view, setView] = useState<'list' | 'month'>('list')
+  const [view, setView] = useState<CalView>('arc')
   const [planOpen, setPlanOpen] = useState(false)
   const [weekEdit, setWeekEdit] = useState<{ week: CalWeek; open: boolean } | null>(null)
   const listScroll = useRef<number | null>(null)
@@ -134,7 +142,7 @@ export default function Calendar() {
   }, [toast])
 
   // The list is this page's scroll root; remember where it was across a month detour.
-  const switchView = (next: 'list' | 'month') => {
+  const switchView = (next: CalView) => {
     if (next === view) return
     if (next === 'month') listScroll.current = scrollRef.current?.scrollTop ?? 0
     setView(next)
@@ -163,7 +171,7 @@ export default function Calendar() {
         right={
           <>
           <div className="segmented segmented-compact" role="tablist" aria-label="Calendar view">
-            {(['list', 'month'] as const).map((option) => (
+            {(['arc', 'list', 'month'] as const).map((option) => (
               <button
                 key={option}
                 type="button"
@@ -172,7 +180,7 @@ export default function Calendar() {
                 className={`segmented-option ${view === option ? 'is-active' : ''}`}
                 onClick={() => switchView(option)}
               >
-                {option === 'list' ? 'List' : 'Month'}
+                {option === 'arc' ? 'Arc' : option === 'list' ? 'List' : 'Month'}
               </button>
             ))}
           </div>
@@ -223,6 +231,10 @@ export default function Calendar() {
           })()}
           <ChevronRight size={18} className="muted" />
         </button>
+      )}
+
+      {view === 'arc' && (
+        <ArcView arc={arc.data} loading={arc.isPending} error={arc.error} />
       )}
 
       {view === 'month' && (

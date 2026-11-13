@@ -85,6 +85,8 @@ PURE_MODULES = [
     "planning.garmin_workout",
     "planning.reflow",
     "planning.relayout",
+    # R18
+    "planning.arc",
     "nutrition",
     "nutrition.targets",
     "nutrition.fueling",

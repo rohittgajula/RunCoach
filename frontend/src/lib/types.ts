@@ -1311,3 +1311,41 @@ export type WakePlan = {
   android_intent: string | null
   sentence: string | null
 }
+
+// --- R18: the arc ---------------------------------------------------------------
+// Past and future on one axis. Two scales, never one: `run_s` measures time spent
+// running in a week, `block_s` measures the longest unbroken run inside a session.
+// Mixing them would draw a plan asking for a 30-minute non-stop run it never asked
+// for, so the payload keeps them apart and so must every chart that reads it.
+
+export type ArcGoal = {
+  kind: 'race' | 'practice'
+  label: string
+  date: string | null
+  distance_km: number | null
+  target_s: number | null
+  reached?: boolean
+  rung?: number
+  rungs?: number
+}
+
+export type ArcWeek = {
+  start: string
+  end: string
+  past: boolean
+  current: boolean
+  done: { runs: number; run_s: number; run_m: number; longest_run_s: number; gym: number }
+  planned: { runs: number; run_s: number; block_s: number; gym: number }
+  missed: number
+  /** The longest unbroken run on record as at the end of this week. Only ever rises. */
+  best_run_s: number
+}
+
+export type TrainingArc = {
+  today: string
+  week_start: string
+  goal: ArcGoal
+  peak: { run_s: number; block_s: number }
+  notes: string[]
+  weeks: ArcWeek[]
+}

@@ -16,7 +16,7 @@ import type {
   LungRecovery, WeeklyReport, WeeklyReportListItem, CompareMetric, CompareResult,
   RemindersResponse, Reminder, Achievements, ReadinessForecast, HealthBody,
   HealthDay, DaySummary, DayTrends, ActivityRoute, WaterDay, WaterLog, Nudge,
-  WakePlan, MyAlarm, WatchAlarms,
+  WakePlan, MyAlarm, WatchAlarms, TrainingArc,
 } from './types'
 
 export const errorText = (error: unknown, fallback = 'Something went wrong.'): string =>
@@ -24,10 +24,23 @@ export const errorText = (error: unknown, fallback = 'Something went wrong.'): s
 
 /** Everything that depends on the plan. Accepting/declining/moving touches all of it. */
 export function invalidatePlanData(client: QueryClient) {
-  for (const key of ['calendar', 'calendar-month', 'calendar-day', 'plan-active', 'plans', 'plan', 'profile-summary', 'diet-day', 'workout', 'wake-plan']) {
+  for (const key of ['calendar', 'calendar-month', 'calendar-day', 'plan-active', 'plans', 'plan', 'profile-summary', 'diet-day', 'workout', 'wake-plan', 'arc']) {
     client.invalidateQueries({ queryKey: [key] })
   }
 }
+
+// --- the arc ---------------------------------------------------------------------
+
+/** Past weeks and planned weeks in one series. Cheap enough to keep warm: it is the
+ *  first thing the Plan tab draws, and it changes only when a run lands or the plan
+ *  is rebuilt — both of which already invalidate the plan keys. */
+export const useTrainingArc = (enabled = true) =>
+  useQuery({
+    queryKey: ['arc'],
+    queryFn: () => api<TrainingArc>('/arc/'),
+    enabled,
+    staleTime: 5 * 60_000,
+  })
 
 // --- profile ---------------------------------------------------------------------
 

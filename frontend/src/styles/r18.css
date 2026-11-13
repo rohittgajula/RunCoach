@@ -48,3 +48,203 @@
 .rt-row > .grow { min-width: 0; }
 .rt-row input[type="time"] { width: 144px; flex: none; padding: 0 8px; }
 .rt-unit { flex: none; }
+
+/* ===== The arc: past and future on one axis (R18) =====================
+   Nothing here is a new visual language — it is the card, the meter and the
+   list the rest of the app already uses, arranged so that today falls in the
+   middle of the page rather than at the end of it. */
+
+.arc { display: flex; flex-direction: column; gap: 12px; }
+.arc-loading { padding: 32px 0; }
+.arc-card { display: flex; flex-direction: column; gap: 10px; }
+.arc-h {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- where you stand ------------------------------------------------- */
+.arc-standing { display: flex; flex-direction: column; gap: 8px; }
+.arc-standing-lab {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.arc-standing-big {
+  margin: 0;
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.arc-standing-of {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--muted);
+}
+.arc-standing-sub { margin: 0; }
+.arc-standing-note {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--run-ink);
+  background: var(--run-tint);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+}
+
+.arc-meter {
+  position: relative;
+  height: 8px;
+  border-radius: 5px;
+  background: var(--card-2);
+  overflow: visible;
+}
+.arc-meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 5px;
+  background: var(--arc-block);
+}
+/* Where the most recent run actually sits, when that is behind the record.
+   Without it the bar claims a capability the last four weeks do not support. */
+.arc-meter-now {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--fg);
+  transform: translateX(-1px);
+}
+
+/* --- the chart ------------------------------------------------------- */
+.arc-chart { margin: 0 -4px; }
+.arc-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 6px 0 0;
+  padding: 0 4px;
+  list-style: none;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.arc-key li { display: flex; align-items: center; gap: 6px; }
+.arc-sw { display: inline-block; width: 12px; height: 9px; border-radius: 2px; flex: none; }
+.arc-sw-done { background: var(--arc-done); }
+.arc-sw-plan { background: transparent; box-shadow: inset 0 0 0 1.5px var(--arc-plan); }
+.arc-sw-block { height: 3px; border-radius: 2px; background: var(--arc-block); }
+.arc-sw-target {
+  height: 0;
+  border-radius: 0;
+  border-top: 3px dashed var(--arc-block);
+}
+
+.arc-tip {
+  background: var(--tip-bg);
+  color: var(--tip-fg);
+  border-radius: 10px;
+  padding: 9px 11px;
+  box-shadow: var(--shadow-lg);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  max-width: 220px;
+}
+.arc-tip p { margin: 0; }
+.arc-tip p + p { margin-top: 2px; }
+.arc-tip-when {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin-bottom: 3px !important;
+}
+.arc-tip-miss { opacity: 0.75; }
+
+.arc-notes {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.arc-notes li {
+  font-size: 0.83rem;
+  line-height: 1.5;
+  color: var(--muted);
+  padding-left: 11px;
+  border-left: 2px solid var(--line);
+}
+
+/* --- week by week ---------------------------------------------------- */
+.arc-weeks { margin: 0; padding: 0; list-style: none; }
+.arc-week {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 3px 11px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.arc-week:last-child { border-bottom: 0; padding-bottom: 0; }
+.arc-week:first-child { padding-top: 0; }
+.arc-week.is-now {
+  background: var(--run-tint);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  margin: 2px -11px;
+  border-bottom-color: transparent;
+}
+
+.arc-week-when { grid-row: span 2; display: flex; flex-direction: column; min-width: 0; }
+.arc-week-when b { font-size: 0.86rem; font-weight: 700; }
+.arc-week-when span {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Planned sits behind, done sits on top of it: the overlap is the week's
+   compliance without a percentage anywhere. */
+.arc-week-track {
+  position: relative;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--card-2);
+  overflow: hidden;
+}
+.arc-week-plan,
+.arc-week-done { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+.arc-week-plan { background: var(--arc-plan); }
+.arc-week-done { background: var(--arc-done); }
+
+.arc-week-figs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.arc-week-figs .num { color: var(--fg); font-weight: 700; }
+.arc-week-block { color: var(--arc-block) !important; font-weight: 600 !important; }
+.arc-week-gym { color: var(--recovery-ink); }
+.arc-week-missed { color: var(--bad-fg); }
+.arc-week-empty { font-style: italic; color: var(--faint); }
+
+@media (min-width: 560px) {
+  .arc-week { grid-template-columns: 96px minmax(0, 1fr) auto; gap: 0 14px; }
+  .arc-week-when { grid-row: auto; flex-direction: row; align-items: baseline; gap: 8px; }
+  .arc-week-figs { justify-content: flex-end; flex-wrap: nowrap; }
+}
