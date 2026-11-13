@@ -41,6 +41,19 @@ from dataclasses import dataclass, replace
 # week, so they follow the rebuilt ramp instead of driving it.
 TAPERING = frozenset({"TAPER", "RACE", "PEAK_TAPER"})
 
+#: Coming back from a week with nothing in it, the next week takes this much of
+#: what it was originally going to be, and the ramp carries on from there.
+#:
+#: A multiplicative ramp cannot leave zero: 0 x 1.1 is 0, so one completely
+#: missed week used to flatten every week after it to nothing, for ever. That is
+#: the single most likely way to use this module — illness, injury, a week away —
+#: and it turned a three-month plan into three months of warm-ups.
+#:
+#: Six tenths rather than all of it because a week off is a week off: you come
+#: back easier and build again, which is what the ramp below then does.
+RESTART_FRACTION = 0.6
+
+
 # How much of the reached volume a taper week carries. Matches the generator's
 # own taper so a rebuilt plan tapers the way an untouched one would.
 TAPER_FRACTION = 0.6
@@ -114,6 +127,17 @@ def rebuild(
 
         if carried is None:          # defensive; from_index was past the end
             out.append(week)
+            continue
+
+        if carried <= 0:
+            # Nothing was done, so there is nothing to grow from. Restart from
+            # a reduced version of what this week already intended rather than
+            # multiplying zero and staying there until the plan runs out.
+            target = int(week.planned_run_s * RESTART_FRACTION)
+            carried = target
+            out.append(replace(week, planned_run_s=target))
+            if abs(target - week.planned_run_s) > NOISE_S:
+                changed[week.index] = (week.planned_run_s, target)
             continue
 
         if week.phase in TAPERING:

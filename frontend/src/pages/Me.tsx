@@ -9,8 +9,7 @@ import { IllnessLauncher } from '../components/illness/IllnessLauncher'
 import { ReviewLauncher } from '../components/quality/ReviewEntry'
 import { Row, RowGroup } from '../components/Disclose'
 import {
-  BandageIcon, CalendarIcon, ChevronRight, GearIcon, HealthIcon, HelpIcon, LockIcon, MedalIcon, SparkIcon,
-  TodayIcon, TrashIcon, WatchIcon,
+  BandageIcon, CalendarIcon, ChevronRight, GearIcon, HealthIcon, HelpIcon, LockIcon, MedalIcon, RefreshIcon, SparkIcon, TodayIcon, TrashIcon, WatchIcon,
 } from '../components/Icons'
 import { initialOf } from '../components/Kit'
 import { PageHeader } from '../components/PageHeader'
@@ -21,6 +20,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useAchievements, useWatchAlarms } from '../lib/queries'
 import { useDataReview, useIllness } from '../lib/r17'
 import { ProfileCards } from './Profile'
+import { ResetPlanning } from '../components/settings/ResetPlanning'
 
 const CalendarSync = lazy(() => import('../components/calendar/CalendarSync').then((m) => ({ default: m.CalendarSync })))
 
@@ -36,6 +36,7 @@ export default function Me() {
       <Route path="account" element={<SubPage title="Account"><AccountPage /></SubPage>} />
       <Route path="memory" element={<SubPage title="What the coach knows"><CoachMemory /></SubPage>} />
       <Route path="deleted" element={<SubPage title="Deleted activities"><DeletedActivities /></SubPage>} />
+      <Route path="reset" element={<SubPage title="Start over"><ResetPlanning /></SubPage>} />
       <Route path="*" element={<Navigate to="/me" replace />} />
     </Routes>
   )
@@ -112,6 +113,7 @@ function MeHome() {
           aside={review.data?.pending ? <span className="row-badge">{review.data.pending}</span> : undefined}
         />
         <Row to="/me/deleted" icon={<TrashIcon size={20} />} title="Deleted activities" sub="Bring back an activity you deleted" />
+        <Row to="/me/reset" icon={<RefreshIcon size={20} />} title="Start over" sub="Clear the plan, the gym days or the calendar and re-plan from today" />
       </RowGroup>
       <IllnessLauncher mode={illness ? 'recover' : 'start'} open={sheet === 'illness'} onClose={() => setSheet('')} />
       <ReviewLauncher open={sheet === 'review'} onClose={() => setSheet('')} />

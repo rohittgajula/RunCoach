@@ -1,28 +1,25 @@
 /**
- * The arc: what you have done and what the plan asks for, on one axis.
+ * The arc, as two charts rather than one.
  *
- * Two quantities are drawn and they do not share a scale.
+ * It was one chart: weekly running time as bars on a left axis, longest
+ * unbroken block as a line on a hidden right axis, past solid and future
+ * dashed, with a record line and a today line over the top. Every number on it
+ * was correct and nobody could read it — because both quantities are measured
+ * in minutes, so a 10-minute block and 10 minutes of running a week were drawn
+ * at the same height while meaning entirely different things, and the line had
+ * no visible axis to check it against.
  *
- *   Bars    weekly running time. Solid for weeks that have happened, hollow for
- *           weeks the plan has committed to. Walking is already out of these —
- *           they are time spent running, not time out of the house.
- *   Line    the longest unbroken run block in that week. Solid behind today,
- *           dashed ahead of it, because ahead of today it is a target rather
- *           than a fact.
+ * Hiding the second axis is what broke it. Two scales was the honest choice;
+ * drawing them on top of each other was not. So: two charts, one quantity
+ * each, both axes visible, each with a sentence saying what it is.
  *
- * The horizontal rule is the longest block on record. It sits above the recent
- * line on purpose: it is the shape of five weeks away from running, and hiding
- * it would make the last month look like progress rather than recovery.
- *
- * Today is a hard vertical divide. Everything left of it happened; everything
- * right of it is a plan. That is the one distinction the whole view exists to
- * make, so it is drawn as a line and not as a colour difference alone.
+ * The block chart goes first. It is the number this whole plan is built
+ * around, and weekly volume is the means rather than the end.
  */
 
-import { useId } from 'react'
 import {
-  Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer,
-  Tooltip, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, ComposedChart, Line, ReferenceLine,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { duration, dur, monthDay } from '../../lib/format'
 import type { ArcWeek } from '../../lib/types'
@@ -32,12 +29,10 @@ type Row = {
   label: string
   past: boolean
   current: boolean
-  /** Only one of these two is ever set, so the bars never stack. */
-  doneMin: number | null
-  planMin: number | null
   blockMin: number | null
   targetMin: number | null
-  best: number
+  doneMin: number | null
+  planMin: number | null
   week: ArcWeek
 }
 
@@ -49,129 +44,132 @@ const toRows = (weeks: ArcWeek[]): Row[] =>
       label: monthDay(w.start),
       past: w.past,
       current: w.current,
-      doneMin: settled && w.done.run_s ? Math.round(w.done.run_s / 60) : null,
-      planMin: !w.past && w.planned.run_s ? Math.round(w.planned.run_s / 60) : null,
       blockMin: settled && w.done.longest_run_s ? w.done.longest_run_s / 60 : null,
       targetMin: !w.past && w.planned.block_s ? w.planned.block_s / 60 : null,
-      best: w.best_run_s / 60,
+      doneMin: settled && w.done.run_s ? Math.round(w.done.run_s / 60) : null,
+      planMin: !w.past && w.planned.run_s ? Math.round(w.planned.run_s / 60) : null,
       week: w,
     }
   })
 
-function ArcTip({ active, payload }: { active?: boolean; payload?: { payload: Row }[] }) {
+/** m:ss from minutes — an axis that reads 6:30, not 6.5. */
+const clock = (min: number) => {
+  const total = Math.round(min * 60)
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+function BlockTip({ active, payload }: { active?: boolean; payload?: { payload: Row }[] }) {
   if (!active || !payload?.length) return null
   const { week } = payload[0].payload
-  const ran = week.done.run_s > 0
+  const held = week.done.longest_run_s
+  const target = week.planned.block_s
   return (
     <div className="arc-tip">
-      <p className="arc-tip-when">
-        {monthDay(week.start)} – {monthDay(week.end)}
-        {week.current ? ' · this week' : ''}
-      </p>
-      {ran && (
-        <p>
-          <b>{dur(week.done.run_s)}</b> running over {week.done.runs}{' '}
-          {week.done.runs === 1 ? 'run' : 'runs'}
-        </p>
-      )}
-      {ran && week.done.longest_run_s > 0 && (
-        <p>Longest block <b>{duration(week.done.longest_run_s)}</b></p>
-      )}
-      {!week.past && week.planned.run_s > 0 && (
-        <p>
-          Plan asks <b>{dur(week.planned.run_s)}</b> over {week.planned.runs}{' '}
-          {week.planned.runs === 1 ? 'run' : 'runs'}
-        </p>
-      )}
-      {!week.past && week.planned.block_s > 0 && (
-        <p>Target block <b>{duration(week.planned.block_s)}</b></p>
-      )}
-      {week.planned.gym > 0 && (
-        <p>{week.done.gym}/{week.planned.gym} gym {week.planned.gym === 1 ? 'day' : 'days'}</p>
-      )}
-      {week.missed > 0 && (
-        <p className="arc-tip-miss">
-          {week.missed} missed · lost, not owed
-        </p>
-      )}
+      <p className="arc-tip-when">week of {monthDay(week.start)}</p>
+      {held > 0 && <p>Held <b>{duration(held)}</b> without stopping</p>}
+      {!held && week.past && <p>Nothing recorded</p>}
+      {!week.past && target > 0 && <p>Plan asks for <b>{duration(target)}</b></p>}
     </div>
   )
 }
 
-export function ArcChart({ weeks, bestS }: { weeks: ArcWeek[]; bestS: number }) {
-  const id = useId()
+function VolumeTip({ active, payload }: { active?: boolean; payload?: { payload: Row }[] }) {
+  if (!active || !payload?.length) return null
+  const { week } = payload[0].payload
+  return (
+    <div className="arc-tip">
+      <p className="arc-tip-when">week of {monthDay(week.start)}</p>
+      {week.done.runs > 0 && (
+        <p><b>{dur(week.done.run_s)}</b> running over {week.done.runs}{' '}
+          {week.done.runs === 1 ? 'run' : 'runs'}</p>
+      )}
+      {week.past && !week.done.runs && <p>Nothing recorded</p>}
+      {!week.past && week.planned.runs > 0 && (
+        <p>Plan asks <b>{dur(week.planned.run_s)}</b> over {week.planned.runs}{' '}
+          {week.planned.runs === 1 ? 'run' : 'runs'}</p>
+      )}
+      {week.planned.gym > 0 && (
+        <p>{week.done.gym}/{week.planned.gym} gym {week.planned.gym === 1 ? 'day' : 'days'}</p>
+      )}
+      {week.missed > 0 && <p className="arc-tip-miss">{week.missed} missed</p>}
+    </div>
+  )
+}
+
+const AXIS = { fontSize: 10, fill: 'var(--muted)' } as const
+
+/** The longest unbroken run, week by week. One line, one axis, in m:ss. */
+export function BlockChart({ weeks, bestS }: { weeks: ArcWeek[]; bestS: number }) {
   const rows = toRows(weeks)
   if (rows.length < 2) return null
-
   const current = rows.find((r) => r.current)
   const bestMin = bestS / 60
 
-  // Both series are minutes, so one axis is honest — but the block line lives in
-  // single digits while weekly volume runs to forty, and a shared axis flattens
-  // the line to nothing. Hence a second axis, and hence the two colours being
-  // the only thing that ties a number to its scale.
   return (
-    <div className="arc-chart">
-      <ResponsiveContainer width="100%" height={236}>
-        {/* No negative left margin. It was pulling the volume axis off the
-            left edge, which clipped the digits and left every tick reading as a
-            bare "m" — an axis labelled with its unit and no numbers. */}
-        <ComposedChart data={rows} margin={{ top: 12, right: 8, bottom: 2, left: 0 }}>
-          <defs>
-            <pattern id={`${id}-plan`} width="5" height="5" patternTransform="rotate(45)"
-              patternUnits="userSpaceOnUse">
-              <line x1="0" y1="0" x2="0" y2="5" stroke="var(--arc-plan)" strokeWidth="2.4" />
-            </pattern>
-          </defs>
+    <figure className="arc-fig">
+      <figcaption className="arc-cap">
+        <b>Longest unbroken run</b>
+        <span>How long you can run without walking. Solid is what you did, dashed is what the plan asks for next.</span>
+      </figcaption>
+      <ResponsiveContainer width="100%" height={176}>
+        <ComposedChart data={rows} margin={{ top: 14, right: 10, bottom: 2, left: 0 }}>
           <CartesianGrid stroke="var(--line)" strokeDasharray="2 4" vertical={false} />
-          <XAxis
-            dataKey="label" tick={{ fontSize: 10, fill: 'var(--muted)' }}
-            axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={18}
-          />
-          <YAxis
-            yAxisId="vol" tick={{ fontSize: 10, fill: 'var(--muted)' }}
-            axisLine={false} tickLine={false} width={38}
-            tickFormatter={(v: number) => (v ? `${v}m` : '')}
-          />
-          <YAxis yAxisId="block" orientation="right" hide />
-          <Tooltip content={<ArcTip />} cursor={{ fill: 'var(--arc-cursor)' }} />
+          <XAxis dataKey="label" tick={AXIS} axisLine={false} tickLine={false}
+            interval="preserveStartEnd" minTickGap={22} />
+          <YAxis tick={AXIS} axisLine={false} tickLine={false} width={44}
+            tickFormatter={(v: number) => (v ? clock(v) : '')} />
+          <Tooltip content={<BlockTip />} cursor={{ stroke: 'var(--line-2, var(--line))' }} />
 
           {bestMin > 0 && (
-            <ReferenceLine
-              yAxisId="block" y={bestMin} stroke="var(--arc-best)" strokeDasharray="4 4"
-              label={{
-                value: `best ${duration(bestS)}`, position: 'insideBottomRight',
-                fill: 'var(--arc-best)', fontSize: 10, offset: 5,
-              }}
-            />
+            <ReferenceLine y={bestMin} stroke="var(--arc-best)" strokeDasharray="4 4"
+              label={{ value: `best ${duration(bestS)}`, position: 'insideBottomRight',
+                fill: 'var(--arc-best)', fontSize: 10, offset: 5 }} />
           )}
           {current && (
-            <ReferenceLine
-              yAxisId="vol" x={current.label} stroke="var(--fg)" strokeWidth={1.5}
-              label={{ value: 'today', position: 'insideTop', fill: 'var(--fg)', fontSize: 10 }}
-            />
+            <ReferenceLine x={current.label} stroke="var(--fg)" strokeWidth={1.5}
+              label={{ value: 'today', position: 'insideTop', fill: 'var(--fg)', fontSize: 10 }} />
           )}
 
-          <Bar yAxisId="vol" dataKey="doneMin" name="Ran" fill="var(--arc-done)"
-            radius={[3, 3, 0, 0]} maxBarSize={22} />
-          <Bar yAxisId="vol" dataKey="planMin" name="Planned" fill={`url(#${id}-plan)`}
-            stroke="var(--arc-plan)" strokeWidth={1} radius={[3, 3, 0, 0]} maxBarSize={22} />
-
-          <Line yAxisId="block" type="monotone" dataKey="blockMin" name="Longest block"
-            stroke="var(--arc-block)" strokeWidth={2.4} dot={{ r: 2.6, strokeWidth: 0 }}
-            activeDot={{ r: 4 }} connectNulls={false} />
-          <Line yAxisId="block" type="monotone" dataKey="targetMin" name="Target block"
-            stroke="var(--arc-block)" strokeWidth={2} strokeDasharray="4 4"
-            dot={false} connectNulls />
+          <Line type="monotone" dataKey="blockMin" name="Held" stroke="var(--arc-block)"
+            strokeWidth={2.6} dot={{ r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }}
+            connectNulls={false} />
+          <Line type="monotone" dataKey="targetMin" name="Target" stroke="var(--arc-block)"
+            strokeWidth={2} strokeDasharray="4 4" dot={false} connectNulls />
         </ComposedChart>
       </ResponsiveContainer>
+    </figure>
+  )
+}
 
-      <ul className="arc-key">
-        <li><i className="arc-sw arc-sw-done" />Ran</li>
-        <li><i className="arc-sw arc-sw-plan" />Planned</li>
-        <li><i className="arc-sw arc-sw-block" />Longest block</li>
-        <li><i className="arc-sw arc-sw-target" />Target block</li>
-      </ul>
-    </div>
+/** Time spent running each week. Bars only — nothing shares this axis. */
+export function VolumeChart({ weeks }: { weeks: ArcWeek[] }) {
+  const rows = toRows(weeks)
+  if (rows.length < 2) return null
+  const current = rows.find((r) => r.current)
+
+  return (
+    <figure className="arc-fig">
+      <figcaption className="arc-cap">
+        <b>Running time a week</b>
+        <span>Minutes actually spent running, walking taken out. Solid bars happened; outlined bars are planned.</span>
+      </figcaption>
+      <ResponsiveContainer width="100%" height={158}>
+        <BarChart data={rows} margin={{ top: 10, right: 10, bottom: 2, left: 0 }}>
+          <CartesianGrid stroke="var(--line)" strokeDasharray="2 4" vertical={false} />
+          <XAxis dataKey="label" tick={AXIS} axisLine={false} tickLine={false}
+            interval="preserveStartEnd" minTickGap={22} />
+          <YAxis tick={AXIS} axisLine={false} tickLine={false} width={34}
+            tickFormatter={(v: number) => (v ? String(v) : '')} />
+          <Tooltip content={<VolumeTip />} cursor={{ fill: 'var(--arc-cursor)' }} />
+          {current && (
+            <ReferenceLine x={current.label} stroke="var(--fg)" strokeWidth={1.5}
+              label={{ value: 'today', position: 'insideTop', fill: 'var(--fg)', fontSize: 10 }} />
+          )}
+          <Bar dataKey="doneMin" name="Ran" fill="var(--arc-done)" radius={[3, 3, 0, 0]} maxBarSize={20} />
+          <Bar dataKey="planMin" name="Planned" fill="transparent" stroke="var(--arc-plan)"
+            strokeWidth={1.4} radius={[3, 3, 0, 0]} maxBarSize={20} />
+        </BarChart>
+      </ResponsiveContainer>
+    </figure>
   )
 }

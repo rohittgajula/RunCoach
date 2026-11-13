@@ -17,6 +17,7 @@ import { BestsList } from './BestsList'
 import { BucketTable } from './BucketTable'
 import { ProgressChart } from './ProgressChart'
 import { ProgressFocus } from './ProgressFocus'
+import { NiggleHistory } from '../health/NiggleHistory'
 import { ProgressReviewCard } from './ProgressReviewCard'
 import { FormTrendsCard, RecordsCard } from './RecordsAndForm'
 import { bestsList, daySpan, periodText, windowText } from './progressUtil'
@@ -156,6 +157,7 @@ export function ProgressSection() {
             </section>
           )}
           <RecordsCard />
+          <NiggleHistory />
           <FormTrendsCard />
           <section className="card">
             <ProgressReviewCard key={progressParams(query)} review={data.review} query={query} />

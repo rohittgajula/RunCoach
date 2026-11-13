@@ -21,9 +21,6 @@
 import { InfoButton } from '../health/InfoButton'
 import type { Draft, SetDraft } from './settingsDraft'
 
-const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
-const FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-
 const EQUIPMENT: { value: string; label: string; hint: string }[] = [
   { value: 'bodyweight', label: 'Bodyweight', hint: 'A wall, a chair and a sturdy table' },
   { value: 'dumbbells', label: 'Dumbbells', hint: 'Adds goblet squats, rows and RDLs' },
@@ -31,60 +28,10 @@ const EQUIPMENT: { value: string; label: string; hint: string }[] = [
 ]
 
 export function GymDays({ draft, set }: { draft: Draft; set: SetDraft }) {
-  const days = draft.gym_days ?? {}
-  const picked = Object.values(days).filter(Boolean).length
   const off = draft.strength_per_week === 0
-
-  const toggle = (index: number) =>
-    set('gym_days', { ...days, [String(index)]: !days[String(index)] })
 
   return (
     <div className="stack gym-days">
-      <div className="row">
-        <strong>Gym days</strong>
-        <InfoButton title="Gym days">
-          <p>
-            Tick the days you can actually get to a gym. Leave them all unticked
-            and the plan picks for you, spreading the sessions around your runs.
-          </p>
-          <p>
-            A day you tick is still skipped when it falls the evening before your
-            long run — heavy legs the night before is how a long run falls apart
-            in the first ten minutes. That is the one case where the plan
-            overrules you, and it loses to your own next run.
-          </p>
-        </InfoButton>
-      </div>
-
-      <div className="gym-row" role="group" aria-label="Gym days">
-        {DAYS.map((label, index) => {
-          const on = !!days[String(index)]
-          return (
-            <button
-              key={index}
-              type="button"
-              className={`gym-day ${on ? 'is-on' : ''}`}
-              aria-pressed={on}
-              aria-label={FULL[index]}
-              onClick={() => toggle(index)}
-              disabled={off}
-            >
-              {label}
-            </button>
-          )
-        })}
-      </div>
-
-      <p className="muted small">
-        {off
-          ? 'Set strength sessions per week above 0 to choose days.'
-          : picked === 0
-            ? 'None picked — the plan will place them around your runs.'
-            : picked < draft.strength_per_week
-              ? `${picked} day${picked === 1 ? '' : 's'} picked for ${draft.strength_per_week} sessions. Some weeks will have fewer.`
-              : `${picked} day${picked === 1 ? '' : 's'} to choose from.`}
-      </p>
-
       <div className="row" style={{ marginTop: 4 }}>
         <strong>What you have</strong>
         <InfoButton title="Equipment">

@@ -19,12 +19,29 @@ export const setAccessToken = (token: string | null) => {
   accessToken = token
 }
 
+/** The parsed error body, if DRF sent its usual `{"detail": "..."}`. */
+function messageOf(detail: unknown): string {
+  if (typeof detail === 'string') return detail
+  if (detail && typeof detail === 'object') {
+    const inner = (detail as { detail?: unknown }).detail
+    if (typeof inner === 'string') return inner
+    // DRF also raises ValidationError with a bare list.
+    if (Array.isArray(inner) && typeof inner[0] === 'string') return inner[0]
+  }
+  return 'Request failed'
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly detail: unknown,
   ) {
-    super(typeof detail === 'string' ? detail : 'Request failed')
+    // `detail` is the parsed body, and DRF's standard error shape is the
+    // OBJECT {"detail": "..."} — so the old `typeof detail === 'string'` test
+    // was false for almost every real error the server sends, and every
+    // carefully written explanation in the backend surfaced as the words
+    // "Request failed".
+    super(messageOf(detail))
   }
 
   /** Flattens DRF's {field: [messages]} into something a form can show. */

@@ -13,7 +13,7 @@
 import { duration, dur, monthDay } from '../../lib/format'
 import { Loading } from '../States'
 import type { ArcWeek, TrainingArc } from '../../lib/types'
-import { ArcChart } from './ArcChart'
+import { BlockChart, VolumeChart } from './ArcChart'
 import { ArcProgress } from './ArcProgress'
 
 const pct = (value: number, of: number) => (of > 0 ? Math.min(100, (value / of) * 100) : 0)
@@ -58,6 +58,78 @@ function Standing({ arc }: { arc: TrainingArc }) {
           getting it back rather than pushing past it.
         </p>
       )}
+    </section>
+  )
+}
+
+/** The last four finished weeks, against the four before them.
+ *
+ *  Four because it is long enough that one missed Tuesday does not swing it and
+ *  short enough to still be about now. Every figure is running only — the
+ *  walking is already out, which is why these numbers are lower than the
+ *  watch's and why they are the ones worth comparing. */
+function Totals({ weeks }: { weeks: ArcWeek[] }) {
+  const settled = weeks.filter((w) => w.past || w.current)
+  if (settled.length < 2) return null
+  const recent = settled.slice(-4)
+  const before = settled.slice(-8, -4)
+
+  const sum = (rows: ArcWeek[], pick: (w: ArcWeek) => number) =>
+    rows.reduce((total, w) => total + pick(w), 0)
+
+  const stats = [
+    {
+      key: 'distance',
+      label: 'Distance run',
+      value: `${(sum(recent, (w) => w.done.run_m) / 1000).toFixed(1)} km`,
+      prev: before.length ? sum(before, (w) => w.done.run_m) : null,
+      now: sum(recent, (w) => w.done.run_m),
+    },
+    {
+      key: 'time',
+      label: 'Time running',
+      value: dur(sum(recent, (w) => w.done.run_s)),
+      prev: before.length ? sum(before, (w) => w.done.run_s) : null,
+      now: sum(recent, (w) => w.done.run_s),
+    },
+    {
+      key: 'runs',
+      label: 'Runs',
+      value: String(sum(recent, (w) => w.done.runs)),
+      prev: before.length ? sum(before, (w) => w.done.runs) : null,
+      now: sum(recent, (w) => w.done.runs),
+    },
+    {
+      key: 'gym',
+      label: 'Gym sessions',
+      value: String(sum(recent, (w) => w.done.gym)),
+      prev: before.length ? sum(before, (w) => w.done.gym) : null,
+      now: sum(recent, (w) => w.done.gym),
+    },
+  ]
+
+  return (
+    <section className="card arc-card">
+      <h2 className="arc-h">Last four weeks</h2>
+      <div className="arc-tiles">
+        {stats.map((s) => {
+          const delta = s.prev != null && s.prev > 0
+            ? Math.round(((s.now - s.prev) / s.prev) * 100)
+            : null
+          return (
+            <div className="arc-tile" key={s.key}>
+              <span className="arc-tile-label">{s.label}</span>
+              <span className="arc-tile-value num">{s.value}</span>
+              {delta != null && delta !== 0 && (
+                <span className={`arc-tile-delta ${delta > 0 ? 'is-up' : 'is-down'}`}>
+                  {delta > 0 ? '+' : ''}{delta}% vs the four before
+                </span>
+              )}
+              {delta === 0 && <span className="arc-tile-delta">level</span>}
+            </div>
+          )
+        })}
+      </div>
     </section>
   )
 }
@@ -140,9 +212,14 @@ export function ArcView({
     <div className="arc">
       <Standing arc={arc} />
 
+      <Totals weeks={arc.weeks} />
+
       <section className="card arc-card">
-        <h2 className="arc-h">The whole arc</h2>
-        <ArcChart weeks={arc.weeks} bestS={best} />
+        <BlockChart weeks={arc.weeks} bestS={best} />
+      </section>
+
+      <section className="card arc-card">
+        <VolumeChart weeks={arc.weeks} />
         {arc.notes.length > 0 && (
           <ul className="arc-notes">
             {arc.notes.map((note) => <li key={note}>{note}</li>)}

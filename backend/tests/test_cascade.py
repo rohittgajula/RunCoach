@@ -139,3 +139,46 @@ def test_nothing_changed_says_nothing():
     result = rebuild(weeks, achieved_run_s=1800, from_index=0)
     assert not result.anything
     assert describe(result, weeks) == []
+
+
+# --- coming back from nothing ------------------------------------------------
+
+
+def test_a_fully_missed_week_does_not_flatten_the_rest_of_the_plan():
+    """The bug this guards is silent and total.
+
+    `target = carried * growth` with `carried == 0` is 0, and stays 0 for every
+    remaining week. One week of illness — the single most likely reason to run
+    a cascade at all — turned the next three months into warm-ups, and the plan
+    never recovered because nothing in the ramp could leave zero.
+    """
+    weeks = plan([1800, 1980, 2180, 2400, 2600, 2800])
+    result = rebuild(weeks, achieved_run_s=0, from_index=1)
+    after = [w.planned_run_s for w in result.weeks]
+
+    assert after[1] == 0, "the week that was missed is still what it was"
+    assert all(s > 0 for s in after[2:]), "but the plan comes back"
+    assert after[2] < weeks[2].planned_run_s, "comes back easier than it was"
+    assert after[3] > after[2], "and climbs from there"
+
+
+def test_coming_back_never_exceeds_what_the_week_already_asked():
+    weeks = plan([1800, 1980, 2180, 2400, 2600])
+    result = rebuild(weeks, achieved_run_s=0, from_index=1)
+    for original, rebuilt in zip(weeks, result.weeks):
+        assert rebuilt.planned_run_s <= original.planned_run_s
+
+
+def test_the_weekly_cap_still_holds_on_the_way_back():
+    """Coming back faster is not the fix.
+
+    An additive floor to speed the climb off a small week was tried and taken
+    out: at the bottom of the range it is a twenty per cent week, and the ten
+    per cent cap is an injury rule rather than a tuning knob. Slow is correct.
+    """
+    weeks = plan([1800, 1980, 2180, 2400, 2600])
+    result = rebuild(weeks, achieved_run_s=900, from_index=1)
+    after = [w.planned_run_s for w in result.weeks]
+    for before_s, next_s in zip(after[1:], after[2:]):
+        if before_s:
+            assert next_s <= before_s * 1.1 + 1

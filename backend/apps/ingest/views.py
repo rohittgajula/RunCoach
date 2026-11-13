@@ -98,6 +98,14 @@ def garmin_sync_view(request):
     # R16 §C: the app's auto-sync. Never calls Garmin when it shouldn't; always 200.
     auto = data.get("auto") is True or str(data.get("auto")).lower() in ("1", "true")
     full = data.get("full") is True or str(data.get("full")).lower() in ("1", "true")
+    # R18: re-fetch the whole history rather than stopping at the first activity
+    # already stored. `sync_athlete` only reaches back HISTORY_MONTHS while
+    # `backfill` is true, and that is `not garmin_backfilled or not known` — so
+    # on an account that has synced once, nothing short of clearing the flag
+    # will look past the newest run it already holds. That is exactly the case
+    # after a spell disconnected: the gap is in the middle, not at the end.
+    rebackfill = (data.get("rebackfill") is True
+                  or str(data.get("rebackfill")).lower() in ("1", "true"))
     if auto:
         reason = auto_skip_reason(athlete)
         if reason:
@@ -110,8 +118,8 @@ def garmin_sync_view(request):
         job, deduped = start(athlete, "run_check" if mode == "run_check" else "auto")
         return Response({"job_id": job.get("id"), "deduped": deduped, "mode": mode,
                          "status": status_json(athlete)})
-    if full:
-        return _full_sync(athlete)
+    if full or rebackfill:
+        return _full_sync(athlete, rebackfill=rebackfill)
 
     try:
         with sync_lock(athlete):
@@ -135,8 +143,20 @@ def garmin_sync_view(request):
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-def _full_sync(athlete):
-    """R18 §A: POST /garmin/sync/ {full: true} → 202 {job_id, deduped, mode, status}."""
+def _full_sync(athlete, *, rebackfill: bool = False):
+    """R18 §A: POST /garmin/sync/ {full: true} → 202 {job_id, deduped, mode, status}.
+
+    With {rebackfill: true} the backfill flag is cleared first, so the listing
+    runs back a full HISTORY_MONTHS instead of stopping at the newest activity
+    already stored.
+
+    What this does and does not do is worth being exact about. Activities are
+    idempotent on their Garmin id, so this *fills gaps* — weeks when the
+    account was disconnected — and never re-downloads a run already held. A run
+    stored without its per-second records stays that way; repairing one means
+    deleting it here and re-importing it, which is a different operation with a
+    different button.
+    """
     from .sync_jobs import active_job_id, start
     from .sync_status import is_running, status_json
     from .tasks import garmin_blocked
@@ -150,6 +170,9 @@ def _full_sync(athlete):
                         status=status.HTTP_429_TOO_MANY_REQUESTS)
     if is_running(athlete) and not active_job_id(athlete.pk):
         return Response({"detail": "A sync is already running."}, status=status.HTTP_409_CONFLICT)
+    if rebackfill and athlete.garmin_backfilled:
+        athlete.garmin_backfilled = False
+        athlete.save(update_fields=["garmin_backfilled"])
     job, deduped = start(athlete, "full")
     return Response({"job_id": job.get("id"), "deduped": deduped, "mode": "full",
                      "status": status_json(athlete)}, status=status.HTTP_202_ACCEPTED)

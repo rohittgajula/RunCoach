@@ -21,6 +21,8 @@ import { ErrorState, Loading } from '../components/States'
 import { ExerciseFigure } from '../components/gym/ExerciseFigure'
 import { ExerciseSheet } from '../components/gym/ExerciseSheet'
 import { GymWatchButton } from '../components/gym/GymWatchButton'
+import { GymStats } from '../components/gym/GymStats'
+import { GymTimer } from '../components/gym/GymTimer'
 import { FormFigure } from '../components/gym/FormFigure'
 import { ChevronDown } from '../components/Icons'
 
@@ -264,6 +266,7 @@ export default function Gym() {
   // only one can be open at a time, and so closing it cannot leave a card
   // stuck mid-state.
   const [open, setOpen] = useState<Exercise | null>(null)
+  const [timing, setTiming] = useState(false)
 
   if (query.isPending) return <Loading />
   if (query.isError || !query.data) {
@@ -360,6 +363,18 @@ export default function Gym() {
                 </ul>
               </div>
 
+              {timing ? (
+                <GymTimer exercises={main} onClose={() => setTiming(false)} />
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-grow gym-start"
+                  onClick={() => setTiming(true)}
+                >
+                  Start session
+                </button>
+              )}
+
               <GymWatchButton session={next} canSend={canSend} today={today} />
 
               <SessionReview sessionId={next.id} patterns={main.map((e) => e.key)} />
@@ -375,6 +390,13 @@ export default function Gym() {
           )}
         </>
       )}
+
+      {/* Ceilings come from the exercises, which carry the equipment cap —
+          `ladders[].max_level` is how long the ladder is, which is a different
+          number and made a bodyweight squat read as 1 of 5 rather than 1 of 2. */}
+      <GymStats
+        ceilings={Object.fromEntries(main.map((e) => [e.key, e.ceiling]))}
+      />
 
       <ExerciseSheet exercise={open} onClose={() => setOpen(null)} />
 

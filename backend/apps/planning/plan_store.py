@@ -487,8 +487,17 @@ def rebuild_active_plan(athlete: Athlete) -> TrainingPlan:
     )
     if active is None:
         raise PlanError("There is no active plan to rebuild.")
-    if active.race is None or active.race.date <= athlete.local_today:
-        raise PlanError("The active plan's race has passed — ask the coach for a new plan.")
+    # A practice plan has no race and never had one, so "the race has passed"
+    # was both wrong and a dead end: an athlete working toward an unbroken
+    # block could not rebuild at all, which is exactly who most needs to after
+    # time off. Rebuild it the way it was made.
+    if active.race is None:
+        return accept_plan(propose_practice_plan(athlete))
+    if active.race.date <= athlete.local_today:
+        raise PlanError(
+            "That plan's race has already happened. Ask the coach for a new one, "
+            "or enter the next race first."
+        )
     race = active.race
     proposal = propose_plan(
         athlete, race_name=race.name, race_date=race.date,
@@ -709,7 +718,20 @@ def propose_practice_plan(
     baseline = _practice_baseline(athlete, available_days, long_run_day)
 
     generated = generate_practice(start, baseline, config_from_settings(), weeks=horizon)
-    milestone = milestone_for(baseline.longest_run_s, baseline.run_pace_s_per_km)
+    # Named for the next rung above what has EVER been held, not the rung the
+    # athlete is standing on today.
+    #
+    # The generator deliberately starts from `longest_run_s` — today's block —
+    # because the volume ceiling derives from it and the plan climbs through
+    # several rungs inside the horizon. That is the right input for the maths
+    # and the wrong one for the title: after time off, today's block is below
+    # a rung already cleared, so the plan ended up named for a milestone the
+    # athlete had already passed. `milestone_for` exists to refuse exactly
+    # that, and the Arc's goal card already reads the all-time figure — so the
+    # two disagreed on screen about what the plan was for.
+    milestone = milestone_for(
+        baseline.demonstrated_longest_s, baseline.run_pace_s_per_km,
+    )
 
     plan = TrainingPlan.objects.create(
         athlete=athlete,

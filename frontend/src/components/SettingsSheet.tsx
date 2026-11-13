@@ -8,7 +8,6 @@ import { installState, promptInstall, type InstallState } from '../lib/install'
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme'
 import { BottomSheet } from './BottomSheet'
 import { ChevronDown } from './Icons'
-import { DayPicker } from './DayPicker'
 import { Field } from './Field'
 import { WeatherSwapSetting } from './weather/WeatherSwapChip'
 import { GarminConnect } from './GarminConnect'
@@ -17,6 +16,7 @@ import { LocationSettings } from './settings/LocationSettings'
 import { RunsPerWeek } from './settings/RunsPerWeek'
 import { TrainingExtras } from './settings/TrainingExtras'
 import { GymDays } from './settings/GymDays'
+import { TrainingDays } from './settings/TrainingDays'
 import { reflowText, toDraft, toPatch, type Draft } from './settings/settingsDraft'
 
 function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
@@ -178,8 +178,13 @@ export function SettingsSheet({ open, onClose, focus }: { open: boolean; onClose
   const hasErrors = Object.keys(errors).length > 0
   const dirty = !!athlete && JSON.stringify(draft) !== JSON.stringify(toDraft(athlete))
 
+  // Functional, not `{ ...draft }`. Spreading the captured draft meant two
+  // `set` calls in one handler both built from the same stale object and the
+  // second silently threw the first away — which is invisible until a control
+  // needs to change more than one field at a time, as the training-day picker
+  // does (a day is a run day *and* not a gym day, in one tap).
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
-    setDraft({ ...draft, [key]: value })
+    setDraft((current) => (current ? { ...current, [key]: value } : current))
     setSaved(false)
   }
 
@@ -283,16 +288,7 @@ export function SettingsSheet({ open, onClose, focus }: { open: boolean; onClose
         </Section>
 
         <Section title="Training days" sub="Run days, gym days, long run, and how many of each" forceOpen={hasErrors}>
-          <DayPicker
-            value={draft.available_days}
-            onChange={(next) => set('available_days', next)}
-            longRunDay={draft.long_run_day}
-            onLongRunDayChange={(day) => set('long_run_day', day)}
-          />
-          <p className="muted small">
-            Tick every day you <em>could</em> run. The plan spreads your runs across them with rest
-            between, and makes the others optional walks.
-          </p>
+          <TrainingDays draft={draft} set={set} />
           {errors.available_days && <p className="field-error">{errors.available_days}</p>}
           {errors.long_run_day && <p className="field-error">{errors.long_run_day}</p>}
           {athlete && <RunsPerWeek draft={draft} set={set} athlete={athlete} error={errors.runs_per_week} />}
