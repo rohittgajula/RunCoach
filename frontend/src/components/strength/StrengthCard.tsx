@@ -14,6 +14,7 @@ export function StrengthCard({ session, compact = false }: { session: Strength; 
     <>
       <article
         className={`card cal-card strength-card is-tappable ${s.status === 'skipped' ? 'is-skipped' : ''} ${compact ? 'is-compact' : ''}`}
+        data-day-type={s.status === 'completed' ? 'done' : 'gym'}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}

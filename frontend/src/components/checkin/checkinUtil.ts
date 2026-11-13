@@ -8,6 +8,9 @@ export const VERDICT: Record<Verdict, { word: string; tone: string }> = {
   swap: { word: 'Swap', tone: 'swap' },
   rest: { word: 'Rest', tone: 'rest' },
   no_plan: { word: 'Rest day', tone: 'none' },
+  // Its own pill, in the gym colour the calendar uses. Folding it into no_plan
+  // is what put "Rest day" above a forty-minute session.
+  gym: { word: 'Gym day', tone: 'gym' },
 }
 
 const SIGNAL_NAME: Record<string, string> = {

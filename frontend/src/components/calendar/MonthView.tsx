@@ -6,7 +6,7 @@ import type { ActivityCard, CalDay, MonthDay, Workout } from '../../lib/types'
 import { ChevronLeft, ChevronRight } from '../Icons'
 import { ErrorState } from '../States'
 import { DaySheet } from './DaySheet'
-import { LEGEND, STATUS_TEXT, monthCells, monthLabel, monthOf, shiftMonth } from './monthUtil'
+import { STATUS_TEXT, monthCells, monthLabel, monthOf, shiftMonth } from './monthUtil'
 
 const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
@@ -19,6 +19,43 @@ const KIND_SHORT: Record<string, string> = {
 }
 
 const mins = (seconds: number) => `${Math.max(1, Math.round(seconds / 60))}m`
+
+/** The six things a day can be. The cell is coloured and glyphed by this and
+ *  nothing else, so a gym day and a run day can never again differ only by a
+ *  word printed in the same colour. */
+type DayType = 'done' | 'run' | 'long' | 'gym' | 'race' | 'rest'
+
+const RUN_KINDS = new Set(['EASY', 'LONG', 'RUN_WALK', 'INTERVALS', 'TEMPO', 'RACE'])
+
+/** 14px glyphs. Inline rather than imported so the cell owns its own sizing —
+ *  the shared icons are built for the 24px tab bar and turn to mush at this
+ *  size. */
+function Glyph({ type }: { type: DayType }) {
+  if (type === 'gym') {
+    return (
+      <svg className="month-glyph" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3.6 9.4v5.2M6.8 7.2v9.6M17.2 7.2v9.6M20.4 9.4v5.2M6.8 12h10.4"
+          fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (type === 'done') {
+    return (
+      <svg className="month-glyph" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4.5 12.6 9.4 17.4 19.5 6.9" fill="none" stroke="currentColor"
+          strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  }
+  if (type === 'rest') return null
+  return (
+    <svg className="month-glyph" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="14.6" cy="4.3" r="2.15" fill="currentColor" />
+      <path d="M12.7 8.2 9.2 10.4l-1.5 4M12.7 8.2l3.2 1.3 1.1 3 2.6 1.1M12.7 8.2l-1.1 5 3 2.6-.7 5.2M11.6 13.2l-3.5 2.9-3.1-.4"
+        fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 
 /**
  * The two lines under the date.
@@ -33,19 +70,27 @@ const mins = (seconds: number) => `${Math.max(1, Math.round(seconds / 60))}m`
  * ahead the duration is the fact worth seeing, because that is what you have to
  * find time for.
  */
-function cellLines(cell: MonthDay): { kind: string; value: string; gymOnly?: boolean } | null {
+function cellLines(
+  cell: MonthDay,
+): { kind: string; value: string; type: DayType; gymOnly?: boolean } | null {
   const done = cell.activities.find((a) => RUN_SPORTS.has(a.sport)) ?? cell.activities[0]
   if (done) {
     const km = (done.distance_m ?? 0) / 1000
     return {
       kind: cell.planned ? (KIND_SHORT[cell.planned.kind] ?? 'Run') : 'Run',
       value: km >= 0.1 ? `${km.toFixed(km < 10 ? 1 : 0)}k` : mins(done.duration_s),
+      type: 'done',
     }
   }
   if (cell.planned) {
+    const kind = cell.planned.kind
     return {
-      kind: KIND_SHORT[cell.planned.kind] ?? cell.planned.kind.toLowerCase(),
+      kind: KIND_SHORT[kind] ?? kind.toLowerCase(),
       value: mins(cell.planned.duration_s),
+      type: kind === 'RACE' ? 'race'
+        : kind === 'LONG' ? 'long'
+        : RUN_KINDS.has(kind) ? 'run'
+        : 'gym',
     }
   }
   // A gym day with no run on it was falling through to the generic status dot,
@@ -56,6 +101,7 @@ function cellLines(cell: MonthDay): { kind: string; value: string; gymOnly?: boo
     return {
       kind: 'Gym',
       value: cell.strength.duration_s ? mins(cell.strength.duration_s) : '·',
+      type: 'gym',
       gymOnly: true,
     }
   }
@@ -123,7 +169,11 @@ export function MonthView({ today, ...handlers }: { today: string } & Handlers) 
         {DOW.map((d, i) => <span key={i} className="month-dow">{d}</span>)}
         {cells.map((cell, i) => {
           if (!cell) return <span key={`x${i}`} className="month-cell is-blank" />
-          const tappable = !!cell.planned || cell.activities.length > 0
+          // A gym day has neither a planned run nor an activity, so it was
+          // falling through to `disabled` — the one kind of day you could see
+          // on the grid and not open. The day endpoint has always returned the
+          // strength session; nothing could ask it for one.
+          const tappable = !!cell.planned || !!cell.strength || cell.activities.length > 0
           const status = cell.status === 'today' ? (cell.planned ? 'planned' : null) : cell.status
           const lines = cellLines(cell)
           const label = [
@@ -135,22 +185,25 @@ export function MonthView({ today, ...handlers }: { today: string } & Handlers) 
             <button
               key={cell.date}
               type="button"
-              className={`month-cell ${cell.date === now ? 'is-today' : ''} ${cell.date < now ? 'is-past' : ''} ${loadingDate === cell.date ? 'is-loading' : ''} ${cell.planned?.kind === 'RACE' ? 'is-race' : ''}`}
+              className={`month-cell ${cell.date === now ? 'is-today' : ''} ${cell.date < now ? 'is-past' : ''} ${loadingDate === cell.date ? 'is-loading' : ''}`}
+              data-type={lines?.type ?? undefined}
               disabled={!tappable}
               aria-label={label}
               onClick={() => open(cell)}
             >
               <span className="month-num">{parseDate(cell.date).getDate()}</span>
               {lines ? (
-                <span className={`month-lines ${lines.gymOnly ? 'is-gym' : ''}`}>
-                  <span className="month-kind">{lines.kind}</span>
-                  <span className="month-value">{lines.value}</span>
-                </span>
+                <>
+                  <Glyph type={lines.type} />
+                  <span className="month-lines">
+                    <span className="month-value">{lines.value}</span>
+                  </span>
+                </>
               ) : (
                 <span className={`month-mark ${status && status !== 'rest' ? `is-${status}` : ''}`} />
               )}
               {cell.strength && !lines?.gymOnly && (
-                <span className="month-gym" title="Also a strength session">Gym</span>
+                <span className="month-also" title="Also a strength session" aria-hidden="true" />
               )}
             </button>
           )
@@ -160,10 +213,14 @@ export function MonthView({ today, ...handlers }: { today: string } & Handlers) 
       {query.isError && !query.data && <ErrorState message={errorText(query.error, 'The month did not load.')} onRetry={() => query.refetch()} />}
       {tapError && <p className="bad small centered-text">{tapError}</p>}
 
+      {/* The legend names what the cells now are. It used to describe five
+          status dots that the typed cells replaced, so it was explaining a
+          thing no longer on screen. */}
       <div className="month-legend">
-        {LEGEND.map(({ status, label }) => (
-          <span key={status}><i className={`month-mark is-${status}`} /> {label}</span>
-        ))}
+        <span><i className="month-key" data-type="run" /> Run</span>
+        <span><i className="month-key" data-type="long" /> Long run</span>
+        <span><i className="month-key" data-type="gym" /> Gym</span>
+        <span><i className="month-key" data-type="done" /> Done</span>
       </div>
 
       {totals && (

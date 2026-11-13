@@ -14,6 +14,7 @@ import { duration, dur, monthDay } from '../../lib/format'
 import { Loading } from '../States'
 import type { ArcWeek, TrainingArc } from '../../lib/types'
 import { ArcChart } from './ArcChart'
+import { ArcProgress } from './ArcProgress'
 
 const pct = (value: number, of: number) => (of > 0 ? Math.min(100, (value / of) * 100) : 0)
 
@@ -148,6 +149,8 @@ export function ArcView({
           </ul>
         )}
       </section>
+
+      <ArcProgress />
 
       <section className="card arc-card">
         <h2 className="arc-h">Ahead</h2>

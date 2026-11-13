@@ -113,7 +113,10 @@ export function ArcChart({ weeks, bestS }: { weeks: ArcWeek[]; bestS: number }) 
   return (
     <div className="arc-chart">
       <ResponsiveContainer width="100%" height={236}>
-        <ComposedChart data={rows} margin={{ top: 10, right: 8, bottom: 2, left: -18 }}>
+        {/* No negative left margin. It was pulling the volume axis off the
+            left edge, which clipped the digits and left every tick reading as a
+            bare "m" — an axis labelled with its unit and no numbers. */}
+        <ComposedChart data={rows} margin={{ top: 12, right: 8, bottom: 2, left: 0 }}>
           <defs>
             <pattern id={`${id}-plan`} width="5" height="5" patternTransform="rotate(45)"
               patternUnits="userSpaceOnUse">
@@ -127,8 +130,8 @@ export function ArcChart({ weeks, bestS }: { weeks: ArcWeek[]; bestS: number }) 
           />
           <YAxis
             yAxisId="vol" tick={{ fontSize: 10, fill: 'var(--muted)' }}
-            axisLine={false} tickLine={false} width={34}
-            tickFormatter={(v: number) => `${v}m`}
+            axisLine={false} tickLine={false} width={38}
+            tickFormatter={(v: number) => (v ? `${v}m` : '')}
           />
           <YAxis yAxisId="block" orientation="right" hide />
           <Tooltip content={<ArcTip />} cursor={{ fill: 'var(--arc-cursor)' }} />
@@ -137,8 +140,8 @@ export function ArcChart({ weeks, bestS }: { weeks: ArcWeek[]; bestS: number }) 
             <ReferenceLine
               yAxisId="block" y={bestMin} stroke="var(--arc-best)" strokeDasharray="4 4"
               label={{
-                value: `best ${duration(bestS)}`, position: 'insideTopRight',
-                fill: 'var(--arc-best)', fontSize: 10, offset: 6,
+                value: `best ${duration(bestS)}`, position: 'insideBottomRight',
+                fill: 'var(--arc-best)', fontSize: 10, offset: 5,
               }}
             />
           )}

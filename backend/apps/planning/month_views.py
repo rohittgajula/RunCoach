@@ -87,7 +87,10 @@ def calendar_month(request):
     strength = {}
     for session in sessions_between(athlete, first, last):
         strength.setdefault(session.date, {"id": session.pk, "title": session.title,
-                                           "status": session.status})
+                                           "status": session.status,
+                                           # Without this the cell can only draw a
+                                           # dot: it has no length to print.
+                                           "duration_s": session.duration_s})
     by_day_workout: dict[dt.date, PlannedWorkout] = {}
     for workout in workouts:
         by_day_workout.setdefault(workout.date, workout)

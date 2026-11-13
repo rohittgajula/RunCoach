@@ -165,8 +165,17 @@ export function Shell({ children }: { children: ReactNode }) {
        * It sits above whatever you are looking at, which is the point: a
        * question about this week's plan is best asked from the plan, not after
        * navigating away from it. Hidden on the coach's own screens, where a
-       * button that takes you where you already are is just clutter. */}
-      {!location.pathname.startsWith('/chat') && (
+       * button that takes you where you already are is just clutter.
+       *
+       * Hidden on a run's own page too, for two reasons. It sat over the
+       * right-hand axis labels of the pace, heart-rate, cadence and elevation
+       * charts — it is a 54px circle in the bottom-right corner and those
+       * labels are 30 to 74px in from that edge, so the numbers at the bottom
+       * of the screen were unreadable while scrolling. And that screen already
+       * has a better door to the coach than a floating circle: "What the coach
+       * makes of it", which arrives with the run already in hand. */}
+      {!location.pathname.startsWith('/chat')
+        && !/^\/activities\/\d/.test(location.pathname) && (
         <NavLink
           to="/chat"
           className="coach-fab"

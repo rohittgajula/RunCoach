@@ -50,7 +50,13 @@ HEADLINES = {
     "swap": "Swap for a walk",
     "rest": "Rest today",
     "no_plan": "No session today",
+    # A gym day is a training day. Without this it fell through to no_plan, and
+    # Today said "Rest day · No session today" directly above a card offering a
+    # forty-minute session.
+    "gym": "Gym day",
 }
+GYM_NOTE = ("Strength today, no run. The signals below still apply: they are about "
+            "how recovered you are, not about which kind of session it is.")
 NO_PLAN_NOTE = ("Nothing is planned today. Recovery is part of training — an easy "
                 "20-min walk keeps you moving without adding load.")
 REST_NOTE = "Rest today. If you want to move, keep it to a gentle walk."
@@ -192,9 +198,16 @@ def _r8_signals(s: WellnessSnapshot) -> list[dict]:
     return out
 
 
-def verdict_for(reasons: list[dict], has_workout: bool) -> str:
+def verdict_for(reasons: list[dict], has_workout: bool, has_gym: bool = False) -> str:
+    """The run decides the verdict; a gym day is only consulted when there is no run.
+
+    Deliberately not folded into `has_workout`: the easy/swap/rest ladder below
+    rewrites a run, and there is nothing to rewrite on a strength day. Saying
+    "swap" about a gym session would be an instruction the rest of the app
+    cannot carry out.
+    """
     if not has_workout:
-        return "no_plan"
+        return "gym" if has_gym else "no_plan"
     if any(r["signal"] in ("pain", "illness") and r["status"] == "bad" for r in reasons):
         return "rest"
     bad = sum(1 for r in reasons if r["status"] == "bad")
@@ -295,7 +308,7 @@ def adjusted_for(verdict: str, w: WorkoutSummary | None, mild: bool = False) -> 
 
     A race is never rewritten automatically — the verdict and reasons still show.
     """
-    if w is None or verdict in ("go", "no_plan") or w.kind == "RACE":
+    if w is None or verdict in ("go", "no_plan", "gym") or w.kind == "RACE":
         return None
     if verdict == "rest":
         return _rest()
@@ -306,14 +319,17 @@ def adjusted_for(verdict: str, w: WorkoutSummary | None, mild: bool = False) -> 
     return _easy(w)
 
 
-def decide(snapshot: WellnessSnapshot, workout: WorkoutSummary | None) -> Verdict:
+def decide(snapshot: WellnessSnapshot, workout: WorkoutSummary | None,
+           has_gym: bool = False) -> Verdict:
     reasons, missing = signals(snapshot)
-    verdict = verdict_for(reasons, workout is not None)
+    verdict = verdict_for(reasons, workout is not None, has_gym)
     bad = sum(1 for r in reasons if r["status"] == "bad")
     watch = sum(1 for r in reasons if r["status"] == "watch")
     # "Only mildly flagged": exactly two bad signals and nothing else amiss.
     mild = verdict == "swap" and bad == 2 and watch == 0
-    note = NO_PLAN_NOTE if verdict == "no_plan" else REST_NOTE if verdict == "rest" else None
+    note = (NO_PLAN_NOTE if verdict == "no_plan"
+            else GYM_NOTE if verdict == "gym"
+            else REST_NOTE if verdict == "rest" else None)
     return Verdict(verdict=verdict, headline=HEADLINES[verdict], reasons=reasons,
                    signals_missing=missing, adjusted=adjusted_for(verdict, workout, mild),
                    note=note)

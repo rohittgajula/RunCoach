@@ -19,7 +19,10 @@ import { dur } from '../lib/format'
 import { PageHeader } from '../components/PageHeader'
 import { ErrorState, Loading } from '../components/States'
 import { ExerciseFigure } from '../components/gym/ExerciseFigure'
+import { ExerciseSheet } from '../components/gym/ExerciseSheet'
+import { GymWatchButton } from '../components/gym/GymWatchButton'
 import { FormFigure } from '../components/gym/FormFigure'
+import { ChevronDown } from '../components/Icons'
 
 type Exercise = {
   key: string
@@ -50,6 +53,10 @@ type Session = {
   status: string
   after_run: boolean
   exercises: Exercise[]
+  // Served since R13 and never declared here, which is part of why the screen
+  // had no way to offer the watch.
+  garmin_status: 'none' | 'synced' | 'changed'
+  garmin_workout_id: number | null
 }
 
 type Ladder = {
@@ -69,6 +76,7 @@ type Payload = {
   levels: Record<string, number>
   ladders: Ladder[]
   sessions: Session[]
+  can_send_to_watch: boolean
 }
 
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -99,9 +107,11 @@ function Rungs({ level, max, ceiling }: { level: number; max: number; ceiling: n
   )
 }
 
-function ExerciseCard({ exercise }: { exercise: Exercise }) {
+function ExerciseCard({ exercise, onOpen }: { exercise: Exercise; onOpen: () => void }) {
   return (
     <li className="gym-ex">
+      <button type="button" className="gym-ex-open" onClick={onOpen}
+        aria-label={`${exercise.name} — how it is done`}>
       <div className="gym-ex-head">
         <span className="gym-ex-pattern">{exercise.pattern}</span>
         <span className="gym-ex-dose num">{doseOf(exercise)}</span>
@@ -112,6 +122,7 @@ function ExerciseCard({ exercise }: { exercise: Exercise }) {
 
       <p className="gym-ex-cue">{exercise.cue}</p>
       <p className="small muted gym-ex-load">{exercise.load} · {exercise.rest_s}s rest</p>
+      </button>
 
       <Rungs level={exercise.level} max={exercise.max_level} ceiling={exercise.ceiling} />
       <p className="small muted gym-ex-next">
@@ -249,6 +260,10 @@ export default function Gym() {
     queryKey: ['strength', 'gym'],
     queryFn: () => api('/strength/'),
   })
+  // The exercise whose sheet is open. Held here rather than in the card so
+  // only one can be open at a time, and so closing it cannot leave a card
+  // stuck mid-state.
+  const [open, setOpen] = useState<Exercise | null>(null)
 
   if (query.isPending) return <Loading />
   if (query.isError || !query.data) {
@@ -256,6 +271,7 @@ export default function Gym() {
   }
 
   const { sessions, equipment, per_week, gym_days, ladders } = query.data
+  const canSend = query.data.can_send_to_watch
   const today = new Date().toISOString().slice(0, 10)
   const next = sessions.find((s) => s.date >= today && s.status === 'planned') ?? sessions[0]
   const days = DOW.filter((_, i) => gym_days[String(i)])
@@ -308,19 +324,29 @@ export default function Gym() {
                 tomorrow matters more than how this session went.
               </p>
 
+              {/* Collapsed by default. Six mobility drills ahead of the lifts
+                  meant scrolling past the warm-up every time to reach the part
+                  that changes week to week — and the warm-up is the part you
+                  stop needing to read after a fortnight. It stays first,
+                  because the order is the instruction. */}
               {warmup.length > 0 && (
-                <div className="gym-group">
-                  <h3 className="gym-group-title">
-                    Warm up <span className="muted">· 5 min</span>
-                  </h3>
+                <details className="gym-group gym-warmup">
+                  <summary className="gym-warmup-summary">
+                    <span className="gym-group-title">
+                      Warm up <span className="muted">· 5 min · {warmup.length} moves</span>
+                    </span>
+                    <ChevronDown className="gym-warmup-chev" />
+                  </summary>
                   <p className="small muted gym-group-why">
                     Warm tissue tolerates load; cold tissue tears. This is the part
                     people skip, so it goes first.
                   </p>
                   <ul className="gym-list is-warmup">
-                    {warmup.map((e) => <ExerciseCard key={e.key} exercise={e} />)}
+                    {warmup.map((e) => (
+                      <ExerciseCard key={e.key} exercise={e} onOpen={() => setOpen(e)} />
+                    ))}
                   </ul>
-                </div>
+                </details>
               )}
 
               <div className="gym-group">
@@ -328,9 +354,13 @@ export default function Gym() {
                   The session <span className="muted">· {main[0]?.sets ?? 2} sets</span>
                 </h3>
                 <ul className="gym-list">
-                  {main.map((e) => <ExerciseCard key={e.key} exercise={e} />)}
+                  {main.map((e) => (
+                    <ExerciseCard key={e.key} exercise={e} onOpen={() => setOpen(e)} />
+                  ))}
                 </ul>
               </div>
+
+              <GymWatchButton session={next} canSend={canSend} today={today} />
 
               <SessionReview sessionId={next.id} patterns={main.map((e) => e.key)} />
             </section>
@@ -345,6 +375,8 @@ export default function Gym() {
           )}
         </>
       )}
+
+      <ExerciseSheet exercise={open} onClose={() => setOpen(null)} />
 
       <FormFigure cadence={null} />
 

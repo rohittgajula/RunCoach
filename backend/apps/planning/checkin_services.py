@@ -64,7 +64,21 @@ def _summary(athlete: Athlete, workout: PlannedWorkout | None) -> WorkoutSummary
 
 def compute(athlete: Athlete) -> tuple[Verdict, PlannedWorkout | None]:
     workout = today_workout(athlete)
-    return decide(snapshot_for(athlete), _summary(athlete, workout)), workout
+    return (
+        decide(snapshot_for(athlete), _summary(athlete, workout),
+               has_gym=_has_gym_today(athlete)),
+        workout,
+    )
+
+
+def _has_gym_today(athlete: Athlete) -> bool:
+    """Is there a strength session on today that has not been done or dropped?"""
+    from .models import StrengthSession
+
+    return StrengthSession.objects.filter(
+        athlete=athlete, date=athlete.local_today,
+        status=StrengthSession.Status.PLANNED,
+    ).exists()
 
 
 def today_payload(athlete: Athlete) -> dict:

@@ -248,3 +248,244 @@
   .arc-week-when { grid-row: auto; flex-direction: row; align-items: baseline; gap: 8px; }
   .arc-week-figs { justify-content: flex-end; flex-wrap: nowrap; }
 }
+
+/* ===== Month cells, by type (R18) ====================================
+   Before this, a gym day and a run day were the same grey tile and differed by
+   the word "Gym" printed in the same blue as everything else — at a glance the
+   month had one kind of day in it. Now the fill carries the type and the glyph
+   repeats it, so neither colour-blindness nor a quick glance can lose it. */
+
+.month-cell[data-type] {
+  background: var(--card-2);
+  gap: 1px;
+  padding: 5px 0 6px;
+  justify-content: center;
+}
+.month-cell[data-type] .month-num { font-size: 13px; font-weight: 700; opacity: 0.9; }
+.month-glyph { width: 15px; height: 15px; display: block; flex: none; }
+
+.month-cell[data-type='run'],
+.month-cell[data-type='long'] { background: var(--day-run); color: var(--day-ink); border-color: transparent; }
+.month-cell[data-type='gym'] { background: var(--day-gym); color: var(--day-ink); border-color: transparent; }
+.month-cell[data-type='race'] { background: var(--day-race); color: var(--day-ink); border-color: transparent; }
+.month-cell[data-type='done'] {
+  background: var(--day-done-bg);
+  color: var(--day-done-fg);
+  box-shadow: inset 0 0 0 1px var(--day-done-line);
+}
+
+/* A long run is a run that is longer, not a different kind of day: same
+   gradient, a heavier ring, so the week's anchor is findable without
+   introducing a fifth colour nobody asked to learn. */
+.month-cell[data-type='long'] { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.38); }
+
+.month-cell[data-type] .month-value {
+  font-size: 10px; font-weight: 800; color: inherit; opacity: 0.95;
+}
+.month-cell[data-type] .month-lines { gap: 0; }
+
+/* Today keeps the white ring it already had; against a filled cell it needs to
+   sit outside the fill rather than replace the border. */
+.month-cell[data-type].is-today {
+  border-color: transparent;
+  outline: 2px solid var(--fg);
+  outline-offset: 1px;
+}
+/* A past day that was planned and not done: drained, not deleted. */
+.month-cell[data-type]:not([data-type='done']).is-past { opacity: 0.42; }
+
+/* "There is also a gym session on this run day" — a corner pip rather than a
+   bordered word that used to eat a third of the cell. */
+.month-also {
+  position: absolute; top: 4px; right: 4px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--gym, #b071f2);
+  box-shadow: 0 0 0 1.5px var(--card-2);
+}
+.month-cell { position: relative; }
+
+/* The legend swatches are the cells in miniature, so the key and the thing it
+   explains cannot drift apart again. */
+.month-key {
+  width: 13px; height: 13px; border-radius: 4px; display: inline-block; flex: none;
+}
+.month-key[data-type='run'] { background: var(--day-run); }
+.month-key[data-type='long'] { background: var(--day-run); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.38); }
+.month-key[data-type='gym'] { background: var(--day-gym); }
+.month-key[data-type='done'] { background: var(--day-done-bg); box-shadow: inset 0 0 0 1px var(--day-done-line); }
+
+/* Warm-up figures are half-size: they are a reminder of a move you will do
+   from memory in a week, not an instruction to study. Full-size they made the
+   warm-up longer than the session it precedes. */
+.gym-list.is-warmup .exfig { margin: 6px 0 2px; }
+.gym-list.is-warmup .exfig svg { max-width: 120px; }
+
+/* ===== Tap an exercise to see how it is done (R18) =================== */
+
+/* The whole card is the target. A small "?" would be the usual answer and the
+   wrong one — on a first programme every move is unfamiliar, so the common
+   case is wanting the detail, not the exception. */
+.gym-ex-open {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.gym-ex-open:active { transform: scale(0.99); }
+.gym-ex-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* It has to look tappable without turning six cards into six buttons: the
+   figure lifts and the name takes the accent on hover, nothing else moves. */
+@media (hover: hover) {
+  .gym-ex-open:hover .exfig svg { background: var(--card-2); }
+  .gym-ex-open:hover .gym-ex-name { color: var(--accent); }
+}
+
+.exsheet { display: flex; flex-direction: column; gap: 12px; }
+.exsheet-dose { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.exsheet-pattern {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.exsheet-amount { font-size: 1.05rem; font-weight: 800; color: var(--accent); }
+
+/* The reason the sheet exists: big enough to copy standing up. */
+.exsheet-fig { margin: 0; }
+.exsheet-fig svg { max-width: 100%; width: 100%; }
+
+.exsheet-cue { margin: 0; font-size: 1rem; line-height: 1.5; }
+
+.exsheet-facts {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0;
+}
+.exsheet-facts > div {
+  background: var(--card-2); border-radius: var(--radius-sm); padding: 9px 11px; min-width: 0;
+}
+.exsheet-facts dt {
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 3px;
+}
+.exsheet-facts dd { margin: 0; font-size: 0.88rem; font-weight: 600; }
+
+.exsheet-why h4, .exsheet-ladder h4 {
+  margin: 0 0 6px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.exsheet-why p { margin: 0; font-size: 0.88rem; line-height: 1.55; color: var(--muted); }
+.exsheet-ladder .rungs { margin-bottom: 7px; }
+.exsheet-rung { margin: 0 0 5px; font-size: 0.82rem; font-weight: 700; }
+.exsheet-next { margin: 0; font-size: 0.85rem; line-height: 1.5; color: var(--muted); }
+
+/* Send a gym session to the watch — the control for a path that was fully
+   built on the server and had no button anywhere in the app. */
+.gym-watch { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+.gym-watch .garmin-on { margin: 0; }
+.gym-watch-off { margin: 12px 0 0; }
+
+/* ===== "Am I improving?" on the arc (R18) ============================
+   The verdict that used to live four taps inside Health, on the screen that
+   asks the question. */
+
+.arcp { gap: 9px; }
+.arcp-scope { margin: -4px 0 2px; }
+.arcp-empty { margin: 0; line-height: 1.55; }
+
+.arcp-lines { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.arcp-lines li {
+  font-size: 0.89rem;
+  line-height: 1.5;
+  padding-left: 11px;
+  border-left: 2px solid var(--line);
+}
+/* Tone carries whether a number moved the right way, so "slower" and "faster"
+   are not the same grey sentence. */
+.arcp-lines li[data-tone='good'] { border-left-color: var(--ok); }
+.arcp-lines li[data-tone='bad'] { border-left-color: var(--bad); }
+.arcp-lines li[data-tone='warn'] { border-left-color: var(--warn); }
+
+.arcp-h {
+  margin: 4px 0 0;
+  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.arcp-focus ul { margin: 7px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.arcp-focus li {
+  background: var(--card-2);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  min-width: 0;
+}
+.arcp-focus li b { display: block; font-size: 0.87rem; font-weight: 700; }
+.arcp-focus li span {
+  display: block; margin-top: 2px;
+  font-size: 0.8rem; line-height: 1.5; color: var(--muted);
+}
+
+.arcp-more {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 3px; padding: 11px 12px;
+  background: var(--card-2); border-radius: var(--radius-sm);
+  color: inherit; text-decoration: none;
+}
+.arcp-more > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.arcp-more b { font-size: 0.88rem; font-weight: 700; }
+.arcp-more svg { flex: none; color: var(--muted); }
+.arcp-more:active { transform: scale(0.99); }
+@media (hover: hover) { .arcp-more:hover { background: var(--line); } }
+
+/* The gym-day verdict pill, in the same purple the calendar gives a gym day,
+   so the two screens agree about what kind of day it is. */
+.verdict-gym { background: var(--gym-tint, #231a36); color: var(--gym-ink, #dcbcff); }
+
+/* ===== One language for a session, everywhere (R18) ==================
+   The calendar learned to colour a day by its type; every other screen still
+   drew the same session as an identical grey card. A run card and a gym card
+   were distinguishable only by reading the word on them — which is the
+   complaint the calendar fix answered, repeated on four other screens.
+
+   A rail and a tinted icon rather than a filled card: these appear in lists of
+   three or four, and four full gradients stacked is a paint chart. The rail is
+   enough to sort them at a glance and leaves the text on the card's own
+   ground, where it stays readable. */
+
+.cal-card[data-day-type] { position: relative; overflow: hidden; }
+.cal-card[data-day-type]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: 0 3px 3px 0;
+}
+.cal-card[data-day-type='run']::before,
+.cal-card[data-day-type='long']::before { background: var(--day-run); }
+.cal-card[data-day-type='gym']::before { background: var(--day-gym); }
+.cal-card[data-day-type='race']::before { background: var(--day-race); }
+.cal-card[data-day-type='done']::before { background: var(--day-done-fg); }
+
+/* The icon picks up the same colour, so the type is stated twice — once by
+   position and once by shape — for anyone who cannot separate the hues. */
+.cal-card[data-day-type='gym'] .strength-icon { color: var(--gym-ink, #dcbcff); }
+.cal-card[data-day-type='done'] .strength-icon { color: var(--day-done-fg); }
+
+/* A skipped or paused session keeps its rail but loses its confidence. */
+.cal-card[data-day-type].is-skipped::before,
+.cal-card[data-day-type].is-paused::before { opacity: 0.35; }
+
+/* The warm-up, folded away. */
+.gym-warmup { border-radius: var(--radius-sm); }
+.gym-warmup-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  cursor: pointer; list-style: none; padding: 2px 0;
+}
+.gym-warmup-summary::-webkit-details-marker { display: none; }
+.gym-warmup-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.gym-warmup-chev { color: var(--muted); flex: none; transition: transform 0.18s ease; }
+.gym-warmup[open] .gym-warmup-chev { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .gym-warmup-chev { transition: none; } }

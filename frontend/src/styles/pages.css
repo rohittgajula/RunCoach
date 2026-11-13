@@ -853,6 +853,8 @@ button.metric-cell { cursor: pointer; }
  * and takes the accent colour so a gym day is told apart from a run day at a
  * glance — the same colour the calendar uses for them. */
 .gym-days .row { display: flex; align-items: center; gap: 6px; }
+
+/* The gym day picker's row.
  * Its own row class rather than reusing .daypicker, which is a flex COLUMN
  * whose children are .daypicker-row — using it directly stacked seven buttons
  * vertically. */
@@ -921,7 +923,10 @@ button.metric-cell { cursor: pointer; }
 
 /* The warm-up is quieter than the lifting: no figures, tighter rows, no rung
    bars. It is a checklist, not a programme. */
-.gym-list.is-warmup .exfig,
+/* Rungs and "move up when" are meaningless for a warm-up — there is no ladder
+   to climb. The figure is not: it is the whole reason the move is legible
+   without reading the sentence under it. This rule used to hide the figure
+   too, from when none of the six warm-up moves had one to show. */
 .gym-list.is-warmup .rungs,
 .gym-list.is-warmup .gym-ex-next { display: none; }
 .gym-list.is-warmup { gap: 0; }

@@ -79,6 +79,18 @@
   --arc-block: #2cc3bd;
   --arc-best: #9aa3b0;
   --arc-cursor: rgba(242, 244, 247, 0.05);
+
+  /* Day types. One gradient per kind of training, used on the calendar and
+     anywhere else a day is drawn, so the type is carried by colour and never
+     by a word alone. A gym day and a run day were previously the same grey
+     card differing by the label "Gym" in the same blue as everything else. */
+  --day-run: linear-gradient(145deg, #3f7bff, #36c6e8);
+  --day-gym: linear-gradient(145deg, #9b5cf6, #e8609f);
+  --day-race: linear-gradient(145deg, #f0a531, #f0664f);
+  --day-done-bg: #12291f;
+  --day-done-line: #1f4733;
+  --day-done-fg: #46d08a;
+  --day-ink: #ffffff;
   
   --radius: 20px;
   --radius-tile: 18px;
@@ -143,6 +155,15 @@
   /* chart tooltip */
   --tip-bg: #101418;
   --tip-fg: #ffffff;
+
+  /* day types */
+  --day-run: linear-gradient(145deg, #2f6bff, #17a9c9);
+  --day-gym: linear-gradient(145deg, #7a3ff0, #d4418a);
+  --day-race: linear-gradient(145deg, #e08c0b, #e5533d);
+  --day-done-bg: #e3f6ea;
+  --day-done-line: #b7e5c8;
+  --day-done-fg: #12793b;
+  --day-ink: #ffffff;
 
   /* the arc */
   --arc-done: #2f6bff;

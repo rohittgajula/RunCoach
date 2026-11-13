@@ -29,12 +29,21 @@ export function WorkoutCard({
   const paused = workout.status === 'paused'
   const stateCls = workout.status === 'skipped' ? 'is-skipped' : paused ? 'is-paused' : ''
   const isAdjusted = (adjusted || workout.adjusted_by === 'checkin' || workout.adjusted_by === 'auto') && workout.status === 'planned'
+  // The same four types the calendar colours by, so a session looks the same
+  // wherever it is drawn. Done wins over kind: once it has happened, what it
+  // was matters less than that it is behind you.
+  const dayType = workout.status === 'completed' ? 'done'
+    : workout.kind === 'RACE' ? 'race'
+    : workout.kind === 'LONG' ? 'long'
+    : workout.kind === 'STRENGTH' ? 'gym'
+    : 'run'
   // R14 §1: every day but today is one row + a slim step bar; Guide, load and the
   // adjustment reason are in the sheet (tap).
   if (compact) {
     return (
       <article
         className={`card cal-card is-compact is-tappable ${stateCls}`}
+        data-day-type={dayType}
         onClick={onOpen}
         role="button"
         tabIndex={0}
@@ -60,6 +69,7 @@ export function WorkoutCard({
   return (
     <article
       className={`card cal-card is-tappable ${stateCls}`}
+      data-day-type={dayType}
       onClick={onOpen}
       role="button"
       tabIndex={0}

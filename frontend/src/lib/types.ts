@@ -480,7 +480,7 @@ export type Insights = {
 
 // --- R7: morning check-in, post-run check-in, easy-day guard -------------------------
 
-export type Verdict = 'go' | 'easy' | 'swap' | 'rest' | 'no_plan'
+export type Verdict = 'go' | 'easy' | 'swap' | 'rest' | 'no_plan' | 'gym'
 export type SignalKey = 'sleep' | 'hrv' | 'rhr' | 'body_battery' | 'readiness' | 'pain' | 'illness' | 'load' | 'stress' | 'alcohol' | 'heat' | 'air'
 export type SignalStatus = 'good' | 'watch' | 'bad'
 

@@ -80,6 +80,121 @@ type Move = {
 }
 
 const MOVES: Record<string, Move> = {
+  // --- the warm-up ---------------------------------------------------------
+  // Six moves that had no figure at all, so the top half of the Gym screen —
+  // the part you actually read first, standing in the room about to start —
+  // was a wall of prose. These are the cheapest figures to get right because
+  // the cue is almost always "which limb goes where", and none of them carries
+  // load, so nothing here can be performed dangerously by copying the drawing.
+  'March on the spot': {
+    // Fast and alternating: the one thing to show is knee height, hip or above.
+    dur: 1.6, facing: [-1, 0], surface: 'stand',
+    a: {
+      head: [46, 18], neck: [46, 27], chest: [46, 38], hip: [46, 57],
+      knee: [35, 55], ankle: [33, 69], toe: [25, 72],
+      knee2: [47, 74], ankle2: [47, 90],
+      shoulder: [46, 30], elbow: [53, 42], wrist: [57, 52],
+    },
+    b: {
+      head: [46, 18], neck: [46, 27], chest: [46, 38], hip: [46, 57],
+      knee: [45, 74], ankle: [45, 90], toe: [37, 91],
+      knee2: [36, 55], ankle2: [34, 69],
+      shoulder: [46, 30], elbow: [39, 42], wrist: [35, 52],
+    },
+  },
+  'Leg swings': {
+    // A hand stays on the wall throughout. Without the prop this reads as a
+    // kick, which is the error — the point is a relaxed swing from a stable
+    // trunk, not height.
+    dur: 2.4, facing: [-1, 0], surface: 'stand',
+    props: [{ x: 78, y: 6, w: 5, h: 86 }],
+    a: {
+      head: [50, 18], neck: [50, 27], chest: [50, 38], hip: [50, 57],
+      knee: [40, 69], ankle: [34, 81], toe: [26, 84],
+      knee2: [51, 74], ankle2: [51, 90],
+      shoulder: [50, 30], elbow: [62, 31], wrist: [75, 29],
+    },
+    b: {
+      head: [50, 18], neck: [50, 27], chest: [50, 38], hip: [50, 57],
+      knee: [60, 70], ankle: [66, 81], toe: [74, 85],
+      knee2: [51, 74], ankle2: [51, 90],
+      shoulder: [50, 30], elbow: [62, 31], wrist: [75, 29],
+    },
+  },
+  'Ankle rocks': {
+    // Half-kneeling, and the whole movement is the front knee travelling
+    // forward over the toes while the heel stays down. The heel is therefore
+    // the one joint that must not move between the poses.
+    dur: 2.8, facing: [-1, 0], surface: 'stand',
+    a: {
+      head: [50, 30], neck: [50, 38], chest: [50, 47], hip: [50, 62],
+      knee: [42, 74], ankle: [42, 88], toe: [33, 90],
+      knee2: [59, 80], ankle2: [70, 88],
+      shoulder: [50, 41], elbow: [46, 52], wrist: [44, 62],
+    },
+    b: {
+      head: [45, 32], neck: [46, 40], chest: [47, 49], hip: [50, 63],
+      knee: [33, 74], ankle: [42, 88], toe: [33, 90],
+      knee2: [59, 80], ankle2: [70, 88],
+      shoulder: [46, 43], elbow: [42, 54], wrist: [40, 63],
+    },
+  },
+  Clamshell: {
+    // On the side, heels together, top knee opens. Drawn from above-behind so
+    // the opening is visible at all; from the side it would be two lines
+    // crossing.
+    dur: 2.6, facing: [0, -1], surface: 'lie',
+    a: {
+      head: [17, 76], neck: [25, 77], chest: [38, 79], hip: [54, 81],
+      knee: [66, 73], ankle: [58, 84], toe: [51, 88],
+      knee2: [66, 77], ankle2: [58, 86],
+      shoulder: [26, 79], elbow: [21, 86], wrist: [15, 90],
+    },
+    b: {
+      head: [17, 76], neck: [25, 77], chest: [38, 79], hip: [54, 81],
+      knee: [69, 61], ankle: [58, 82], toe: [51, 86],
+      knee2: [66, 77], ankle2: [58, 86],
+      shoulder: [26, 79], elbow: [21, 86], wrist: [15, 90],
+    },
+  },
+  'Hip-flexor stretch': {
+    // Half-kneeling again, but here nothing bends — the hips travel forward
+    // and the back knee trails. People do this as a forward lean, which
+    // stretches nothing, so the spine stays upright in both poses.
+    dur: 3.0, facing: [-1, 0], surface: 'stand',
+    a: {
+      head: [48, 26], neck: [48, 34], chest: [48, 44], hip: [48, 60],
+      knee: [38, 70], ankle: [36, 86], toe: [27, 88],
+      knee2: [58, 80], ankle2: [70, 88],
+      shoulder: [48, 37], elbow: [46, 48], wrist: [46, 58],
+    },
+    b: {
+      head: [44, 24], neck: [45, 32], chest: [47, 42], hip: [53, 58],
+      knee: [40, 70], ankle: [36, 86], toe: [27, 88],
+      knee2: [64, 80], ankle2: [76, 88],
+      shoulder: [45, 35], elbow: [43, 46], wrist: [43, 56],
+    },
+  },
+  'A-skip': {
+    // The fastest of the six and the only one that leaves the ground. Support
+    // ankle rises to the toe at the top, which is what separates a skip from
+    // a march.
+    dur: 1.4, facing: [-1, 0], surface: 'stand',
+    a: {
+      head: [46, 14], neck: [46, 23], chest: [46, 34], hip: [46, 53],
+      knee: [33, 50], ankle: [31, 64], toe: [23, 67],
+      knee2: [48, 70], ankle2: [48, 86],
+      shoulder: [46, 26], elbow: [56, 36], wrist: [62, 45],
+    },
+    b: {
+      head: [46, 18], neck: [46, 27], chest: [46, 38], hip: [46, 57],
+      knee: [44, 74], ankle: [44, 90], toe: [36, 91],
+      knee2: [37, 56], ankle2: [35, 70],
+      shoulder: [46, 30], elbow: [37, 40], wrist: [32, 49],
+    },
+  },
+
+  // --- the session ---------------------------------------------------------
   'Box squat': {
     dur: 3.4, facing: [-1, 0], surface: 'stand',
     props: [{ x: 60, y: 63, w: 34, h: 5 }, { x: 89, y: 63, w: 5, h: 29 }],
@@ -193,6 +308,10 @@ const MOVES: Record<string, Move> = {
 const BY_PATTERN: Record<string, string> = {
   calf: 'Calf raise', squat: 'Box squat', hinge: 'Glute bridge',
   push: 'Wall push-up', pull: 'Table row', core: 'Dead bug',
+  // The warm-up keys, which the session list passes as `pattern`. Without
+  // these every warm-up move fell through to `return null`.
+  march: 'March on the spot', legswing: 'Leg swings', anklerock: 'Ankle rocks',
+  clam: 'Clamshell', hipflexor: 'Hip-flexor stretch', askip: 'A-skip',
 }
 
 /**
