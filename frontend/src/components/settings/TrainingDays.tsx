@@ -156,6 +156,20 @@ export function TrainingDays({ draft, set }: { draft: Draft; set: SetDraft }) {
           actually lands.
         </p>
       )}
+      {/* Two controls can name the same number: the days picked here, and the
+          "strength sessions per week" stepper below. They are not redundant —
+          three days picked for two sessions means "any two of these" — but
+          asking for more sessions than there are days silently gives you
+          fewer, and the app should say so rather than quietly disagree with
+          itself. This line used to live on the old gym-days picker and went
+          when that picker did. */}
+      {gymDays > 0 && draft.strength_per_week > gymDays && (
+        <p className="small warn-text">
+          {draft.strength_per_week} gym sessions a week asked for, but only{' '}
+          {gymDays} gym {gymDays === 1 ? 'day' : 'days'} picked — you will get{' '}
+          {gymDays} a week.
+        </p>
+      )}
       {clash && (
         <p className="small warn-text">
           {FULL[eve]} is a gym day the evening before your long run. The plan

@@ -55,6 +55,12 @@ def history_baseline(athlete: Athlete) -> HistoryBaseline:
     return from_history(run_points(athlete, since), today)
 
 
+def run_days_for(athlete: Athlete) -> dict:
+    """Days a run may be placed on. Lives on the model, because the raw
+    `available_days` had five readers and all of them meant this."""
+    return athlete.run_days()
+
+
 def baseline_for(athlete: Athlete) -> Baseline:
     """From segmented running history, never from a questionnaire.
 
@@ -72,7 +78,7 @@ def baseline_for(athlete: Athlete) -> Baseline:
         longest_run_s=history.longest_run_s,
         run_pace_s_per_km=history.run_pace_s_per_km or 480.0,
         walk_pace_s_per_km=history.walk_pace_s_per_km or 700.0,
-        available_days=athlete.available_days or {},
+        available_days=run_days_for(athlete),
         long_run_day=athlete.long_run_day,
     )
 

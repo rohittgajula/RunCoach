@@ -683,3 +683,7 @@
 .niggle-track i[data-sev='3'] { background: var(--bad); }
 .niggle-sub { margin: 6px 0 0; }
 .niggle-sub b { color: var(--fg); font-weight: 700; }
+
+/* Nothing to rebuild is not an error to stare at. */
+.reset-dead-end { display: flex; flex-direction: column; gap: 9px; }
+.reset-dead-end .btn { text-align: center; text-decoration: none; }

@@ -36,7 +36,7 @@ export default function Me() {
       <Route path="account" element={<SubPage title="Account"><AccountPage /></SubPage>} />
       <Route path="memory" element={<SubPage title="What the coach knows"><CoachMemory /></SubPage>} />
       <Route path="deleted" element={<SubPage title="Deleted activities"><DeletedActivities /></SubPage>} />
-      <Route path="reset" element={<SubPage title="Start over"><ResetPlanning /></SubPage>} />
+      <Route path="reset" element={<SubPage title="Clear data"><ResetPlanning /></SubPage>} />
       <Route path="*" element={<Navigate to="/me" replace />} />
     </Routes>
   )
@@ -113,7 +113,10 @@ function MeHome() {
           aside={review.data?.pending ? <span className="row-badge">{review.data.pending}</span> : undefined}
         />
         <Row to="/me/deleted" icon={<TrashIcon size={20} />} title="Deleted activities" sub="Bring back an activity you deleted" />
-        <Row to="/me/reset" icon={<RefreshIcon size={20} />} title="Start over" sub="Clear the plan, the gym days or the calendar and re-plan from today" />
+        {/* "Clear data", not "Start over". The row sat in the right group under
+            a name nobody searching for it would think of: people look for the
+            word for what they want gone, not for the mood they are in. */}
+        <Row to="/me/reset" icon={<RefreshIcon size={20} />} title="Clear data & rebuild" sub="Clear the plan, gym days or calendar, rebuild it, or re-sync Garmin" />
       </RowGroup>
       <IllnessLauncher mode={illness ? 'recover' : 'start'} open={sheet === 'illness'} onClose={() => setSheet('')} />
       <ReviewLauncher open={sheet === 'review'} onClose={() => setSheet('')} />

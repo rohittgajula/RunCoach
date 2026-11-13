@@ -23,6 +23,7 @@
  */
 
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, json } from '../../lib/auth'
 import { errorText, invalidatePlanData } from '../../lib/queries'
@@ -200,9 +201,17 @@ function Rebuild() {
         </p>
       )}
       {rebuild.error && (
-        <p className="small bad" role="alert">
-          {errorText(rebuild.error, 'The plan could not be rebuilt.')}
-        </p>
+        <div className="reset-dead-end" role="alert">
+          <p className="small bad">
+            {errorText(rebuild.error, 'The plan could not be rebuilt.')}
+          </p>
+          {/* The commonest way to see this is to clear everything and then
+              press rebuild, which is a dead end: there is nothing to rebuild
+              and the screen has to say what to do instead. */}
+          <Link to="/chat/new" className="btn btn-primary btn-grow">
+            Ask the coach for a new plan
+          </Link>
+        </div>
       )}
     </section>
   )
@@ -243,7 +252,7 @@ function ClearPlanning() {
   return (
     <section className="card stack reset">
       <div className="row">
-        <strong>What to clear</strong>
+        <strong>Clear data</strong>
         <InfoButton title="Starting over">
           <p>
             Plans are stored, not recalculated, which is what makes them

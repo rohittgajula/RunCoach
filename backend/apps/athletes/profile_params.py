@@ -404,7 +404,10 @@ def validate_setting(athlete, field: str, value) -> None:
     if field == "long_run_day":
         if not 0 <= int(value) <= 6:
             raise ValueError("long_run_day must be 0 (Monday) to 6 (Sunday).")
-        if not (athlete.available_days or {}).get(str(value)):
+        # `is_available` rather than the raw map: a gym day is not a run day,
+        # so a long run accepted onto one would have nowhere to go once the
+        # generator took the gym days out.
+        if not athlete.is_available(int(value)):
             raise ValueError(f"{parser.DAY_NAMES[int(value)]} isn't one of your run days "
                              "\u2014 add it to your run days first.")
         return

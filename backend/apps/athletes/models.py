@@ -250,13 +250,36 @@ class Athlete(models.Model):
         born = self.date_of_birth
         return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
 
+    def run_days(self) -> dict:
+        """Days a RUN may be placed on: available, minus the gym days.
+
+        `available_days` and `gym_days` are separate maps and nothing in the
+        database stops a day being true in both. The settings picker writes
+        them together so it cannot create that state, but it cannot repair one
+        either: a day already in both renders as "Gym", because gym wins the
+        display, while every caller reading `available_days` raw still treats
+        it as a day to run on.
+
+        What that produced: four run days picked, a plan with runs on three of
+        them and one on a gym day. The generator saw five candidates, wanted
+        four, spaced them out, and dropped a day nobody had taken away.
+
+        Put on the model because the raw field had five readers — the planner,
+        the relayout, the illness return, a chat tool and the coach's own
+        context — and every one of them meant this rather than that.
+        """
+        gym = self.gym_days or {}
+        return {day: bool(on) and not gym.get(day, False)
+                for day, on in (self.available_days or {}).items()}
+
     @property
     def training_days_per_week(self) -> int:
-        return sum(1 for v in (self.available_days or {}).values() if v)
+        """How many days a week a run can go on. Gym days are not run days."""
+        return sum(1 for on in self.run_days().values() if on)
 
     def is_available(self, weekday: int) -> bool:
-        """weekday: 0 = Monday."""
-        return bool((self.available_days or {}).get(str(weekday), False))
+        """Can a run go on this weekday? 0 = Monday. False on a gym day."""
+        return bool(self.run_days().get(str(weekday), False))
 
     def zones(self):
         """Heart-rate zones, or None when the data cannot support them.
