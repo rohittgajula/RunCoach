@@ -2,6 +2,7 @@ from django.urls import path, re_path
 
 from .arc_views import training_arc
 from .calendar_views import calendar
+from .goal_views import goal_create, goal_preview
 from .plan_views import (
     PlanList, active_plan, activity_ai_review, activity_review, calendar_days, plan_accept,
     plan_decline, plan_rebuild, plan_view, workout_guide, workout_review, workout_view,
@@ -34,6 +35,10 @@ urlpatterns = [
     path("plans/active/", active_plan, name="plan-active"),
     path("plans/active/rebuild/", plan_rebuild, name="plan-rebuild"),
     path("plans/reset/", reset_views.reset, name="plan-reset"),
+    # R20: a distance by a date, run or run-walked. Preview first — the whole
+    # value of this mode is the date it refuses.
+    path("plans/goal/", goal_create, name="plan-goal"),
+    path("plans/goal/preview/", goal_preview, name="plan-goal-preview"),
     path("plans/<int:pk>/", plan_view, name="plan-detail"),
     path("plans/<int:pk>/accept/", plan_accept, name="plan-accept"),
     path("plans/<int:pk>/decline/", plan_decline, name="plan-decline"),

@@ -106,6 +106,10 @@ class Baseline:
     # between this and longest_run_s is exactly the ground they are REGAINING rather
     # than breaking, and the two progress at very different speeds.
     demonstrated_longest_s: float = 0.0
+    # The furthest EVER covered in one session, walking included. Only the
+    # run-walk goal mode reads it: that mode asks whether a session can cover
+    # ground, which walking contributes to and the unbroken block does not.
+    demonstrated_covered_m: float = 0.0
 
 
 @dataclass

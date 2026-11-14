@@ -30,11 +30,13 @@ just a race with extra steps.
 from __future__ import annotations
 
 import datetime as dt
+import math
 from dataclasses import dataclass, replace
+from typing import Literal
 
 from .generator import (
-    PHASE_SHAPE, Baseline, Plan, PlanConfig, Week, _continuous_curve,
-    _lay_out_week, _round_down, _volume_curve,
+    CONTINUOUS_CEILING_MIN, PHASE_SHAPE, Baseline, Plan, PlanConfig, Week,
+    _continuous_curve, _lay_out_week, _round_down, _volume_curve,
 )
 
 #: How far ahead a practice plan is written. Long enough to show a direction,
@@ -122,6 +124,7 @@ def generate_practice(
     baseline: Baseline,
     config: PlanConfig | None = None,
     weeks: int = HORIZON_WEEKS,
+    min_peak_run_km: float | None = None,
 ) -> Plan:
     """A plan that builds toward the next milestone and then keeps going.
 
@@ -130,6 +133,14 @@ def generate_practice(
     fourth week, hard sessions never back to back, the long run on the day the
     athlete said they have time for it, and the regain rate for ground already
     held.
+
+    `min_peak_run_km` raises the volume ceiling the ramp is allowed to climb
+    toward. It exists for the run-walk goal mode, where the governing quantity
+    is how far the long run *covers* rather than how long its unbroken block
+    is, and the milestone-derived ceiling would otherwise stop the ramp short
+    of a distance the athlete explicitly asked for. It moves the ceiling only:
+    the weekly increase cap still decides how fast the ramp gets there, which
+    is the part that keeps people uninjured.
     """
     config = config or PlanConfig()
     weeks = max(1, int(weeks))
@@ -155,6 +166,8 @@ def generate_practice(
         if baseline.run_pace_s_per_km else 10.0
     )
     ideal_peak_km = max(ideal_peak_km, _round_down(baseline.run_km_per_week * 1.1))
+    if min_peak_run_km:
+        ideal_peak_km = max(ideal_peak_km, _round_down(float(min_peak_run_km)))
 
     volumes, achieved_peak, reached = _volume_curve(
         phases, baseline.run_km_per_week, ideal_peak_km, config,
@@ -224,9 +237,125 @@ def generate_practice(
 # it — not a plan that spends four months arriving somewhere short.
 
 
+#: The two honest readings of "I want to do 5 km by March".
+#:
+#: They are different questions with different answers, and the app used to
+#: answer only the first while accepting the words of the second. Rohit asked
+#: for "5k between march and april with breaks" and would have been told his
+#: date was impossible — true of running it without stopping, and false of what
+#: he actually asked for.
+GoalStyle = Literal["nonstop", "run_walk"]
+
+#: A run-walk attempt is governed by the long run's TOTAL covered distance; a
+#: non-stop one by its longest unbroken block. Mixing the two is the whole bug
+#: this mode exists to avoid, so the quantity is named everywhere it is carried.
+GOVERNS: dict[GoalStyle, str] = {
+    "nonstop": "longest unbroken block",
+    "run_walk": "distance covered in one session",
+}
+
+#: Past this, a run-walk "session" has stopped being a training session and
+#: become a day out. Not a refusal — the plan is still built — but the athlete
+#: is told, because four hours of run-walking is a different undertaking from
+#: the one most people picture when they say "5k".
+LONG_SESSION_WARN_S = 3 * 3600
+
+
+def coverage_factor(
+    run_walk_ratio: float, run_pace_s_per_km: float, walk_pace_s_per_km: float,
+) -> float:
+    """How far a run-walk session covers, per metre of RUNNING inside it.
+
+    `run_walk_ratio` is the fraction of the session's TIME spent running, which
+    is what `PHASE_SHAPE` holds and what `_session` lays a week out with. The
+    walking that rides along covers ground too, and for a beginner it covers a
+    lot of it: at Rohit's 10:04/km run and 11:40/km walk, a FOUNDATION session
+    covers 2.3 metres for every metre he runs.
+
+    Ignoring that is how the app concluded 5 km was two years away. It is also
+    why this cannot be folded into the continuous curve: walking adds distance
+    without adding a second to the unbroken block.
+    """
+    if run_walk_ratio <= 0:
+        return 0.0
+    if run_walk_ratio >= 1 or walk_pace_s_per_km <= 0:
+        return 1.0
+    walk_time_per_run_time = (1 - run_walk_ratio) / run_walk_ratio
+    return 1 + walk_time_per_run_time * (run_pace_s_per_km / walk_pace_s_per_km)
+
+
+def blended_pace_s_per_km(
+    run_walk_ratio: float, run_pace_s_per_km: float, walk_pace_s_per_km: float,
+) -> float:
+    """Seconds per kilometre of the whole session, running and walking.
+
+    What the athlete will actually see on the watch, and the number that turns
+    "5 km with breaks" into "about an hour on your feet" — which is the fact
+    that decides whether they want it.
+    """
+    factor = coverage_factor(run_walk_ratio, run_pace_s_per_km, walk_pace_s_per_km)
+    if factor <= 0 or run_walk_ratio <= 0:
+        return run_pace_s_per_km
+    return run_pace_s_per_km / (run_walk_ratio * factor)
+
+
+def _long_run_shape(phase: str, config: PlanConfig) -> tuple[float, float]:
+    """(share of the week the long run takes, fraction of its time running).
+
+    Read from the same `PHASE_SHAPE` and the same `max_long_run_pct_of_week`
+    that `_lay_out_week` uses, including the min() between them — a projection
+    that disagrees with what the generator then prescribes is worse than no
+    projection.
+    """
+    shape = PHASE_SHAPE[phase]
+    share = min(shape["long_share"], config.max_long_run_pct_of_week / 100)
+    return share, shape["run_walk_ratio"]
+
+
+def covered_by_long_run_m(
+    week_run_km: float, phase: str, baseline: Baseline, config: PlanConfig,
+) -> float:
+    """Total ground the long run covers in a week of this volume and phase."""
+    share, ratio = _long_run_shape(phase, config)
+    long_run_km = week_run_km * share
+    return long_run_km * 1000 * coverage_factor(
+        ratio, baseline.run_pace_s_per_km, baseline.walk_pace_s_per_km,
+    )
+
+
+def weekly_volume_for_coverage(
+    target_distance_km: float, phase: str, baseline: Baseline, config: PlanConfig,
+) -> float:
+    """The weekly running volume whose long run covers the target. Inverse of
+    `covered_by_long_run_m`, and what the goal plan's volume ceiling is set to.
+
+    Rounded UP to the 0.1 km the volume curve works in, which is the opposite
+    of what that curve does to every other figure and is correct here. Every
+    weekly volume on the way up rounds down, because rounding up would let a
+    10 % cap print an 11 % step. A ceiling is not a step: truncating it leaves
+    the ramp stopping just below the distance the athlete asked for. At 5 km
+    the exact figure is 7.711 km a week, and 7.7 covers 4.99 — a plan that
+    arrives 7 metres short of the whole point of itself.
+    """
+    share, ratio = _long_run_shape(phase, config)
+    factor = coverage_factor(ratio, baseline.run_pace_s_per_km, baseline.walk_pace_s_per_km)
+    if share <= 0 or factor <= 0:
+        return 0.0
+    return math.ceil(target_distance_km / (share * factor) * 10) / 10
+
+
 @dataclass(frozen=True)
 class Feasibility:
-    """Whether a distance can be run continuously by a date, and when it can."""
+    """Whether a distance can be covered by a date, and when it can.
+
+    Carries both readings of the question without mixing them. `needs_s` and
+    `reaches_s` are seconds of CONTINUOUS running and mean something only under
+    `style="nonstop"`; `needs_m` and `reaches_m` are metres COVERED in one
+    session and mean something only under `style="run_walk"`. The fields for
+    the other style are left at zero rather than filled with a plausible
+    number, because a plausible number in the wrong unit is how this goes
+    wrong quietly.
+    """
 
     target_distance_km: float
     target_date: dt.date
@@ -244,12 +373,41 @@ class Feasibility:
     weeks_needed: int | None
     achievable: bool
 
+    style: GoalStyle = "nonstop"
+    #: run_walk: the distance itself, in metres. Here so the two styles read
+    #: the same way at the call site.
+    needs_m: float = 0.0
+    #: run_walk: the furthest the long run covers on or before the target date.
+    #: A running maximum, like the continuous curve's capability — a cutback
+    #: week prescribes less without unlearning anything, and an athlete who
+    #: covered 5 km in week 9 has covered 5 km.
+    reaches_m: float = 0.0
+    #: run_walk: how long the attempt takes, running and walking together.
+    session_s: int = 0
+    #: run_walk: seconds per km of the whole session. What the watch will show.
+    blended_pace_s_per_km: float = 0.0
+    #: run_walk: the weekly running volume the ramp has to reach for the long
+    #: run to cover the target. The goal plan's volume ceiling is set to it.
+    peak_run_km_needed: float = 0.0
+
+    @property
+    def governs(self) -> str:
+        """The quantity this verdict is about, named."""
+        return GOVERNS[self.style]
+
     @property
     def earliest_date(self) -> dt.date | None:
         """The first date this is realistic, whatever date was asked about."""
         if self.weeks_needed is None:
             return None
         return self.plan_start + dt.timedelta(weeks=self.weeks_needed)
+
+    @property
+    def label(self) -> str:
+        """How the goal reads to a human. The one place the words are decided."""
+        if self.style == "run_walk":
+            return f"{self.target_distance_km:g} km with walk breaks"
+        return f"{self.target_distance_km:g} km without stopping"
 
 
 def assess_goal(
@@ -259,15 +417,36 @@ def assess_goal(
     baseline: Baseline,
     config: PlanConfig | None = None,
     search_weeks: int = 104,
+    style: GoalStyle = "nonstop",
 ) -> Feasibility:
-    """Can this distance be run without stopping by this date, and if not, when.
+    """Can this distance be covered by this date, and if not, when.
 
-    Projected with the same continuous curve a plan is built from, including the
-    regain rate — so an athlete returning to ground they have held is told the
-    truth about how fast it comes back, rather than being quoted the beginner's
-    timeline for it.
+    Two different questions behind one sentence, and the answers are years
+    apart. `style="nonstop"` projects the continuous curve: can the unbroken
+    block reach the time the distance takes. `style="run_walk"` projects the
+    volume curve: does the long run, walking breaks included, cover the ground.
+
+    Both run on the generator's own curves, so both inherit the weekly increase
+    cap, the cutback every fourth week and — for nonstop — the regain rate, and
+    neither can quote a date the plan would not actually prescribe.
     """
     config = config or PlanConfig()
+    if style == "run_walk":
+        return _assess_run_walk(
+            plan_start, target_date, target_distance_km, baseline, config, search_weeks,
+        )
+    return _assess_nonstop(
+        plan_start, target_date, target_distance_km, baseline, config, search_weeks,
+    )
+
+
+def _assess_nonstop(
+    plan_start, target_date, target_distance_km, baseline, config, search_weeks,
+) -> Feasibility:
+    """Projected with the same continuous curve a plan is built from, including
+    the regain rate — so an athlete returning to ground they have held is told
+    the truth about how fast it comes back, rather than being quoted the
+    beginner's timeline for it."""
     weeks_available = max((target_date - plan_start).days // 7, 0)
     needs_s = round(target_distance_km * baseline.run_pace_s_per_km)
 
@@ -280,6 +459,7 @@ def assess_goal(
     reaches_s = round(curve[min(weeks_available, len(curve) - 1)]) if curve else 0
 
     return Feasibility(
+        style="nonstop",
         target_distance_km=target_distance_km,
         target_date=target_date,
         plan_start=plan_start,
@@ -291,48 +471,205 @@ def assess_goal(
     )
 
 
+def _assess_run_walk(
+    plan_start, target_date, target_distance_km, baseline, config, search_weeks,
+) -> Feasibility:
+    """Projected with the VOLUME curve, because that is what the long run rides.
+
+    The continuous ceiling does not apply here and must not be borrowed: it
+    caps the unbroken block at 75 minutes, which is why 10 km non-stop has no
+    honest date at a beginner's pace. Walking is not capped at 75 minutes, and
+    a 10 km run-walk is a perfectly ordinary thing to build toward.
+
+    Coverage is tracked as a running maximum. A cutback week covers less
+    without unlearning anything, exactly as the continuous curve holds
+    capability through one, and "the week you could first cover 5 km" should
+    not be withdrawn by the down week after it.
+    """
+    weeks_available = max((target_date - plan_start).days // 7, 0)
+    needs_m = target_distance_km * 1000
+    horizon = max(search_weeks, weeks_available + 1)
+    phases = _phases(horizon)
+
+    # The search climbs to the SAME ceiling the plan will be built with — the
+    # weekly volume whose long run covers the target — and no further.
+    #
+    # Searching with an unbounded ceiling was wrong in a way that read as
+    # confidence: for a 5 km goal nineteen weeks out it projected the long run
+    # covering 11.6 km, because nothing stopped the ramp once it passed the
+    # target. A projection that overshoots the plan it belongs to is the same
+    # failure as one that undershoots it, and it is the more persuasive one.
+    peak_needed = weekly_volume_for_coverage(
+        target_distance_km, "AEROBIC", baseline, config,
+    )
+    # Floored at the athlete's own volume the same way `generate_practice`
+    # floors it, or the search and the plan disagree for anybody already
+    # running more than the goal needs: the curve would step their week DOWN
+    # to the ceiling while the plan they are given steps it up.
+    search_ceiling = max(peak_needed, _round_down(baseline.run_km_per_week * 1.1))
+    volumes, _, _ = _volume_curve(
+        phases, baseline.run_km_per_week, search_ceiling, config,
+    )
+
+    # Seeded with what the athlete has ALREADY covered in one session. Without
+    # this the mode quotes a date to somebody who did the distance in August —
+    # the volume curve starts from a weekly figure and divides it across the
+    # week, so it can place the long run below a session that actually
+    # happened. A record of what happened outranks a projection of it.
+    weeks_needed: int | None = None
+    best_m = float(baseline.demonstrated_covered_m or 0.0)
+    reaches_m = best_m
+    achieved_phase = phases[0]
+    for index, (phase, volume) in enumerate(zip(phases, volumes)):
+        covered = covered_by_long_run_m(volume, phase, baseline, config)
+        if covered > best_m:
+            best_m = covered
+            achieved_phase = phase
+        if weeks_needed is None and best_m >= needs_m:
+            weeks_needed = index
+            achieved_phase = phase
+        if index <= weeks_available:
+            reaches_m = best_m
+
+    # Quoted from the phase that actually gets there, not from a nominal one.
+    # The phases walk different amounts — FOUNDATION walks 60 % of the session
+    # and AEROBIC 45 % — so the same distance is a different length of day
+    # depending on which week you do it in, and quoting the wrong one makes the
+    # app's own estimate disagree with the session it prescribes.
+    ratio = PHASE_SHAPE[achieved_phase]["run_walk_ratio"]
+    pace = blended_pace_s_per_km(
+        ratio, baseline.run_pace_s_per_km, baseline.walk_pace_s_per_km,
+    )
+
+    return Feasibility(
+        style="run_walk",
+        target_distance_km=target_distance_km,
+        target_date=target_date,
+        plan_start=plan_start,
+        needs_s=0,
+        reaches_s=0,
+        needs_m=needs_m,
+        reaches_m=reaches_m,
+        session_s=round(target_distance_km * pace),
+        blended_pace_s_per_km=pace,
+        # The ceiling is quoted from AEROBIC, where a goal plan spends every
+        # week after its first block, so the ramp is heading somewhere that
+        # supports the distance once the walking share comes down.
+        peak_run_km_needed=peak_needed,
+        weeks_available=weeks_available,
+        weeks_needed=weeks_needed,
+        achievable=weeks_needed is not None and weeks_needed <= weeks_available,
+    )
+
+
+def _mmss(seconds: float) -> str:
+    seconds = round(seconds)
+    return f"{seconds // 60}:{seconds % 60:02d}"
+
+
+def _goal_warning(verdict: Feasibility, baseline: Baseline) -> str:
+    """The one sentence the athlete reads. Style-aware, because the honest
+    answer to the same date is different for the two questions."""
+    label = verdict.label
+    when = f"{verdict.target_date:%-d %B}"
+
+    if verdict.style == "run_walk":
+        pace = _mmss(verdict.blended_pace_s_per_km)
+        takes = (
+            f"about {verdict.session_s / 60:.0f} minutes on your feet at "
+            f"{pace}/km including the walk breaks"
+        )
+        if verdict.achievable:
+            return (
+                f"{label} by {when} is realistic. It is {takes}, and the ramp has "
+                f"your long run covering {verdict.reaches_m / 1000:.1f} km by then "
+                f"against the {verdict.target_distance_km:g} it needs."
+            )
+        if verdict.earliest_date:
+            return (
+                f"{label} by {when} is not realistic from where you are. It is "
+                f"{takes}, and by that date the ramp has your long run covering "
+                f"{verdict.reaches_m / 1000:.1f} km. "
+                f"{verdict.earliest_date:%-d %B %Y} is the honest date — this plan "
+                "builds toward it, and the date can move once you are further along."
+            )
+        return (
+            f"{label} is a long way from {baseline.run_km_per_week:g} km a week. "
+            "The plan below builds the volume that gets you there; the date is "
+            "worth setting once it is bigger."
+        )
+
+    if verdict.achievable:
+        return (
+            f"{label} by {when} is realistic: the ramp reaches "
+            f"{verdict.reaches_s / 60:.0f} minutes of continuous running against "
+            f"the {verdict.needs_s / 60:.0f} it needs at your pace."
+        )
+    if verdict.earliest_date:
+        return (
+            f"{label} by {when} is not realistic from where you are. It needs "
+            f"{verdict.needs_s / 60:.0f} minutes of continuous running and the ramp "
+            f"reaches {verdict.reaches_s / 60:.0f} by then. "
+            f"{verdict.earliest_date:%-d %B %Y} is the honest date — this plan "
+            "builds toward it, and the date can move once you are further along."
+        )
+    return (
+        f"{label} is a long way from a {baseline.longest_run_s / 60:.0f}"
+        "-minute unbroken run, and the long run stops progressing at "
+        f"{CONTINUOUS_CEILING_MIN:.0f} minutes, so there is no date to give you. "
+        "Walk breaks would make it reachable — ask for the same distance with "
+        "breaks and you will get a date."
+    )
+
+
 def generate_goal(
     plan_start: dt.date,
     target_date: dt.date,
     target_distance_km: float,
     baseline: Baseline,
     config: PlanConfig | None = None,
+    style: GoalStyle = "nonstop",
 ) -> tuple[Plan, Feasibility]:
-    """A dated plan toward running a distance, with no race ceremony.
+    """A dated plan toward covering a distance, with no race ceremony.
 
     The plan is built for the weeks available either way. When the date is not
     achievable the plan is still returned — the training is the same training —
     but the warning says so plainly and names the date that would work, because
     an athlete who is told "no" and nothing else just picks another number.
+
+    The two styles differ in the plan as well as the verdict. A run-walk goal
+    raises the volume ceiling to the weekly running the long run needs, because
+    the milestone ladder would otherwise stop the ramp short of a distance the
+    athlete asked for in as many words.
     """
     config = config or PlanConfig()
-    verdict = assess_goal(plan_start, target_date, target_distance_km, baseline, config)
+    verdict = assess_goal(
+        plan_start, target_date, target_distance_km, baseline, config, style=style,
+    )
     weeks = max(verdict.weeks_available, 4)
 
-    plan = generate_practice(plan_start, baseline, config, weeks=weeks)
+    plan = generate_practice(
+        plan_start, baseline, config, weeks=weeks,
+        min_peak_run_km=verdict.peak_run_km_needed or None,
+    )
 
-    target_label = f"{target_distance_km:g} km without stopping"
-    if verdict.achievable:
-        warning = (
-            f"{target_label} by {target_date:%-d %B} is realistic: the ramp "
-            f"reaches {verdict.reaches_s / 60:.0f} minutes of continuous running "
-            f"against the {verdict.needs_s / 60:.0f} it needs at your pace."
-        )
-    elif verdict.earliest_date:
-        warning = (
-            f"{target_label} by {target_date:%-d %B} is not realistic from where "
-            f"you are. It needs {verdict.needs_s / 60:.0f} minutes of continuous "
-            f"running and the ramp reaches {verdict.reaches_s / 60:.0f} by then. "
-            f"{verdict.earliest_date:%-d %B %Y} is the honest date — this plan "
-            "builds toward it, and the date can move once you are further along."
-        )
-    else:
-        warning = (
-            f"{target_label} is a long way from a {baseline.longest_run_s / 60:.0f}"
-            "-minute unbroken run. The plan below builds the block that gets you "
-            "there; the distance is worth revisiting once it is bigger."
-        )
+    warnings = [_goal_warning(verdict, baseline), *plan.warnings[1:]]
+    if verdict.style == "run_walk" and verdict.session_s >= LONG_SESSION_WARN_S:
+        warnings.insert(1, (
+            f"Worth knowing: at your pace that is {verdict.session_s / 3600:.1f} "
+            "hours of run-walking in one go. That is a day out rather than a "
+            "training session — covering the distance faster, by running more of "
+            "it, is usually the better goal."
+        ))
 
-    plan = replace(plan, warnings=[warning, *plan.warnings[1:]],
-                   race_needs_continuous_s=verdict.needs_s)
+    plan = replace(
+        plan,
+        warnings=warnings,
+        # Only meaningful for a non-stop goal: it is the continuous curve's
+        # yardstick. A run-walk goal leaves the milestone ladder in place,
+        # because the unbroken block still progresses underneath it.
+        race_needs_continuous_s=(
+            verdict.needs_s if verdict.style == "nonstop" else plan.race_needs_continuous_s
+        ),
+    )
     return plan, verdict

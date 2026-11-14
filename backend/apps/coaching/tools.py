@@ -73,21 +73,35 @@ TOOLS = [
     _fn("get_workouts", "Planned workouts between two dates (inclusive).",
         {"start": DATE, "end": DATE}, ["start", "end"]),
     _fn("propose_goal_plan",
-        "Build a plan toward running a DISTANCE WITHOUT STOPPING by a date the "
-        "athlete chose — \"5k within three months\", \"10k by summer\". No race, "
-        "no entry, no taper. Use this when they name both a distance and a "
-        "deadline but no event. If the date is not realistic the plan is still "
-        "built and the result says so, with the earliest date that works — tell "
-        "them that honestly rather than agreeing to the date they asked for. "
-        "Never invent the date; if they gave a distance but no date, call "
-        "propose_practice_plan instead and let the milestones do the work.",
+        "Build a plan toward a DISTANCE by a date the athlete chose — \"5k "
+        "within three months\", \"10k by summer\". No race, no entry, no taper. "
+        "Use this when they name both a distance and a deadline but no event. "
+        "`style` is the most important argument and you must not guess it: "
+        "\"run_walk\" means covering the distance with walking breaks, which is "
+        "what most beginners mean and what phrases like \"with breaks\", \"run "
+        "walk\", \"just finish it\" or \"complete a 5k\" are asking for; "
+        "\"nonstop\" means running the whole thing without stopping, for \"run "
+        "it without stopping\", \"run the whole 5k\", \"properly run it\". They "
+        "are different questions with answers months or years apart, so if the "
+        "athlete has not made it clear, ASK THEM before calling this. If the "
+        "date is not realistic the plan is still built and the result says so, "
+        "with the earliest date that works — tell them that honestly rather "
+        "than agreeing to the date they asked for. A nonstop goal can come "
+        "back with no date at all, because the long run stops progressing at 75 "
+        "minutes; when that happens, offer them the same distance with breaks, "
+        "which usually has a date. Never invent the date; if they gave a "
+        "distance but no date, call propose_practice_plan instead and let the "
+        "milestones do the work.",
         {"target_distance_km": {"type": "number", "minimum": 0.4, "maximum": 100},
          "target_date": DATE,
+         "style": {"type": "string", "enum": ["run_walk", "nonstop"],
+                   "description": "run_walk = cover it with walking breaks; "
+                                  "nonstop = run it without stopping. Ask if unclear."},
          "available_days": {"type": "array",
                             "items": {"type": "integer", "minimum": 0, "maximum": 6},
                             "description": "Weekdays, 0 = Monday."},
          "long_run_day": {"type": "integer", "minimum": 0, "maximum": 6}},
-        ["target_distance_km", "target_date"]),
+        ["target_distance_km", "target_date", "style"]),
     _fn("propose_practice_plan",
         "Build a training plan with NO RACE, as a proposal the athlete must accept. "
         "Use this whenever they say they are not racing, are training for themselves, "
@@ -322,7 +336,7 @@ class ToolRunner:
         return diet_day(self.athlete, _date(date))
 
     # --- write ----------------------------------------------------------------
-    def t_propose_goal_plan(self, target_distance_km, target_date,
+    def t_propose_goal_plan(self, target_distance_km, target_date, style="nonstop",
                             available_days=None, long_run_day=None):
         """A distance by a date, with none of the race ceremony."""
         from apps.planning.plan_store import propose_goal_plan
@@ -330,7 +344,8 @@ class ToolRunner:
         try:
             plan = propose_goal_plan(
                 self.athlete, target_distance_km=float(target_distance_km),
-                target_date=_date(target_date), available_days=available_days,
+                target_date=_date(target_date), style=str(style),
+                available_days=available_days,
                 long_run_day=long_run_day, chat_message=self.chat_message,
             )
         except PlanError as exc:
@@ -338,18 +353,37 @@ class ToolRunner:
 
         self._attach("plan_proposal", plan.pk)
         summary = plan.summary
+        run_walk = summary.get("style") == "run_walk"
         return {
             "plan_id": plan.pk, "status": plan.status, "name": plan.name,
             "goal": plan.goal,
+            "style": summary.get("style"),
+            # Named so you cannot read the wrong pair of numbers: the two
+            # styles are measured in different units.
+            "governs": summary.get("governs"),
             "achievable": summary.get("achievable"),
             "earliest_date": summary.get("earliest_date"),
-            "needs_continuous_s": summary.get("needs_continuous_s"),
-            "reaches_continuous_s": summary.get("reaches_continuous_s"),
+            **({
+                "needs_covered_m": summary.get("needs_covered_m"),
+                "reaches_covered_m": summary.get("reaches_covered_m"),
+                "session_s": summary.get("session_s"),
+                "blended_pace_s_per_km": summary.get("blended_pace_s_per_km"),
+            } if run_walk else {
+                "needs_continuous_s": summary.get("needs_continuous_s"),
+                "reaches_continuous_s": summary.get("reaches_continuous_s"),
+            }),
             "weeks": summary.get("weeks"),
             "warnings": summary.get("warnings", []),
             "note": ("Tell the athlete plainly whether their date works. If it "
                      "does not, give them the earliest one that does rather than "
-                     "softening it — the plan is built either way."),
+                     "softening it — the plan is built either way. Say which "
+                     "question you answered: covering the distance with walk "
+                     "breaks and running it without stopping are not the same "
+                     "goal, and they must not find out later that you planned "
+                     "for the other one."
+                     + (" For a run-walk goal, tell them how long the attempt "
+                        "takes (session_s) — that is the fact that decides "
+                        "whether they want it." if run_walk else "")),
         }
 
     def t_propose_practice_plan(self, available_days=None, long_run_day=None, weeks=None):

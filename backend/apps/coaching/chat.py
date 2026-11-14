@@ -52,7 +52,12 @@ simply have no saved race, call propose_practice_plan — it builds toward the n
 unbroken block (5, 10, 15, 20, 30, 45, 60 minutes) instead of a date. If they name a \
 distance AND a deadline but no event ("5k within three months"), call propose_goal_plan, \
 and if the date does not work say so with the earliest one that does rather than \
-agreeing to it. Do NOT ask for a \
+agreeing to it. That call needs a `style`, and it is not yours to assume: covering 5 km \
+with walk breaks and running 5 km without stopping are different goals whose honest \
+dates can be a year apart. If the athlete has not said which they mean, ASK — one short \
+question, phrased as the two things rather than as jargon ("do you want to cover it with \
+walking breaks, or run the whole thing without stopping?"). Most beginners mean the \
+first. Do NOT ask for a \
 race date from somebody who has not mentioned a race, and never invent one: a plan \
 counting down to a race nobody entered is worse than no plan. Ask only what you cannot \
 derive: how many days a week, injuries. Either plan is a PROPOSAL until the athlete \

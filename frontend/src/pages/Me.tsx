@@ -21,6 +21,7 @@ import { useAchievements, useWatchAlarms } from '../lib/queries'
 import { useDataReview, useIllness } from '../lib/r17'
 import { ProfileCards } from './Profile'
 import { ResetPlanning } from '../components/settings/ResetPlanning'
+import { SetGoal } from '../components/goal/SetGoal'
 
 const CalendarSync = lazy(() => import('../components/calendar/CalendarSync').then((m) => ({ default: m.CalendarSync })))
 
@@ -37,6 +38,7 @@ export default function Me() {
       <Route path="memory" element={<SubPage title="What the coach knows"><CoachMemory /></SubPage>} />
       <Route path="deleted" element={<SubPage title="Deleted activities"><DeletedActivities /></SubPage>} />
       <Route path="reset" element={<SubPage title="Clear data"><ResetPlanning /></SubPage>} />
+      <Route path="goal" element={<SubPage title="Set a goal"><SetGoal /></SubPage>} />
       <Route path="*" element={<Navigate to="/me" replace />} />
     </Routes>
   )
@@ -81,6 +83,13 @@ function MeHome() {
       </section>
 
       <ProfileCards />
+
+      {/* Its own row because the mode had no door but the coach, and that door
+          only opened for the exact words. A goal you can set by picking a
+          distance and a date is not a chat feature. */}
+      <RowGroup title="Training">
+        <Row to="/me/goal" icon={<MedalIcon size={20} />} title="Set a goal" sub="A distance by a date — run it, or cover it with walk breaks" />
+      </RowGroup>
 
       <RowGroup title="Gear & reminders">
         <Row to="/me/alarms" icon={<WatchIcon size={20} />} title="Watch alarms" sub={alarmSub} />

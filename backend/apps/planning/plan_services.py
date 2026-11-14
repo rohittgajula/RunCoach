@@ -42,6 +42,7 @@ def run_points(athlete: Athlete, since: dt.date | None = None) -> list[RunPoint]
         points.append(RunPoint(
             date=activity.local_date, run_distance_m=metrics.run_distance_m,
             longest_run_s=metrics.longest_run_s,
+            covered_m=(metrics.run_distance_m or 0.0) + (metrics.walk_distance_m or 0.0),
             run_pace_s_per_km=metrics.run_pace_s_per_km,
             walk_pace_s_per_km=metrics.walk_pace_s_per_km,
         ))

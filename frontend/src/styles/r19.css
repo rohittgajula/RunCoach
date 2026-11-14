@@ -1,0 +1,61 @@
+/* ===== A distance by a date (R19) ====================================
+   The screen exists because the mode had one door — say the right thing to
+   the coach — and that door could not express the commonest version of the
+   goal at all: covering a distance with walk breaks.
+
+   Two things the layout has to carry. The two readings of the goal are shown
+   together and answered together, because a control that defaults to one and
+   hides the other is how somebody trains for months toward a goal they never
+   picked. And the answer arrives before the plan does, so the verdict pair
+   sits above the button that builds anything. */
+
+.goal-field { display: flex; flex-direction: column; gap: 7px; }
+.goal-field input[type='number'],
+.goal-field input[type='date'] { width: 100%; }
+
+.goal-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.goal-pill {
+  appearance: none; cursor: pointer; font: inherit;
+  padding: 7px 13px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card-2); color: var(--muted);
+  font-size: 0.84rem; font-weight: 700;
+}
+.goal-pill:active { transform: scale(0.95); }
+.goal-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.goal-pill.is-on { background: var(--accent); border-color: transparent; color: #fff; }
+
+.goal-styles { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.goal-styles legend { padding: 0; margin-bottom: 7px; }
+.goal-style {
+  display: flex; align-items: flex-start; gap: 11px; min-width: 0;
+  padding: 11px 12px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-2);
+}
+.goal-style > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.goal-style input[type='radio'] { flex: none; width: 19px; height: 19px; margin-top: 2px; }
+.goal-style.is-on { border-color: var(--accent); }
+
+/* The pair. Side by side where there is room, stacked on a phone — but always
+   both, and always in the same order, so they read as one comparison. */
+.goal-verdicts { display: grid; gap: 9px; }
+@media (min-width: 560px) { .goal-verdicts { grid-template-columns: 1fr 1fr; } }
+
+.goal-verdict {
+  appearance: none; cursor: pointer; font: inherit; text-align: left; min-width: 0;
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--card-2); color: var(--fg);
+}
+.goal-verdict:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.goal-verdict.is-chosen { border-color: var(--accent); }
+.goal-verdict-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.goal-verdict-title { font-size: 0.92rem; font-weight: 700; min-width: 0; }
+.goal-verdict-date { font-size: 0.86rem; line-height: 1.5; }
+.goal-verdict .small { line-height: 1.5; }
+
+.goal-chip {
+  flex: none; padding: 3px 9px; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 800; letter-spacing: 0.03em;
+}
+.goal-chip.ok { background: var(--good-bg); color: var(--good-fg); }
+.goal-chip.no { background: var(--bad-bg); color: var(--bad-fg); }

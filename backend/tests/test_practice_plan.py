@@ -244,7 +244,7 @@ def test_the_demonstrated_best_is_all_time_not_recent(athlete):
     from django.utils import timezone
 
     from apps.activities.models import Activity, ActivityMetrics
-    from apps.planning.plan_store import _practice_baseline
+    from apps.planning.plan_store import practice_baseline
 
     today = athlete.local_today
     # One big block months ago, small ones since — the shape of a layoff.
@@ -263,7 +263,7 @@ def test_the_demonstrated_best_is_all_time_not_recent(athlete):
             run_pace_s_per_km=604, walk_pace_s_per_km=700, blended_pace_s_per_km=845,
         )
 
-    baseline = _practice_baseline(athlete, None, None)
+    baseline = practice_baseline(athlete, None, None)
     assert baseline.demonstrated_longest_s == 837.0
     assert baseline.demonstrated_longest_s > baseline.longest_run_s, (
         "ground already held must be distinguishable from ground not yet broken"

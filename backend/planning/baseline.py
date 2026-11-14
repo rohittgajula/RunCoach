@@ -35,6 +35,12 @@ class RunPoint:
     longest_run_s: float
     run_pace_s_per_km: float | None = None
     walk_pace_s_per_km: float | None = None
+    #: Ground covered in this session, running and walking together, with
+    #: standing still excluded. Distinct from run_distance_m on purpose —
+    #: "distance means distance RUN" everywhere a plan is loaded from, and this
+    #: is the one question where the walking counts, because a run-walk goal is
+    #: about covering ground rather than about running it.
+    covered_m: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -50,6 +56,11 @@ class HistoryBaseline:
     best_week_start: dt.date | None = None
     best_week_km: float = 0.0
     best_longest_run_s: float = 0.0
+    #: The furthest ever covered in ONE session in this block, walking
+    #: included. Undetrained, like best_longest_run_s: it is a record of what
+    #: happened, and a run-walk goal must never be quoted a date for ground the
+    #: athlete has already covered.
+    best_covered_m: float = 0.0
     warning: str | None = None
 
 
@@ -99,6 +110,7 @@ def from_history(runs: list[RunPoint], today: dt.date) -> HistoryBaseline:
     best_start, best_m = max(by_week.items(), key=lambda item: (item[1], item[0]))
     best_km = best_m / 1000
     longest = max(r.longest_run_s for r in block)
+    covered = max((r.covered_m for r in block), default=0.0)
 
     last = block[0].date
     gap = (today - last).days
@@ -129,5 +141,6 @@ def from_history(runs: list[RunPoint], today: dt.date) -> HistoryBaseline:
         best_week_start=best_start,
         best_week_km=round(best_km, 2),
         best_longest_run_s=longest,
+        best_covered_m=covered,
         warning=warning,
     )

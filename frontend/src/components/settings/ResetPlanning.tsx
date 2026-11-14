@@ -207,9 +207,18 @@ function Rebuild() {
           </p>
           {/* The commonest way to see this is to clear everything and then
               press rebuild, which is a dead end: there is nothing to rebuild
-              and the screen has to say what to do instead. */}
-          <Link to="/chat/new" className="btn btn-primary btn-grow">
-            Ask the coach for a new plan
+              and the screen has to say what to do instead.
+
+              Setting a goal leads, because "ask the coach" was the only answer
+              here and it is the one that failed — the planner's dated-goal
+              mode could only be reached by saying the right thing in chat, and
+              it could not express a distance you mean to cover with walk
+              breaks at all. */}
+          <Link to="/me/goal" className="btn btn-primary btn-grow">
+            Set a goal — a distance by a date
+          </Link>
+          <Link to="/chat/new" className="btn btn-secondary btn-grow">
+            Or ask the coach for a new plan
           </Link>
         </div>
       )}

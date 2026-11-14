@@ -472,6 +472,35 @@ def _forget_on_garmin(athlete: Athlete, workouts) -> None:
 
 
 @transaction.atomic
+def _goal_rebuild_args(plan: TrainingPlan, today: dt.date) -> dict | None:
+    """The goal to rebuild toward, or None if this plan is not a dated goal.
+
+    Returns None for a goal whose date has passed as well. A plan cannot be
+    rebuilt toward yesterday, and silently moving the date would be inventing
+    a goal the athlete never set — they are sent to propose a new one instead,
+    the same way a passed race is handled.
+    """
+    summary = plan.summary or {}
+    if summary.get("kind") != "goal":
+        return None
+    raw_date, distance = summary.get("target_date"), summary.get("target_distance_km")
+    if not raw_date or not distance:
+        return None
+    try:
+        target_date = dt.date.fromisoformat(str(raw_date))
+    except ValueError:
+        return None
+    if target_date <= today + dt.timedelta(days=1):
+        return None
+    # Plans written before the run-walk mode existed carry no style and were
+    # all non-stop, which is exactly what the default means.
+    return {
+        "target_distance_km": float(distance),
+        "target_date": target_date,
+        "style": str(summary.get("style") or "nonstop"),
+    }
+
+
 def rebuild_active_plan(athlete: Athlete) -> TrainingPlan:
     """Regenerate the active plan for the same race from the athlete's CURRENT profile
     (training days, long-run day) and history, and make it active.
@@ -491,7 +520,16 @@ def rebuild_active_plan(athlete: Athlete) -> TrainingPlan:
     # was both wrong and a dead end: an athlete working toward an unbroken
     # block could not rebuild at all, which is exactly who most needs to after
     # time off. Rebuild it the way it was made.
+    #
+    # "The way it was made" has to include which way that was. A goal plan also
+    # has no race, and rebuilding it as a practice plan quietly threw away both
+    # the date the athlete chose and whether they meant to run the distance or
+    # cover it — so pressing Rebuild turned "5 km with breaks by March" into an
+    # undated milestone ladder, with nothing on screen saying the goal had gone.
     if active.race is None:
+        goal = _goal_rebuild_args(active, athlete.local_today)
+        if goal is not None:
+            return accept_plan(propose_goal_plan(athlete, **goal))
         return accept_plan(propose_practice_plan(athlete))
     if active.race.date <= athlete.local_today:
         raise PlanError(
@@ -518,6 +556,25 @@ PRACTICE_PHASE_NAMES: dict[str, tuple[str, str]] = {
                 "phase that moves the number you are actually chasing."),
 }
 
+#: The same phases, described for a goal that is about covering ground rather
+#: than running it unbroken.
+#:
+#: Not cosmetic. The shared copy tells the athlete that "the long run's unbroken
+#: block … is the number you are actually chasing", which is true of a milestone
+#: plan and of a non-stop goal, and is the wrong quantity for somebody training
+#: to cover 5 km with walk breaks — the precise confusion this mode exists to
+#: remove, reappearing underneath the plan that removes it.
+RUN_WALK_PHASE_NAMES: dict[str, tuple[str, str]] = {
+    "FOUNDATION": ("Getting going again",
+                   "Short, frequent, easy. The aim is consistency and letting the "
+                   "tendons catch up with the enthusiasm."),
+    "AEROBIC": ("Building the distance",
+                "The long run gets longer week by week, walk breaks and all. Time "
+                "on your feet is the number you are chasing here — the unbroken "
+                "block grows underneath it, and it is not what the goal is measured "
+                "against."),
+}
+
 
 
 def _all_time_longest_run_s(athlete: Athlete) -> float:
@@ -538,8 +595,32 @@ def _all_time_longest_run_s(athlete: Athlete) -> float:
     ).aggregate(best=Max("longest_run_s"))["best"] or 0.0
 
 
-def _practice_baseline(athlete: Athlete, available_days, long_run_day):
-    """The baseline both no-race modes start from.
+def _all_time_covered_m(athlete: Athlete) -> float:
+    """The furthest this athlete has ever covered in one session.
+
+    Running and walking together, standing still excluded — the quantity a
+    run-walk goal is actually about. Unbounded in time for the same reason as
+    `_all_time_longest_run_s`: it is a record of what happened, not a claim
+    about current fitness, and the run-walk mode uses it only to avoid handing
+    somebody a six-week plan to reach a distance they covered in August.
+    """
+    from django.db.models import F, Max
+
+    from apps.activities.models import ActivityMetrics
+
+    return ActivityMetrics.objects.filter(
+        activity__athlete=athlete,
+    ).annotate(
+        covered=F("run_distance_m") + F("walk_distance_m"),
+    ).aggregate(best=Max("covered"))["best"] or 0.0
+
+
+def practice_baseline(athlete: Athlete, available_days, long_run_day):
+    """The baseline every no-race mode starts from.
+
+    Public because the goal preview reads it too: that endpoint has to answer
+    from the same starting point the plan would be built from, and a second
+    copy of this would be wrong the first time one of them was corrected.
 
     Shared because the two differ only in what they build toward: how the
     athlete's history becomes a starting point is the same question either way,
@@ -570,6 +651,10 @@ def _practice_baseline(athlete: Athlete, available_days, long_run_day):
             float(history.best_longest_run_s or 0.0),
             baseline.longest_run_s,
         ),
+        demonstrated_covered_m=max(
+            float(_all_time_covered_m(athlete)),
+            float(history.best_covered_m or 0.0),
+        ),
     )
     days = _normalise_days(available_days)
     if days is not None:
@@ -586,12 +671,14 @@ def _practice_baseline(athlete: Athlete, available_days, long_run_day):
     return baseline
 
 
-def _persist_practice(athlete, plan, generated, baseline, start, horizon_end):
+def _persist_practice(athlete, plan, generated, baseline, start, horizon_end,
+                      *, style: str = "nonstop"):
     """Phases and workouts for a plan with no race in it."""
     merged = _merge_phases(generated, horizon_end)
+    names = RUN_WALK_PHASE_NAMES if style == "run_walk" else PRACTICE_PHASE_NAMES
     phases: list[PlanPhase] = []
     for order, block in enumerate(merged):
-        name, description = PRACTICE_PHASE_NAMES.get(
+        name, description = names.get(
             block["generator_phase"], (block["generator_phase"].title(), ""),
         )
         phases.append(PlanPhase.objects.create(
@@ -627,23 +714,34 @@ def propose_goal_plan(
     *,
     target_distance_km: float,
     target_date: dt.date,
+    style: str = "nonstop",
     available_days=None,
     long_run_day: int | None = None,
     chat_message=None,
 ) -> TrainingPlan:
-    """A dated goal with no race: "5 km without stopping, by June".
+    """A dated goal with no race: "5 km by June", in either of its two senses.
 
     Between the two existing modes. A race plan needs an event; a practice plan
     has no deadline. This has a date the athlete chose and nothing else a race
     brings — no taper, no race week, no entry.
 
-    The one thing it does that a race plan does not is refuse. A race date is a
-    fact, so a plan to it is built and warned about; a self-set date is a wish,
-    and the useful answer to an impossible wish is the possible one beside it.
-    The plan is still built either way, because the training is the same
-    training — only the date in the goal changes.
+    `style` is the part that was missing, and its absence was not a small gap.
+    The mode took "5 km by April" and only ever planned for running it WITHOUT
+    STOPPING, which for a beginner is a different and much harder question than
+    the one most people are asking. Rohit asked for "5k between march and april
+    with breaks" and the app would have told him his date was impossible —
+    true of the goal it assumed, false of the goal he stated.
+
+    The one thing this mode does that a race plan does not is refuse. A race
+    date is a fact, so a plan to it is built and warned about; a self-set date
+    is a wish, and the useful answer to an impossible wish is the possible one
+    beside it. The plan is still built either way, because the training is the
+    same training — only the date in the goal changes.
     """
     from planning.practice import generate_goal
+
+    if style not in ("nonstop", "run_walk"):
+        raise PlanError("style must be 'nonstop' or 'run_walk'.")
 
     today = athlete.local_today
     start = today + dt.timedelta(days=1)
@@ -652,9 +750,10 @@ def propose_goal_plan(
     if not 0.4 <= float(target_distance_km) <= 100:
         raise PlanError("The distance must be between 0.4 and 100 km.")
 
-    baseline = _practice_baseline(athlete, available_days, long_run_day)
+    baseline = practice_baseline(athlete, available_days, long_run_day)
     generated, verdict = generate_goal(
         start, target_date, float(target_distance_km), baseline, config_from_settings(),
+        style=style,
     )
 
     when = (
@@ -665,21 +764,33 @@ def propose_goal_plan(
     plan = TrainingPlan.objects.create(
         athlete=athlete,
         race=None,
-        name=f"{float(target_distance_km):g} km without stopping"[:160],
-        goal=f"Run {float(target_distance_km):g} km without stopping {when}.",
+        name=verdict.label[:160],
+        goal=f"{verdict.label.capitalize()} {when}.",
         status=TrainingPlan.Status.PROPOSED,
         generator_version=GENERATOR_VERSION,
         chat_message=chat_message,
         summary={
             "kind": "goal",
+            "style": verdict.style,
+            # Named, because the two styles are measured in different units and
+            # a reader of this blob has no other way to tell which fields mean
+            # anything. See planning/practice.GOVERNS.
+            "governs": verdict.governs,
             "weeks": generated.weeks_available,
             "peak_run_km": generated.peak_run_km,
             "peak_continuous_s": generated.peak_continuous_s,
             "target_distance_km": float(target_distance_km),
             "target_date": target_date.isoformat(),
             "achievable": verdict.achievable,
+            # nonstop only: seconds of unbroken running.
             "needs_continuous_s": verdict.needs_s,
             "reaches_continuous_s": verdict.reaches_s,
+            # run_walk only: metres covered in one session, and what that
+            # session costs in time.
+            "needs_covered_m": verdict.needs_m,
+            "reaches_covered_m": verdict.reaches_m,
+            "session_s": verdict.session_s,
+            "blended_pace_s_per_km": round(verdict.blended_pace_s_per_km) or None,
             "earliest_date": verdict.earliest_date.isoformat() if verdict.earliest_date else None,
             "warnings": generated.warnings,
             "available_days": baseline.available_days,
@@ -687,7 +798,8 @@ def propose_goal_plan(
         },
     )
     _persist_practice(athlete, plan, generated, baseline, start,
-                      start + dt.timedelta(days=generated.weeks_available * 7))
+                      start + dt.timedelta(days=generated.weeks_available * 7),
+                      style=verdict.style)
     return plan
 
 
@@ -715,7 +827,7 @@ def propose_practice_plan(
     horizon = max(4, min(int(weeks or HORIZON_WEEKS), 26))
     history = history_baseline(athlete)
     beginner = history.source != "history"
-    baseline = _practice_baseline(athlete, available_days, long_run_day)
+    baseline = practice_baseline(athlete, available_days, long_run_day)
 
     generated = generate_practice(start, baseline, config_from_settings(), weeks=horizon)
     # Named for the next rung above what has EVER been held, not the rung the
