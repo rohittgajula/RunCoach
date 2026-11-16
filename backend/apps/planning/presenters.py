@@ -100,10 +100,46 @@ def workout_json(workout: PlannedWorkout, guard_inputs: dict | None = None) -> d
     }
 
 
-WALK_PACE_S_PER_KM = 600
+#: Only for an athlete with no segmented walking on record at all. Everybody
+#: else gets their own measured figure — see `walk_pace_for`.
+WALK_PACE_FALLBACK_S_PER_KM = 700
+
+
+def walk_pace_for(athlete) -> float:
+    """The athlete's own walking pace, median over their segmented history.
+
+    This was a flat 600 s/km for everybody, which is a brisk walk and not what
+    most beginners do: Rohit's measured figure is about 700, so every session
+    with walking in it was credited with ~17 % more ground than he covers. The
+    number exists in the data already — segmentation records walk_pace_s_per_km
+    on every run — and a constant standing in front of a measurement is the
+    kind of thing this app is supposed not to do.
+
+    Cached per athlete and data version, because a month of calendar cells asks
+    for this once per workout and the history query is not free.
+    """
+    from apps.athletes.versioning import cached
+
+    def measure() -> float:
+        from .plan_services import history_baseline
+
+        return float(history_baseline(athlete).walk_pace_s_per_km or 0)
+
+    return cached(athlete, "walk_pace", measure) or WALK_PACE_FALLBACK_S_PER_KM
 
 
 def distance_estimate(workout: PlannedWorkout) -> dict | None:
+    """How far this session goes, split the way it is actually run.
+
+    Run and walk are reported separately as well as together. A 27-minute
+    session of "5 min walk + 4 min run + ..." is two different efforts sharing
+    a card, and one combined kilometre figure hides which part of it is the
+    training. The split is also the only honest way to show it, because the two
+    happen at paces 100 s/km apart.
+
+    Every figure is an average at the athlete's own paces, so it is an estimate
+    and the UI says so. Nothing here is a target.
+    """
     from apps.athletes.effective import loop_distance_km
     from apps.athletes.versioning import cached
     from planning import edit as rules
@@ -111,15 +147,41 @@ def distance_estimate(workout: PlannedWorkout) -> dict | None:
     if workout.kind in ("REST", "STRENGTH") or not workout.steps:
         return None
     athlete = workout.athlete
-    run, walk = rules.run_s(workout.steps), rules.walk_s(workout.steps)
-    pace = ((athlete.easy_pace_min or 600) + (athlete.easy_pace_max or 645)) / 2
-    km = run / pace + walk / WALK_PACE_S_PER_KM
+    run_s, walk_s = rules.run_s(workout.steps), rules.walk_s(workout.steps)
+    run_pace = ((athlete.easy_pace_min or 600) + (athlete.easy_pace_max or 645)) / 2
+    walk_pace = walk_pace_for(athlete)
+
+    run_km = run_s / run_pace if run_pace else 0.0
+    walk_km = walk_s / walk_pace if walk_pace else 0.0
+    km = run_km + walk_km
     if km <= 0:
         return None
+
     loop = cached(athlete, "loop_km", lambda: loop_distance_km(athlete) or 0) or None
-    km = round(km, 1)
-    return {"km": km, "loops": round(km / loop, 1) if loop else None,
-            "loop_km": loop}
+
+    # The total is the SUM OF THE ROUNDED PARTS, not a separately rounded
+    # total. Those are different numbers — 1.17 + 1.28 is 2.45 while the raw
+    # 2.447 rounds to 2.4 — and a breakdown that does not add up is worse than
+    # no breakdown, because the athlete checks. Rounding the parts first and
+    # summing them is the only version where every figure on screen agrees.
+    #
+    # Two decimals, because the parts are small: a 90-second run block is
+    # 0.15 km, and at one decimal it becomes 0.1 or 0.2 depending on nothing
+    # the athlete did. The UI shows the headline at one decimal.
+    run_km = round(run_km, 2)
+    walk_km = round(walk_km, 2)
+    km = round(run_km + walk_km, 2)
+    return {
+        "km": km,
+        "run_km": run_km,
+        "walk_km": walk_km,
+        "run_s": run_s,
+        "walk_s": walk_s,
+        "run_pace_s_per_km": round(run_pace),
+        "walk_pace_s_per_km": round(walk_pace),
+        "loops": round(km / loop, 1) if loop else None,
+        "loop_km": loop,
+    }
 
 
 def edit_fields(workout: PlannedWorkout, today: dt.date | None = None) -> dict:

@@ -59,3 +59,81 @@
 }
 .goal-chip.ok { background: var(--good-bg); color: var(--good-fg); }
 .goal-chip.no { background: var(--bad-bg); color: var(--bad-fg); }
+
+/* ===== How far a timed session goes (R19) ============================
+   A run/walk prescription is given in minutes, and the athlete cannot turn
+   that into distance in their head because the two halves run at paces about
+   100 s/km apart. The split carries the paces it used, because a figure whose
+   basis is invisible is one you have to take on trust. */
+
+.dsplit { display: flex; flex-direction: column; gap: 7px; }
+.dsplit-rows {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--card-2); overflow: hidden;
+}
+.dsplit-row {
+  display: grid; grid-template-columns: 10px 1fr auto auto;
+  align-items: center; gap: 9px;
+  padding: 8px 11px; border-top: 1px solid var(--line); min-width: 0;
+}
+.dsplit-row:first-child { border-top: 0; }
+.dsplit-swatch { width: 10px; height: 10px; border-radius: 3px; }
+.dsplit-name { font-size: 0.84rem; font-weight: 600; min-width: 0; }
+.dsplit-km { font-size: 0.88rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dsplit-pace {
+  font-size: 0.74rem; color: var(--muted);
+  font-variant-numeric: tabular-nums; min-width: 4.4em; text-align: right;
+}
+/* The sum reads as a sum: same row shape, heavier, no colour chip. */
+.dsplit-row.is-total { background: var(--card); }
+.dsplit-row.is-total .dsplit-name,
+.dsplit-row.is-total .dsplit-km { font-weight: 800; }
+.dsplit-note { margin: 0; font-size: 0.74rem; line-height: 1.5; color: var(--muted); }
+
+/* ===== Adding your own session to a day (R20) ========================
+   The description box leads, because a sentence is how people hold a session
+   in their head — "30 easy, run/walk" rather than a list of steps with
+   heart-rate bands on them. The shapes underneath are for the days you do not
+   want to type. */
+
+.add-open { margin-top: 4px; }
+.add-closed { margin: 6px 0 0; }
+.add { padding-top: 4px; border-top: 1px solid var(--line); }
+.add-field { display: flex; flex-direction: column; gap: 7px; }
+.add-field textarea {
+  width: 100%; resize: vertical; min-height: 68px;
+  font: inherit; line-height: 1.5;
+}
+.add-manual > summary {
+  cursor: pointer; padding: 8px 0; font-size: 0.84rem; font-weight: 700; color: var(--muted);
+}
+.add-manual[open] > summary { margin-bottom: 6px; }
+.add-manual .add-field { gap: 9px; }
+
+.add-preview {
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 11px; border-radius: var(--radius-sm);
+  border: 1px solid var(--accent); background: var(--card-2);
+}
+/* What the coach took from the sentence, above the session it produced:
+   it is the thing to disagree with, so it reads first. */
+.add-understood { margin: 0; font-size: 0.84rem; line-height: 1.5; }
+.add-title { margin: 0; font-size: 0.95rem; font-weight: 800; }
+.add-moves { margin: 0; padding-left: 18px; font-size: 0.86rem; line-height: 1.7; }
+
+/* Changes to OTHER days, each its own question (R20).
+   A list accepted wholesale is not consent to the item in the middle of it,
+   so every row carries its own tick and nothing is ticked to begin with. */
+.add-changes {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--card);
+}
+.add-changes-head { margin: 0; font-size: 0.78rem; line-height: 1.5; color: var(--muted); }
+.add-change { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; min-width: 0; }
+.add-change input[type='checkbox'] { flex: none; width: 18px; height: 18px; margin-top: 2px; }
+.add-change > span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.add-change-day { font-size: 0.82rem; font-weight: 700; }
+.add-change-do { font-size: 0.82rem; }
+.add-change-why { font-size: 0.75rem; line-height: 1.45; color: var(--muted); }

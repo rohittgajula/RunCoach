@@ -70,6 +70,11 @@ class PlanError(ValueError):
     """The request cannot produce a plan (race in the past, bad inputs)."""
 
 
+#: `PlannedWorkout.created_by` for a session the athlete added themselves.
+#: Mirrored in apps.planning.day_session.USER; both read the same column.
+USER_CREATED = "user"
+
+
 def bands_for(athlete: Athlete) -> Bands:
     """Pace and heart-rate bands for each intensity.
 
@@ -331,6 +336,18 @@ def accept_plan(plan: TrainingPlan) -> TrainingPlan:
     for previous in TrainingPlan.objects.select_for_update().filter(
         athlete=athlete, status=TrainingPlan.Status.ACTIVE
     ):
+        # A session the athlete added themselves is not the old coach's work to
+        # throw away. It moves to the new plan instead of being deleted, and
+        # keeps its place on the calendar and on the watch.
+        #
+        # Without this, "add a run on Tuesday" lasted exactly as long as it
+        # took to accept another plan, and nothing on screen would have said
+        # the run had gone. Same rule as `edited_by`: what the athlete put
+        # there outlives what the generator put there.
+        previous.workouts.filter(
+            date__gt=today, status=PlannedWorkout.Status.PLANNED, created_by=USER_CREATED,
+        ).update(plan=plan, phase=None)
+
         doomed = previous.workouts.filter(date__gt=today, status=PlannedWorkout.Status.PLANNED)
         _forget_on_garmin(athlete, doomed)
         doomed.delete()

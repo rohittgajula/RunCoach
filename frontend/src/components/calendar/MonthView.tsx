@@ -133,15 +133,12 @@ export function MonthView({ today, ...handlers }: { today: string } & Handlers) 
     try {
       const response = await fetchCalendarDay(client, day.date)
       const full = response.days.find((d) => d.date === day.date)
-      if (!full || !full.items.length) return
-      if (full.items.length === 1) {
-        const item = full.items[0]
-        if (item.type === 'workout') handlers.onWorkout(item.workout)
-        else if (item.type === 'activity') handlers.onActivity(item.activity)
-        else setOpenDay(full)
-      } else {
-        setOpenDay(full)
-      }
+      // Always the sheet now, including for a single item and for a day with
+      // nothing on it. The day stopped being a list the moment you could add
+      // to it: a rest day with no sheet is a day you cannot put a run on, and
+      // a run day that jumps straight to the run is a day you cannot add a
+      // gym session to. One extra tap on the single-item day buys both.
+      setOpenDay(full ?? { date: day.date, items: [], rest: null })
     } catch (error) {
       setTapError(errorText(error, 'Could not open that day.'))
     } finally {
@@ -169,11 +166,10 @@ export function MonthView({ today, ...handlers }: { today: string } & Handlers) 
         {DOW.map((d, i) => <span key={i} className="month-dow">{d}</span>)}
         {cells.map((cell, i) => {
           if (!cell) return <span key={`x${i}`} className="month-cell is-blank" />
-          // A gym day has neither a planned run nor an activity, so it was
-          // falling through to `disabled` — the one kind of day you could see
-          // on the grid and not open. The day endpoint has always returned the
-          // strength session; nothing could ask it for one.
-          const tappable = !!cell.planned || !!cell.strength || cell.activities.length > 0
+          // Every day opens. It used to need a planned run, a gym session or
+          // an activity on it, which made a rest day the one square on the
+          // grid you could look at and not touch — and a rest day is exactly
+          // the day somebody wants to put their own session on.
           const status = cell.status === 'today' ? (cell.planned ? 'planned' : null) : cell.status
           const lines = cellLines(cell)
           const label = [
@@ -187,7 +183,6 @@ export function MonthView({ today, ...handlers }: { today: string } & Handlers) 
               type="button"
               className={`month-cell ${cell.date === now ? 'is-today' : ''} ${cell.date < now ? 'is-past' : ''} ${loadingDate === cell.date ? 'is-loading' : ''}`}
               data-type={lines?.type ?? undefined}
-              disabled={!tappable}
               aria-label={label}
               onClick={() => open(cell)}
             >

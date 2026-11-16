@@ -104,7 +104,19 @@ export type Workout = {
   load: number
   steps: Step[]
   /** R18 §B: estimated km (+ loops when the athlete set a loop distance). */
-  distance_estimate?: { km: number; loops: number | null; loop_km: number | null } | null
+  distance_estimate?: {
+    km: number
+    /** Run and walk kept apart: they happen at paces ~100 s/km different, and
+     *  one combined figure hides which part of the session is the training. */
+    run_km: number
+    walk_km: number
+    run_s: number
+    walk_s: number
+    run_pace_s_per_km: number
+    walk_pace_s_per_km: number
+    loops: number | null
+    loop_km: number | null
+  } | null
   description: string
   purpose: string
   target_zone: string

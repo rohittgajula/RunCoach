@@ -23,11 +23,12 @@ from .client import AIUnavailable, canonical_hash, complete, model_for, provider
 from .context import athlete_state, recent_runs, run_summary, weekly_rollup
 from .models import AIAnalysis, AIRequestLog
 from .prompts import (
-    GUIDANCE_USER, INSIGHTS_USER, JOURNAL_USER, PROMPT_VERSION, REVIEW_USER, RUN_USER, SYSTEM,
-    WEEKLY_USER,
+    GUIDANCE_USER, INSIGHTS_USER, JOURNAL_USER, PROMPT_VERSION, REVIEW_USER, RUN_USER,
+    SESSION_USER, SYSTEM, WEEKLY_USER,
 )
 from .schemas import (
-    Guidance, InsightsSummary, JournalFacts, RunAnalysis, WeeklyReview, WorkoutReview,
+    DescribedSession, Guidance, InsightsSummary, JournalFacts, RunAnalysis, WeeklyReview,
+    WorkoutReview,
 )
 from .validators import prose_of, validate
 
@@ -271,6 +272,52 @@ def extract_journal(athlete: Athlete, text: str, written_on) -> tuple[JournalFac
         payload=payload,
         user_prompt=JOURNAL_USER.format(text=text, written_on=written_on),
         schema=JournalFacts,
+    )
+
+
+def describe_session(
+    athlete: Athlete, text: str, context: dict | None = None,
+) -> tuple[DescribedSession, bool]:
+    """One run, written from the athlete's own sentence about it.
+
+    "i need to have a easy run basically in zone 2 for 30 min ie run/walk
+    stratagy" is a complete specification and the app could not read it — the
+    only way to put a session on a day was to accept one the generator wrote.
+
+    The model reads; it does not prescribe. Its output is passed straight to
+    `planning.edit.expand`, the validator the manual editor uses, which is what
+    actually enforces step lengths, the total, and heart-rate bands against
+    this athlete's own floor and ceiling. A model asked to respect a numeric
+    limit mostly will, and mostly is not a safety rule.
+
+    The athlete's own bands go IN, so "zone 2" resolves to their zone 2 rather
+    than a textbook's.
+    """
+    zones = athlete.zones()
+    zone_lines = ""
+    if zones:
+        zone_lines = "- Their zones: " + ", ".join(
+            f"{name} {zones.band(name).low}-{zones.band(name).high}"
+            for name in ("Z1", "Z2", "Z3", "Z4", "Z5")
+            if zones.band(name)
+        )
+    payload = {
+        "text": text,
+        "easy_low": athlete.easy_pace_min, "easy_high": athlete.easy_pace_max,
+        "hr_easy_low": athlete.hr_easy_min, "hr_easy_high": athlete.hr_easy_max,
+        "hr_ceiling": athlete.hr_ceiling, "zones": zone_lines,
+        # The days either side. Part of the payload, so it is part of the cache
+        # key too: the same sentence on a week that has changed is a different
+        # question and must not be answered from the old reply.
+        "context": json.dumps(context or {}, sort_keys=True, default=str),
+    }
+    return _run(
+        athlete,
+        kind=AIAnalysis.Kind.SESSION,
+        operation="session_describe",
+        payload=payload,
+        user_prompt=SESSION_USER.format(**payload),
+        schema=DescribedSession,
     )
 
 

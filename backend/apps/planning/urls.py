@@ -2,6 +2,7 @@ from django.urls import path, re_path
 
 from .arc_views import training_arc
 from .calendar_views import calendar
+from .day_views import day_create, day_options, day_preview
 from .goal_views import goal_create, goal_preview
 from .plan_views import (
     PlanList, active_plan, activity_ai_review, activity_review, calendar_days, plan_accept,
@@ -43,6 +44,11 @@ urlpatterns = [
     path("plans/<int:pk>/accept/", plan_accept, name="plan-accept"),
     path("plans/<int:pk>/decline/", plan_decline, name="plan-decline"),
     path("calendar/", calendar_days, name="calendar"),
+    # R20: put your own session on a day the plan had nothing on. Preview
+    # first — a described session is a guess at what you meant.
+    path("days/<str:date>/", day_options, name="day-options"),
+    path("days/<str:date>/preview/", day_preview, name="day-preview"),
+    path("days/<str:date>/create/", day_create, name="day-create"),
     path("calendar/month/", calendar_month, name="calendar-month"),
     path("workouts/<int:pk>/", workout_view, name="workout"),
     path("workouts/<int:pk>/guide/", workout_guide, name="workout-guide"),

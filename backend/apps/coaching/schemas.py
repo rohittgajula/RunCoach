@@ -193,3 +193,89 @@ class FactParams(BaseModel):
     model_config = {"extra": "forbid"}
 
     parameters: list[FactParamItem]
+
+
+class DescribedStep(BaseModel):
+    """One step of a session the athlete described in a sentence.
+
+    Deliberately the SAME shape `planning.edit.stored_step` already accepts, so
+    what the model returns goes straight through the validator the manual
+    editor uses. A second shape would need a second validator, and the one that
+    got less attention would be the one the model talks to.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    kind: Literal["warmup", "run", "walk", "recovery", "cooldown", "strides", "other"]
+    duration_s: int = Field(description="Seconds, 10 to 5400.")
+    intensity: Literal["walk", "easy", "moderate", "hard"]
+    hr_low: int | None = Field(description="Heart rate floor, or null to leave it to the app.")
+    hr_high: int | None = Field(description="Heart rate ceiling, or null.")
+    note: str | None = Field(description="At most a few words, or null.")
+
+
+class DescribedBlock(BaseModel):
+    """A repeated block: "4 × (4 min run, 2 min walk)"."""
+
+    model_config = {"extra": "forbid"}
+
+    repeat: int = Field(description="2 to 30. Use 1 step lists only inside a repeat.")
+    steps: list[DescribedStep]
+
+
+class ProposedChange(BaseModel):
+    """A change to a DIFFERENT day that the new session would make necessary.
+
+    Rohit: "if you wanna change future runs ask for a updated on specific day i
+    will give you a go or no go."
+
+    So this is a question, never an instruction. Each one names a single date
+    and gets its own yes or no — a list the athlete accepts wholesale is not
+    consent to the item buried in the middle of it. The server resolves every
+    one to a real workout before showing it, and applies only the ones that
+    come back approved.
+
+    Only ever gentler. A day the athlete did not ask about may be made easier,
+    moved or dropped; it may never be made longer or harder. Reading a clash is
+    the job; re-planning the week is not.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    date: str = Field(description="YYYY-MM-DD. A day other than the one being planned.")
+    action: Literal["easier", "move", "skip"]
+    minutes: int | None = Field(
+        description="For 'easier': the new total, lower than the current one. Else null."
+    )
+    move_to: str | None = Field(description="For 'move': YYYY-MM-DD. Else null.")
+    why: str = Field(description="One short sentence the athlete can judge. Name the clash.")
+
+
+class DescribedSession(BaseModel):
+    """A run written from the athlete's own description of it.
+
+    The model's job here is reading, not prescribing: turning "easy run in zone
+    2 for 30 min, run/walk strategy" into steps. Every limit — step length,
+    total length, heart-rate bands against this athlete's own floor and
+    ceiling — is enforced afterwards by `planning.edit.expand`, because a model
+    asked to respect a numeric limit will mostly respect it, and mostly is not
+    a safety rule.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    title: str = Field(description="Short, e.g. '30m easy run/walk'. No date in it.")
+    kind: Literal["RUN_WALK", "EASY", "LONG", "INTERVALS", "TEMPO"]
+    description: str = Field(description="1-2 sentences on how to run it.")
+    target_zone: str | None = Field(description="'Z2' etc. if the athlete named one, else null.")
+    understood: str = Field(
+        description="One line, addressed to the athlete, naming what you took from "
+                    "their words, and how the days around it shaped the session. "
+                    "Say plainly if you had to assume something."
+    )
+    steps: list[DescribedStep | DescribedBlock]
+    changes: list[ProposedChange] = Field(
+        description="Changes to OTHER days that this session would need, or an empty "
+                    "list. Each is a proposal the athlete answers yes or no to on its "
+                    "own; you are not making them."
+    )

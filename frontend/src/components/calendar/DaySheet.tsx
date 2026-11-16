@@ -3,6 +3,7 @@ import { parseDate } from '../../lib/format'
 import type { ActivityCard, CalDay, Workout } from '../../lib/types'
 import { BottomSheet } from '../BottomSheet'
 import { ActivityCardView, WorkoutCard } from '../Cards'
+import { AddSession } from '../day/AddSession'
 
 /** A month-grid day with more than one item: the same cards as the list, then detail. */
 export function DaySheet({
@@ -22,6 +23,12 @@ export function DaySheet({
     <BottomSheet open={!!day} onClose={onClose} title={title} label="Day">
       {day && (
         <div className="cal-items">
+          {/* An empty day is no longer a dead end. It used to be the one
+              square on the grid you could see and not open, which made a rest
+              day the only day you could not put your own session on. */}
+          {!day.items.length && (
+            <p className="muted small">Nothing planned for this day.</p>
+          )}
           {day.items.map((item) =>
             item.type === 'workout' ? (
               <WorkoutCard
@@ -41,6 +48,7 @@ export function DaySheet({
               />
             ),
           )}
+          <AddSession date={day.date} onDone={onClose} />
         </div>
       )}
     </BottomSheet>

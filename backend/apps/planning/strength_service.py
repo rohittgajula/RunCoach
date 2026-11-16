@@ -22,6 +22,9 @@ from .models import INACTIVE_STATUSES, PlannedWorkout, StrengthSession, Training
 logger = logging.getLogger(__name__)
 
 HORIZON_DAYS = 56
+
+#: `StrengthSession.created_by` for a session the athlete added themselves.
+USER_CREATED = "user"
 STRENGTH_SPORTS = ("strength", "training")   # Garmin: strength_training / training
 
 
@@ -72,8 +75,14 @@ def place_for(athlete) -> dict:
     plan = TrainingPlan.objects.filter(athlete=athlete, status=TrainingPlan.Status.ACTIVE) \
         .select_related("race").first()
     with transaction.atomic():
+        # A gym session the athlete added themselves is not this pass's to
+        # move or remove. It is excluded from `future` entirely, so it is
+        # neither counted as one of the programme's placements nor deleted for
+        # sitting on a day the programme did not choose — the same rule that
+        # carries a user-added run across a plan rebuild.
         future = list(StrengthSession.objects.select_for_update().filter(
-            athlete=athlete, date__gte=first, status=StrengthSession.Status.PLANNED))
+            athlete=athlete, date__gte=first, status=StrengthSession.Status.PLANNED,
+        ).exclude(created_by=USER_CREATED))
         wanted: list[tuple[dt.date, bool]] = []
         if plan is not None and athlete.strength_per_week:
             phases_end = plan.phases.order_by("-end").values_list("end", flat=True).first()

@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { dur, km, pace, parseDate, timeOfDay, todayISO } from '../lib/format'
+import { dur, km, pace, parseDate, splitKm, timeOfDay, todayISO } from '../lib/format'
 import { errorText, useActivityAiReview, useActivityDetail, usePatchWorkout, useWorkout } from '../lib/queries'
 import type { ActivityCard, Workout } from '../lib/types'
 import { ActualVsPlanned } from './actual/ActualVsPlanned'
 import { CoachReviewCard } from './actual/CoachReviewCard'
 import { ComplianceCard } from './actual/ComplianceCard'
 import { WorkoutResult } from './actual/WorkoutResult'
+import { DistanceSplit } from './workout/DistanceSplit'
 import { BottomSheet } from './BottomSheet'
 import { CheckinSection } from './checkin/CheckinSummary'
 import { EasyGuard } from './workout/EasyGuard'
@@ -112,9 +113,20 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
               <WorkoutBar steps={w.steps} height={72} />
               <div className="stat-row">
                 <div className="stat"><span className="stat-label">Duration</span><span className="stat-value">{dur(w.duration_s)}</span></div>
+                {/* The session says how long it is; this says how far it goes.
+                    A time-based run/walk prescription is the one shape where
+                    the athlete cannot work that out in their head, because the
+                    two halves happen at paces ~100 s/km apart. */}
+                {w.distance_estimate && w.distance_estimate.km > 0 && (
+                  <div className="stat">
+                    <span className="stat-label">Distance</span>
+                    <span className="stat-value">≈ {splitKm(w.distance_estimate.km)} km</span>
+                  </div>
+                )}
                 <div className="stat"><span className="stat-label">Load</span><span className="stat-value">{Math.round(w.load)}</span></div>
                 {w.target_zone && <div className="stat"><span className="stat-label">Target</span><span className="stat-value stat-value-sm">{w.target_zone}</span></div>}
               </div>
+              <DistanceSplit estimate={w.distance_estimate} />
               {w.original_steps && w.adjusted_by === 'checkin' && (
                 <div className="avp-bar">
                   <span className="avp-bar-label">Original</span>

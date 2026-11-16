@@ -178,6 +178,16 @@ class PlannedWorkout(OwnedByAthlete):
     # Plain ids (not FKs) to keep the planning ↔ health migrations independent.
     paused_by_illness = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     illness_return = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    # R20: the athlete added this session themselves, on a day the plan had
+    # nothing on. Blank means the generator wrote it.
+    #
+    # It has to be recorded, because accepting a new plan deletes the previous
+    # plan's future sessions — and a session the athlete put on the calendar on
+    # purpose is not the old coach's work to throw away. Everything else here
+    # that belongs to the athlete rather than the generator (`edited_by`,
+    # `notes`) is marked the same way and for the same reason.
+    created_by = models.CharField(max_length=8, blank=True, default="")
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -298,6 +308,10 @@ class StrengthSession(OwnedByAthlete):
     # movements says nothing about which of them it was easy for.
     moved_up = models.JSONField(default=list, blank=True)
     moved_down = models.JSONField(default=list, blank=True)
+    # R20: added by the athlete rather than placed by the programme. The gym
+    # re-layout removes sessions it did not want on a day; one the athlete
+    # asked for is not its to remove.
+    created_by = models.CharField(max_length=8, blank=True, default="")
     reviewed_at = models.DateTimeField(null=True, blank=True)
     paused_by_illness = models.PositiveIntegerField(null=True, blank=True)
     garmin_workout_id = models.BigIntegerField(null=True, blank=True)

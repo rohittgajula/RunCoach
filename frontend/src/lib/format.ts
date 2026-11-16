@@ -117,3 +117,16 @@ export function estimateText(e: { km: number; loops: number | null } | null | un
   const n = (v: number) => (Math.round(v * 10) / 10).toString()
   return `≈ ${n(e.km)} km${e.loops ? ` · ≈ ${n(e.loops)} ${e.loops === 1 ? 'loop' : 'loops'}` : ''}`
 }
+
+/** The headline distance for a session: one decimal, "2.4". */
+export const splitKm = (v: number): string => (Math.round(v * 10) / 10).toString()
+
+/** A part of the split, at the precision the parts are carried in.
+ *
+ * Two decimals because the parts are small — a ninety second run block is
+ * 0.15 km, and at one decimal it becomes 0.1 or 0.2 depending on nothing the
+ * athlete did. It also keeps the breakdown adding up: the server derives the
+ * split's total by summing these same rounded parts, so the rows on screen sum
+ * to the row beneath them exactly. A breakdown that does not add up is worse
+ * than no breakdown, because the athlete checks. */
+export const partKm = (v: number): string => (Math.round(v * 100) / 100).toFixed(2)

@@ -187,6 +187,7 @@ class AIAnalysis(OwnedByAthlete):
         RUN_REVIEW = "run_review", "Post-run coach review"
         MONTHLY_CARD = "monthly_card", "Monthly report"
         MEMORY_PARAM = "memory_param", "Memory fact parameters"
+        SESSION = "session", "Session from a description"
 
     kind = models.CharField(max_length=12, choices=Kind.choices, db_index=True)
     activity = models.ForeignKey(

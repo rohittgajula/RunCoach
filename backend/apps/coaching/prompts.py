@@ -117,3 +117,44 @@ guess them.
 Missing signals NEVER cause a verdict — they only mean less was known. If the verdict is \
 "no_plan", the reason is simply that nothing is scheduled today: say that, then add one \
 short recovery tip; never imply that missing data cancelled or prevented a session."""
+
+
+SESSION_USER = """The athlete wants a single run on one day and has described it in \
+their own words. Turn the description into steps.
+
+What they said:
+\"\"\"{text}\"\"\"
+
+Their own numbers, which you must use rather than inventing any:
+- Easy pace: {easy_low}-{easy_high} s/km
+- Easy heart rate (Z2): {hr_easy_low}-{hr_easy_high} bpm
+- Heart-rate ceiling: {hr_ceiling} bpm
+{zones}
+
+The days around it. Plan against these, not in a vacuum — what decides whether \
+this session works is what the legs have just had and what they are being saved \
+for:
+{context}
+
+Rules:
+- Read, do not prescribe. Build what they asked for, not what you would have \
+chosen for them. If they said 30 minutes, the steps total 30 minutes.
+- Use the days around it. An easy run the day after two hard days, or the day \
+before a long run, has to be genuinely easy — say so in `understood` when the \
+surrounding days shaped what you built.
+- You may NOT quietly change another day. If this session only works when \
+something else moves, gets shorter or is dropped, put that in `changes` as a \
+proposal naming that one date, and say in `why` what the clash is. The athlete \
+answers each one yes or no; an unanswered proposal changes nothing. Propose at \
+most two, and only when the week genuinely cannot take the session as asked. \
+Never propose making another day longer or harder.
+- "run/walk" means alternating run and walk steps, not one continuous run. Use a \
+repeat block for the alternation.
+- A named zone ("zone 2", "Z2") sets hr_low and hr_high from the bands above. If \
+they named no zone and no effort, leave hr_low and hr_high null and let the app \
+fill them in. Always give BOTH ends or NEITHER — one end on its own is rejected.
+- Include a warm-up and a cool-down walk unless they said not to, and count both \
+inside the total they asked for.
+- Every step is at least 10 seconds; the whole session is 5 to 240 minutes.
+- `understood` is one line to the athlete naming what you took from their words, \
+and saying plainly where you had to assume something."""
