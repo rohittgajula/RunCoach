@@ -36,6 +36,10 @@ def make(slug, name, *, primary=(), secondary=(), equipment="dumbbell",
 
 @pytest.fixture
 def library(db):
+    # The real 708 ship in a data migration, so the test database already has
+    # them. These tests are about filter behaviour over a known small set, and
+    # they assert exact totals; they start from an empty table on purpose.
+    Exercise.objects.all().delete()
     make("calf-raise", "Calf Raise", primary=["gastrocnemius"], equipment="")
     make("seated-calf-raise", "Seated Calf Raise", primary=["gastrocnemius"],
          equipment="machine")
@@ -275,3 +279,51 @@ def test_everything_else_still_has_a_picture(api, library):
     assert body["results"]
     for row in body["results"]:
         assert row["media"].get("best"), row["name"]
+
+
+# --- the data actually ships --------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_the_library_is_not_empty_on_a_fresh_database():
+    """The bug this file did not catch the first time.
+
+    The table and the pictures both reached production and the rows did not:
+    they only ever existed in a developer's database after running
+    `import_exercises` by hand, so the screen came up saying "0 exercises" with
+    every filter reading zero. The rows ship in a data migration now, and this
+    is the assertion that they are still in it.
+    """
+    assert Exercise.objects.count() == 708
+
+
+@pytest.mark.django_db
+def test_the_shipped_rows_carry_their_pictures_and_collections():
+    """A row without media is a card with an empty box on the one screen this
+    feature exists for."""
+    assert Exercise.objects.filter(media__best="anim").count() == 30
+    assert Exercise.objects.filter(media__best=None).count() == 0
+    assert Exercise.objects.filter(collections__contains="runner").count() > 300
+    assert Exercise.objects.filter(collections__contains="belly").count() > 100
+
+
+@pytest.mark.django_db
+def test_every_shipped_media_path_points_at_a_file_the_frontend_has():
+    """The paths are written at import time from files on disk, and the files
+    live in a different part of the repo. Nothing but this checks they agree."""
+    from pathlib import Path as P
+
+    root = P(__file__).resolve().parents[2] / "frontend" / "public" / "ex"
+    if not root.is_dir():          # frontend not present in this checkout
+        pytest.skip("frontend/public/ex not in this checkout")
+
+    missing = []
+    for row in Exercise.objects.all()[:120]:
+        media = row.media or {}
+        if media.get("anim") and not (root / media["anim"]).is_file():
+            missing.append(media["anim"])
+        for style in ("classic", "flat"):
+            for path in (media.get(style) or {}).values():
+                if not (root / path).is_file():
+                    missing.append(path)
+    assert not missing, missing[:5]
