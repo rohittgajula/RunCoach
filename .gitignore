@@ -42,3 +42,8 @@ deploy/secrets/*
 .DS_Store
 .idea/
 .vscode/
+
+# Working copy from an earlier version of the exercise import, which used to
+# fetch photographs. It no longer does — the library's pictures come from
+# RepDB and live in frontend/public/ex/.
+backend/.exercise-media/

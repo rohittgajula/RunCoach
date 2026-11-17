@@ -25,6 +25,7 @@ import { GymStats } from '../components/gym/GymStats'
 import { GymTimer } from '../components/gym/GymTimer'
 import { FormFigure } from '../components/gym/FormFigure'
 import { ChevronDown } from '../components/Icons'
+import { ExerciseLibrary } from '../components/library/ExerciseLibrary'
 
 type Exercise = {
   key: string
@@ -257,7 +258,26 @@ function SessionReview({ sessionId, patterns }: { sessionId: number; patterns: s
   )
 }
 
+/** Two things live under Gym now: the session the coach wrote for you, and the
+ *  whole catalogue to look things up in. They are different acts — one you do,
+ *  one you browse — so they get a switch rather than being stacked. */
+function GymTabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+  return (
+    <div className="seg-row" role="tablist" aria-label="Gym view">
+      <button type="button" role="tab" aria-selected={tab === 'session'}
+              className={`seg-btn${tab === 'session' ? ' is-on' : ''}`}
+              onClick={() => setTab('session')}>My session</button>
+      <button type="button" role="tab" aria-selected={tab === 'library'}
+              className={`seg-btn${tab === 'library' ? ' is-on' : ''}`}
+              onClick={() => setTab('library')}>All exercises</button>
+    </div>
+  )
+}
+
+type Tab = 'session' | 'library'
+
 export default function Gym() {
+  const [tab, setTab] = useState<Tab>('session')
   const query = useQuery<Payload>({
     queryKey: ['strength', 'gym'],
     queryFn: () => api('/strength/'),
@@ -283,9 +303,20 @@ export default function Gym() {
   const warmup = (next?.exercises ?? []).filter((e) => e.is_warmup)
   const main = (next?.exercises ?? []).filter((e) => !e.is_warmup)
 
+  if (tab === 'library') {
+    return (
+      <div className="page">
+        <PageHeader title="Gym" />
+        <GymTabs tab={tab} setTab={setTab} />
+        <ExerciseLibrary />
+      </div>
+    )
+  }
+
   return (
     <div className="page">
       <PageHeader title="Gym" />
+      <GymTabs tab={tab} setTab={setTab} />
 
       {per_week === 0 ? (
         <section className="card">

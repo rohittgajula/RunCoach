@@ -268,6 +268,55 @@ class WorkoutAdjustment(OwnedByAthlete):
         ordering = ["-created_at", "-id"]
 
 
+class Exercise(models.Model):
+    """One movement in the reference library. Not owned by an athlete.
+
+    The strength programme (planning/strength.py) is unaffected by this table
+    and does not read from it. That separation is deliberate: the programme is
+    six patterns chosen for you and progressed by a ladder, and this is the
+    whole catalogue for when you want to look something up or add a movement
+    yourself. A programme offering 876 choices is not a programme.
+
+    Rows come from the free-exercise-db dataset, which is public domain under
+    the Unlicense. `slug` is the dataset's own folder name, so re-running the
+    import updates rows in place instead of duplicating them.
+    """
+
+    slug = models.SlugField(max_length=160, unique=True)
+    name = models.CharField(max_length=160, db_index=True)
+    category = models.CharField(max_length=24, db_index=True)
+    level = models.CharField(max_length=16, db_index=True)
+    equipment = models.CharField(max_length=24, blank=True, default="", db_index=True)
+    force = models.CharField(max_length=16, blank=True, default="")
+    mechanic = models.CharField(max_length=16, blank=True, default="")
+    # Lists, not relations: the vocabulary is fixed and small, every query is a
+    # containment check, and a join table for seventeen constants would be
+    # three more files for no answer the JSON cannot give.
+    primary_muscles = models.JSONField(default=list)
+    secondary_muscles = models.JSONField(default=list)
+    instructions = models.JSONField(default=list)
+    body_part = models.CharField(max_length=16, blank=True, default="", db_index=True)
+    # Curated sets that sit above the filter bar: "runner", "belly". Stored
+    # rather than computed per request because it is derived from fields that
+    # never change after import.
+    collections = models.JSONField(default=list)
+    #: Best media first. {"anim": "...", "classic": {"start","peak"},
+    #: "flat": {"start","peak"} | {"main"}} — paths under /ex/. The UI walks
+    #: this in order and uses the best it finds, so an exercise with a real
+    #: animation shows it and the rest fall back to stills without a special
+    #: case anywhere.
+    media = models.JSONField(default=dict)
+    met = models.FloatField(null=True, blank=True)
+    tips = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ["name"]
+        indexes = [models.Index(fields=["category", "level"])]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class StrengthSession(OwnedByAthlete):
     """R13 §4: a 20-minute strength & drills session on the calendar."""
 
