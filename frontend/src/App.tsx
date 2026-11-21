@@ -12,7 +12,6 @@ import Today from './pages/Today'
 // touch-down is the very promise the route renders from.
 const Plan = lazy(pages.calendar)
 const Chat = lazy(pages.chat)
-const Gym = lazy(pages.gym)
 const Activities = lazy(pages.activities)
 const ActivityDetail = lazy(pages.activityDetail)
 const ChatIndex = lazy(() => pages.chat().then((m) => ({ default: m.ChatIndex })))
@@ -76,7 +75,10 @@ export default function App() {
                 <Route path="/today" element={<Today />} />
                 <Route path="/plan" element={<Plan />} />
                 <Route path="/chat" element={<ChatIndex />} />
-                <Route path="/gym" element={<Gym />} />
+                {/* The Gym tab is gone: strength is a day on the calendar like
+                    any other, not a section of its own. Old links and any
+                    installed PWA shortcut land on the plan. */}
+                <Route path="/gym" element={<Navigate to="/plan" replace />} />
                 <Route path="/activities" element={<Activities />} />
                 <Route path="/activities/:id" element={<ActivityDetail />} />
                 <Route path="/chat/:threadId" element={<Chat />} />

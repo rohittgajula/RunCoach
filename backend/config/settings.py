@@ -294,6 +294,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "planning.adapt_all",
         "schedule": crontab(hour=1, minute=0, day_of_week=1),
     },
+    # R22: daily, after the morning sync has landed. Asks each active plan
+    # whether the last fortnight actually happened, and rebuilds the weeks
+    # ahead from what did. Daily because what it looks for is silence, and a
+    # weekly check means up to seven more days of a plan nobody is following.
+    "catch-the-plan-up-daily": {
+        "task": "planning.catchup_all",
+        "schedule": crontab(hour=6, minute=30),
+    },
     # R7 §1: hourly; the task picks athletes whose local time is 07:xx, syncs their
     # wellness, then computes the check-in (never applies it).
     "morning-checkins": {

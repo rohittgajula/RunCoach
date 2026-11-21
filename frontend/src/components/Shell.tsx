@@ -7,7 +7,7 @@ import { prefetchTab } from '../lib/queries'
 import { SyncingPill, useAutoSync } from '../lib/r16'
 import { UpdateBanner } from '../lib/r18'
 import { useAuth } from '../lib/AuthContext'
-import { CoachIcon, GymIcon, HealthIcon, ListIcon, PlanIcon, TodayIcon } from './Icons'
+import { CoachIcon, HealthIcon, ListIcon, PlanIcon, TodayIcon } from './Icons'
 import { BadgeToast } from './me/Badges'
 import { GlobalToast } from './GlobalToast'
 import { SettingsSheet } from './SettingsSheet'
@@ -15,7 +15,6 @@ import { SettingsSheet } from './SettingsSheet'
 const TABS = [
   { to: '/today', label: 'Today', Icon: TodayIcon },
   { to: '/plan', label: 'Plan', Icon: PlanIcon },
-  { to: '/gym', label: 'Gym', Icon: GymIcon },
   { to: '/health', label: 'Health', Icon: HealthIcon },
   // "Runs", not "Activities": shorter, and in a running app it is also the more
   // direct word. The short label is what makes six tabs fit a 375px phone at
@@ -28,7 +27,7 @@ type ShellValue = { openSettings: (focus?: unknown) => void }
 const ShellContext = createContext<ShellValue>({ openSettings: () => {} })
 export const useShell = () => useContext(ShellContext)
 
-/** Five tabs — Today · Plan · Gym · Runs · Health — and the coach as a bubble.
+/** Four tabs — Today · Plan · Runs · Health — and the coach as a bubble.
  *
  * Six tabs on a 375px phone was about 62px each and read as congested. Coach is
  * the one that leaves most willingly: it is not a place you browse, it is a
@@ -37,11 +36,15 @@ export const useShell = () => useContext(ShellContext)
  * you are on rather than leaving it first.
  *
  * Diet held this slot and came out: the app had drifted away from the one job
- * Rohit uses it for. Gym takes it, because strength is the half of the training
- * he is newest at and the half read standing up between sets — a different act
- * from glancing at tomorrow's run, and so a different tab. The backend, the models and every meal already logged are
- * untouched — this is a navigation change, not a deletion, and `/diet` redirects
- * rather than 404s so an old bookmark still lands somewhere sensible.
+ * Rohit uses it for. Gym took it next and came out for the same reason — a
+ * whole tab for two sessions a week, against ten runs in eleven weeks, is the
+ * app asking for attention it has not earned. Strength is now a day on the
+ * calendar like any other, which is what it always was.
+ *
+ * Both redirect rather than 404, so an old bookmark or an installed PWA
+ * shortcut still lands somewhere sensible, and neither deletion touched the
+ * backend: gym sessions are still planned, still pushed to the watch, still
+ * counted as a workout on the day they fall on.
  */
 export function Shell({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false)

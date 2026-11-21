@@ -25,7 +25,6 @@ function once<T>(load: Loader<T>): Loader<T> {
 export const pages = {
   calendar: once(() => import('../pages/Calendar')),
   chat: once(() => import('../pages/Chat')),
-  gym: once(() => import('../pages/Gym')),
   activities: once(() => import('../pages/Activities')),
   activityDetail: once(() => import('../pages/ActivityDetail')),
   insights: once(() => import('../pages/Insights')),
@@ -54,7 +53,8 @@ export function warmRoute(path: string): Promise<unknown> {
   switch (top) {
     case 'plan': return quiet(pages.calendar())
     case 'chat': return quiet(pages.chat())
-    case 'gym': return quiet(pages.gym())
+    // /gym redirects to the plan now, so warm what it lands on.
+    case 'gym': return quiet(pages.calendar())
     case 'me': return quiet(pages.me())
     case 'weather': return quiet(pages.weather())
     case 'health': {
@@ -82,7 +82,7 @@ export function preloadTabs() {
   if (done) return
   done = true
   const queue: Loader[] = [
-    pages.calendar, pages.gym, pages.activities, pages.insights, pages.chat, pages.me,
+    pages.calendar, pages.activities, pages.insights, pages.chat, pages.me,
     ...SECTION_ORDER.map((key): Loader => () => healthSections().then((m): Promise<unknown> => m.sections[key]())),
     pages.weather,
   ]

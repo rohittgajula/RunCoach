@@ -37,6 +37,42 @@ def adapt_all() -> dict:
     return {"queued": len(ids)}
 
 
+@shared_task(name="planning.catchup")
+def catchup_task(athlete_id: int) -> dict:
+    """Bring one athlete's plan down to what they are actually doing."""
+    from apps.health.illness import active as illness_active
+
+    from .catchup import adapt
+
+    athlete = Athlete.objects.filter(pk=athlete_id).first()
+    if athlete is None:
+        return {"skipped": "gone"}
+    # Someone who is ill has a reason for the empty fortnight and already has a
+    # mode for it. Shrinking their plan on top of pausing it would have them
+    # come back to a build smaller than the one illness mode is holding.
+    if illness_active(athlete) is not None:
+        return {"skipped": "illness"}
+    return {"athlete": athlete_id, **adapt(athlete)}
+
+
+@shared_task(name="planning.catchup_all")
+def catchup_all() -> dict:
+    """Daily: every active plan, asked whether the last fortnight happened.
+
+    Daily rather than weekly, because the thing it is looking for is silence,
+    and a weekly check means up to seven more days of a plan nobody is
+    following. The service itself will not rebuild twice inside a week, so the
+    cost of asking often is a query, not a notification.
+    """
+    from .models import TrainingPlan
+
+    ids = list(TrainingPlan.objects.filter(status=TrainingPlan.Status.ACTIVE)
+               .values_list("athlete_id", flat=True))
+    for athlete_id in ids:
+        catchup_task.delay(athlete_id)
+    return {"queued": len(ids)}
+
+
 @shared_task(name="planning.garmin_push")
 def garmin_push_task(athlete_id: int, workout_ids: list[int], action: str = "send") -> dict:
     """R7 §3. Routed to the `garmin` queue (see CELERY_TASK_ROUTES)."""

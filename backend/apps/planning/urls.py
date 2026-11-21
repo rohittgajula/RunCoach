@@ -3,7 +3,6 @@ from django.urls import path, re_path
 from .arc_views import training_arc
 from .calendar_views import calendar
 from .day_views import day_create, day_options, day_preview
-from .library_views import exercise_detail, exercise_facets, exercise_list
 from .goal_views import goal_create, goal_preview
 from .plan_views import (
     PlanList, active_plan, activity_ai_review, activity_review, calendar_days, plan_accept,
@@ -66,11 +65,6 @@ urlpatterns = [
     path("adjustments/", r13_views.adjustments, name="adjustments"),
     path("adjustments/<int:pk>/undo/", r13_views.adjustment_undo, name="adjustment-undo"),
     path("races/<int:pk>/plan/", r13_views.race_plan_view, name="race-plan"),
-    # R21: the whole exercise library, filterable by muscle and equipment.
-    # Distinct from `strength/` above, which is the programme the coach writes.
-    path("exercises/", exercise_list, name="exercise-list"),
-    path("exercises/facets/", exercise_facets, name="exercise-facets"),
-    path("exercises/<slug:slug>/", exercise_detail, name="exercise-detail"),
     path("strength/", r13_views.strength_list, name="strength"),
     path("strength/<int:pk>/", r13_views.strength_detail, name="strength-detail"),
     path("strength/<int:pk>/garmin/", r13_views.strength_garmin, name="strength-garmin"),
