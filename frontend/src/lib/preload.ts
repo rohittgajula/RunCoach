@@ -42,7 +42,7 @@ export function prefetchHealth(client: QueryClient, key = 'overview') {
 
 const SECTION_ORDER = [
   'day', 'sleep', 'fitness', 'habits', 'progress', 'more', 'dayTrends', 'guides',
-  'goals', 'heart',
+  'goals', 'heart', 'body', 'labs',
 ] as const
 
 const quiet = (p: Promise<unknown>) => p.catch(() => undefined)

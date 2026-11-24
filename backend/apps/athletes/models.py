@@ -200,6 +200,14 @@ class Athlete(models.Model):
     # columns hold the effective value, so the explicit one is kept here.
     profile_settings = models.JSONField(default=dict, blank=True)
 
+    # Small, non-training facts about what the app has already said to this
+    # athlete: which prompts they have answered and when. Separate from
+    # profile_settings, which has a shape of its own that profile_params owns,
+    # and separate from the training columns because nothing here should ever
+    # change what is prescribed — it only stops the app asking the same
+    # question every morning.
+    ui_state = models.JSONField(default=dict, blank=True)
+
     # Whether the athlete has been through onboarding. Needed as an explicit flag
     # rather than inferred: the router has to decide where a freshly-registered
     # athlete lands, and racing a redirect against a state update silently skipped

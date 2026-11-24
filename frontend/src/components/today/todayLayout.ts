@@ -5,6 +5,7 @@
  * on here only adds a shortcut.
  */
 export type TodayCardKey =
+  | 'comeback' | 'weight'
   | 'weather_swap' | 'checkins' | 'injury' | 'review' | 'mood'
   | 'weather' | 'log'
   | 'wake' | 'so_far' | 'this_week' | 'tomorrow' | 'adjustments' | 'weekly_report'
@@ -12,6 +13,10 @@ export type TodayCardKey =
 export type TodayCardDef = { key: TodayCardKey; label: string; hint: string; on: boolean }
 
 export const TODAY_CARDS: TodayCardDef[] = [
+  // First, and on by default. The week's floor is always worth seeing, and
+  // when there is a gap this is the one card that asks about it.
+  { key: 'comeback', label: 'This week, and getting back', hint: 'Your floor, and one question after a gap', on: true },
+  { key: 'weight', label: 'Weigh-in', hint: 'Log today’s weight in one tap', on: true },
   { key: 'weather_swap', label: 'Weather swap suggestions', hint: 'Only when a run day looks bad', on: true },
   { key: 'checkins', label: 'Post-run check-ins', hint: 'Only when one is waiting', on: true },
   { key: 'injury', label: 'Injury watch', hint: 'Only at moderate or high risk', on: true },

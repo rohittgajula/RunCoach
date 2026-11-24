@@ -32,12 +32,15 @@ export const sections = {
   more: once(() => import('../components/health/MoreSection')),
   goals: once(() => import('../components/goals/GoalsSection')),
   heart: once(() => import('../components/heart/HeartSection')),
+  labs: once(() => import('../components/labs/LabsSection')),
+  body: once(() => import('../components/weight/BodySection')),
 }
 
 const BY_PATH: Record<string, Loader> = {
   day: sections.day, 'day/trends': sections.dayTrends, guides: sections.guides, habits: sections.habits,
   fitness: sections.fitness, sleep: sections.sleep, progress: sections.progress,
   more: sections.more, goals: sections.goals, heart: sections.heart,
+  labs: sections.labs, body: sections.body,
 }
 
 /** `rest` = the path segments after /health. Overview ships with the Health chunk. */

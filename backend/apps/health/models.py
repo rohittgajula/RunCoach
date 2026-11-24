@@ -42,6 +42,53 @@ class Achievement(OwnedByAthlete):
                                                name="uniq_athlete_achievement")]
 
 
+class LabPanel(OwnedByAthlete):
+    """One blood or urine test, on one day.
+
+    Stored as a panel plus its readings rather than as columns, because the
+    markers a lab prints differ every time and a schema that names them would
+    need a migration per test. Reference ranges live on the reading, not in
+    code: they differ between labs and assays, and a value flagged against the
+    wrong range is worse than no flag at all.
+
+    Never interpreted here. `analysis/bloodwork.py` lines the numbers up
+    against their ranges and says which ones runners care about; what any of
+    it means is a conversation with a doctor, and the app says so every time.
+    """
+
+    taken_on = models.DateField(db_index=True)
+    lab = models.CharField(max_length=120, blank=True, default="")
+    note = models.CharField(max_length=300, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-taken_on", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.taken_on} panel"
+
+
+class LabReading(models.Model):
+    """One marker from one panel, with the range the lab measured it against."""
+
+    panel = models.ForeignKey(LabPanel, on_delete=models.CASCADE, related_name="readings")
+    key = models.CharField(max_length=32, db_index=True)
+    value = models.FloatField()
+    unit = models.CharField(max_length=16, blank=True, default="")
+    # Null means the report printed no range and the app supplied one. Which
+    # was used is always shown.
+    ref_low = models.FloatField(null=True, blank=True)
+    ref_high = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["key"]
+        constraints = [models.UniqueConstraint(fields=["panel", "key"],
+                                               name="uniq_panel_marker")]
+
+    def __str__(self) -> str:
+        return f"{self.key}={self.value}"
+
+
 class PainReport(OwnedByAthlete):
     """R13 §3 "Anything hurting?": one spot, one side, one day. Severity 1–3. Never a
     diagnosis; two days ≥ 2 on the same spot only ever makes the plan easier."""

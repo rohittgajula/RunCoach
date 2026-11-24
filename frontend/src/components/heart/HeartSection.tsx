@@ -56,6 +56,7 @@ export function HeartSection() {
       />
       <HeartChart d={d} />
       <KeyNumbers d={d} />
+      <WhatThisCannotTell />
       {(d.heat?.sentence || d.sentences.length > 0) && (
         <Disclosure id="heart-more" title="Heat & what else changed" sub={d.heat?.sentence ?? d.sentences[0]}>
           {d.heat && <HeatCard d={d} />}
@@ -197,6 +198,46 @@ function HeatCard({ d }: { d: HeartResponse }) {
       {h.adaptation && (
         <p className="muted small">Hot runs then {Math.round(h.adaptation.early_hot_avg)} bpm → now {Math.round(h.adaptation.recent_hot_avg)} bpm (n={h.adaptation.n_early} / {h.adaptation.n_recent}).</p>
       )}
+    </section>
+  )
+}
+
+
+/**
+ * What this page is, and what it is not.
+ *
+ * Rohit asked for an analyser that would look at heart-rate irregularities and
+ * spot heart disease. This page cannot do that and neither can anything else
+ * built on this data, which is worth saying plainly on the page rather than
+ * leaving him to assume otherwise.
+ *
+ * A running watch measures heart rate optically at the wrist: it averages, it
+ * loses beats under motion, and it sometimes locks onto cadence instead of
+ * pulse. Arrhythmias live in the electrical signal, which needs an ECG. Some
+ * Garmin watches have an ECG app, and that — or a doctor with a 12-lead — is
+ * the tool for that question.
+ *
+ * The honest danger is not a missing feature, it is a false reassurance: an
+ * app that said "your heart looks fine" from this data would be believed.
+ */
+function WhatThisCannotTell() {
+  return (
+    <section className="card stack-sm">
+      <strong>What this can and cannot tell you</strong>
+      <p className="small muted">
+        These are training numbers: how your heart responds to running, and
+        whether that response is improving. A rising resting heart rate is
+        flagged in your morning check-in, and the drift and pace-at-heart-rate
+        figures above show whether you are getting fitter at the same effort.
+      </p>
+      <p className="small muted">
+        None of it is a heart check. Your watch reads your pulse optically at
+        the wrist — it averages, it drops beats while you move, and it cannot
+        see the electrical signal that rhythm problems show up in. That needs
+        an ECG, which some Garmin watches have as a separate app, or a doctor.
+        If something feels wrong — chest pain, fainting, a racing or irregular
+        pulse at rest — see a doctor and do not wait for a trend here.
+      </p>
     </section>
   )
 }

@@ -24,6 +24,8 @@ const ProgressSection = lazy(() => sections.progress().then((m) => ({ default: m
 const MoreSection = lazy(() => sections.more().then((m) => ({ default: m.MoreSection })))
 const GoalsSection = lazy(() => sections.goals().then((m) => ({ default: m.GoalsSection })))
 const HeartSection = lazy(() => sections.heart().then((m) => ({ default: m.HeartSection })))
+const LabsSection = lazy(() => sections.labs().then((m) => ({ default: m.LabsSection })))
+const BodySection = lazy(() => sections.body().then((m) => ({ default: m.BodySection })))
 
 /**
  * Section chips, in order. `range` = that section's default for the shared range
@@ -42,6 +44,8 @@ const SECTIONS: Array<{ key: string; to: string; label: string; end?: boolean; r
   { key: 'guides', to: '/health/guides', label: 'Guides', chip: false, more: true },
   { key: 'goals', to: '/health/goals', label: 'Goals', chip: false, more: true },
   { key: 'heart', to: '/health/heart', label: 'Heart', range: '3m', chip: false, more: true },
+  { key: 'body', to: '/health/body', label: 'Weight', chip: false, more: true },
+  { key: 'labs', to: '/health/labs', label: 'Blood & urine', chip: false, more: true },
 ]
 
 function sectionOf(pathname: string) {
@@ -129,6 +133,8 @@ export default function Health() {
           <Route path="more" element={<MoreSection />} />
           <Route path="goals" element={<GoalsSection />} />
           <Route path="heart" element={<HeartSection />} />
+          <Route path="body" element={<BodySection />} />
+          <Route path="labs" element={<LabsSection />} />
           <Route path="*" element={<Navigate to="/health" replace />} />
         </Routes>
         </Suspense>

@@ -29,6 +29,33 @@ def today_apply(request):
     return Response(today_payload(athlete))
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def comeback(request):
+    """GET /today/comeback/ -> the gap, the first run back, and this week.
+
+    Separate from the check-in rather than folded into it. The check-in answers
+    "train or rest today" from last night's signals; this answers "are you
+    still running at all", which is a different question on a different clock
+    and should not disappear because last night's sleep was fine.
+    """
+    from .comeback_service import card_for
+
+    return Response(card_for(request.user.athlete))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def comeback_answer(request):
+    """POST /today/comeback/ {"key": "hurt"|"much"|"life"|"restart"}."""
+    from .comeback_service import answer
+
+    try:
+        return Response(answer(request.user.athlete, str(request.data.get("key") or "")))
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @throttle_classes([ChatThrottle])

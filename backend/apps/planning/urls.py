@@ -8,7 +8,9 @@ from .plan_views import (
     PlanList, active_plan, activity_ai_review, activity_review, calendar_days, plan_accept,
     plan_decline, plan_rebuild, plan_view, workout_guide, workout_review, workout_view,
 )
-from .checkin_views import today, today_apply, today_explain
+from .checkin_views import (
+    comeback, comeback_answer, today, today_apply, today_explain,
+)
 from .garmin_views import plan_garmin, workout_garmin
 from .month_views import calendar_month
 from . import (
@@ -58,6 +60,9 @@ urlpatterns = [
     # R7.
     path("today/", today, name="today"),
     path("today/apply/", today_apply, name="today-apply"),
+    # R23: are you still running at all — the gap, the first run back, the week.
+    path("today/comeback/", comeback, name="today-comeback"),
+    path("today/comeback/answer/", comeback_answer, name="today-comeback-answer"),
     path("today/explain/", today_explain, name="today-explain"),
     path("workouts/<int:pk>/garmin/", workout_garmin, name="workout-garmin"),
     path("plans/active/garmin/", plan_garmin, name="plan-garmin"),
