@@ -148,7 +148,9 @@ def derive(activity: Activity, reassess: bool = True) -> ActivityMetrics | None:
             "blended_pace_s_per_km": truth.blended_pace_s_per_km,
             "avg_run_cadence_spm": truth.avg_run_cadence_spm,
             "avg_run_hr": truth.avg_run_hr,
-            "hr_drift_percent": heart_rate.hr_drift_percent(samples),
+            # Segments, not raw samples: drift over the whole session measures
+            # the run/walk mix rather than the heart. See heart_rate.py.
+            "hr_drift_percent": heart_rate.hr_drift_percent(samples, segments),
             "custom_load": load.session_load(
                 truth.run_duration_s / 60, truth.walk_duration_s / 60
             ),

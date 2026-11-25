@@ -1,5 +1,5 @@
 from django.urls import path
-from . import labs
+from . import hr_views, labs
 
 from . import (
     achievements, briefing, compare_views, day_views, forecast_views, garmin_views, injury,
@@ -10,6 +10,8 @@ from . import data_review, experiments, goals, heart, illness
 urlpatterns = [
     # R23: blood and urine panels. Numbers against their ranges, never a
     # diagnosis — see analysis/bloodwork.py.
+    # R24: heart rate split by sleeping / running / walking / awake.
+    path("health/heart-rate/", hr_views.heart_rate, name="health-heart-rate"),
     path("labs/", labs.panels, name="labs"),
     path("labs/markers/", labs.markers, name="lab-markers"),
     path("labs/<int:pk>/", labs.panel_detail, name="lab-panel"),

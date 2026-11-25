@@ -93,3 +93,16 @@
 .lab-entry-row { display: flex; gap: 6px; }
 .lab-entry-row input { min-width: 0; flex: 1; }
 .lab-entry-row .lab-ref { flex: 0 0 23%; }
+
+/* ===== Heart rate by context (R24) ===================================
+   A day holds four different hearts — asleep, running, walking, sitting at a
+   desk — and averaging them hides the one that matters most. One line each. */
+
+.hrx-controls { display: flex; flex-direction: column; gap: 7px; }
+.hrx-chart { color: var(--accent); margin: 0 -4px; }
+.hrx-trend { margin: 0; font-size: 0.86rem; font-weight: 600; }
+.hrx-change { font-weight: 800; }
+/* Down is the win on every line here except running, so the colour follows
+   `better` rather than the sign of the number. */
+.hrx-trend.is-better .hrx-change { color: var(--good-fg); }
+.hrx-trend.is-worse .hrx-change { color: var(--warn-fg, var(--bad-fg)); }

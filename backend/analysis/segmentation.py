@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Iterable, Literal
 
 # 2 (R17): segmentation reads the series the data-quality filter's `use` picks.
-ALGORITHM_VERSION = 2
+ALGORITHM_VERSION = 3
 
 Kind = Literal["run", "walk", "stop"]
 

@@ -26,24 +26,29 @@ const GoalsSection = lazy(() => sections.goals().then((m) => ({ default: m.Goals
 const HeartSection = lazy(() => sections.heart().then((m) => ({ default: m.HeartSection })))
 const LabsSection = lazy(() => sections.labs().then((m) => ({ default: m.LabsSection })))
 const BodySection = lazy(() => sections.body().then((m) => ({ default: m.BodySection })))
+const HeartRateSection = lazy(() => sections.hr().then((m) => ({ default: m.HeartRateSection })))
 
 /**
  * Section chips, in order. `range` = that section's default for the shared range
  * control (none = no range there). Sub-routes (Day trends, Compare) have their own key.
  */
 const SECTIONS: Array<{ key: string; to: string; label: string; end?: boolean; range?: Preset; chip?: false; more?: true }> = [
+  // R24: Rohit's own order. Heart rate sits early because it is the thing he
+  // checks; Heart (heart rate against pace) follows Fitness because it only
+  // means anything once you have been running a while.
   { key: 'overview', to: '/health', label: 'Overview', end: true, range: '4w' },
   { key: 'day', to: '/health/day', label: 'Day' },
   { key: 'sleep', to: '/health/sleep', label: 'Sleep', range: '4w' },
+  { key: 'hr', to: '/health/hr', label: 'Heart rate', range: '4w' },
   { key: 'fitness', to: '/health/fitness', label: 'Fitness', range: '6m' },
-  { key: 'habits', to: '/health/habits', label: 'Habits', range: '4w' },
+  { key: 'heart', to: '/health/heart', label: 'Heart', range: '3m' },
   { key: 'progress', to: '/health/progress', label: 'Progress' },
+  { key: 'habits', to: '/health/habits', label: 'Habits', range: '4w' },
   { key: 'more', to: '/health/more', label: 'More' },
   { key: 'day/trends', to: '/health/day/trends', label: 'Day trends', range: '4w', chip: false },
   // R14: grouped under More (their chip shows "More" as active).
   { key: 'guides', to: '/health/guides', label: 'Guides', chip: false, more: true },
   { key: 'goals', to: '/health/goals', label: 'Goals', chip: false, more: true },
-  { key: 'heart', to: '/health/heart', label: 'Heart', range: '3m', chip: false, more: true },
   { key: 'body', to: '/health/body', label: 'Weight', chip: false, more: true },
   { key: 'labs', to: '/health/labs', label: 'Blood & urine', chip: false, more: true },
 ]
@@ -133,6 +138,7 @@ export default function Health() {
           <Route path="more" element={<MoreSection />} />
           <Route path="goals" element={<GoalsSection />} />
           <Route path="heart" element={<HeartSection />} />
+          <Route path="hr" element={<HeartRateSection />} />
           <Route path="body" element={<BodySection />} />
           <Route path="labs" element={<LabsSection />} />
           <Route path="*" element={<Navigate to="/health" replace />} />
