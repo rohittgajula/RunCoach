@@ -7,7 +7,7 @@ import { prefetchTab } from '../lib/queries'
 import { SyncingPill, useAutoSync } from '../lib/r16'
 import { UpdateBanner } from '../lib/r18'
 import { useAuth } from '../lib/AuthContext'
-import { CoachIcon, HealthIcon, ListIcon, PlanIcon, TodayIcon } from './Icons'
+import { CoachIcon, DietIcon, HealthIcon, ListIcon, PlanIcon, TodayIcon } from './Icons'
 import { BadgeToast } from './me/Badges'
 import { GlobalToast } from './GlobalToast'
 import { SettingsSheet } from './SettingsSheet'
@@ -16,6 +16,10 @@ const TABS = [
   { to: '/today', label: 'Today', Icon: TodayIcon },
   { to: '/plan', label: 'Plan', Icon: PlanIcon },
   { to: '/health', label: 'Health', Icon: HealthIcon },
+  // Fifth tab: logging a meal is a several-times-a-day action, and it was
+  // two taps and a sideways chip scroll inside Health. The bar was already
+  // sized for six at 375px.
+  { to: '/diet', label: 'Food', Icon: DietIcon },
   // "Runs", not "Activities": shorter, and in a running app it is also the more
   // direct word. The short label is what makes six tabs fit a 375px phone at
   // all — the first version hid this tab on mobile entirely, which put the list

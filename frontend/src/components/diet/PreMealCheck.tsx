@@ -64,12 +64,15 @@ const CONFIDENCE_SAID: Record<Estimate['confidence'], string> = {
   low: 'The portions are a rough guess — say how much if you want it closer.',
 }
 
-export function PreMealCheck({ date, onOpen }: {
+export function PreMealCheck({ date, onOpen, variant = 'card' }: {
   date: string
   /** True while a verdict is on screen. The page's "Log meal" FAB is fixed to
    *  the bottom-right and sits squarely on this card's own "I ate it — log it"
    *  button, so the page hides it while the verdict is up. */
   onOpen?: (open: boolean) => void
+  /** 'inline' drops the card chrome so this can sit inside Today's Food card
+   *  without nesting a card in a card. The behaviour is identical. */
+  variant?: 'card' | 'inline'
 }) {
   const [text, setText] = useState('')
   const [mealType, setMealType] = useState('lunch')
@@ -84,11 +87,16 @@ export function PreMealCheck({ date, onOpen }: {
   useEffect(() => { onOpen?.(!!result) }, [result, onOpen])
   useEffect(() => () => onOpen?.(false), [onOpen])
 
+  const inline = variant === 'inline'
+  const Wrapper = inline ? 'div' : 'section'
+
   return (
-    <section className="card stack pmc">
-      <div className="card-head">
-        <h2 className="card-title"><SparkIcon size={18} /> Before you eat it</h2>
-      </div>
+    <Wrapper className={inline ? 'stack pmc pmc-inline' : 'card stack pmc'}>
+      {!inline && (
+        <div className="card-head">
+          <h2 className="card-title"><SparkIcon size={18} /> Before you eat it</h2>
+        </div>
+      )}
       <p className="muted small">
         Say what you are about to have. You get it read against today’s food, your
         next run and anything flagged in your bloods — before you eat, not after.
@@ -228,6 +236,6 @@ export function PreMealCheck({ date, onOpen }: {
         open={logging} onClose={() => { setLogging(false); check.reset(); setText('') }}
         date={date} prefill={result ? { ...result.estimate, meal_type: mealType } : undefined}
       />
-    </section>
+    </Wrapper>
   )
 }

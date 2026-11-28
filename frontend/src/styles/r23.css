@@ -292,3 +292,49 @@
   font-size: 0.78rem;
 }
 .pmc-items li:first-child { border-top: 0; }
+
+/* --- Food on Today ------------------------------------------------------ */
+
+.tf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+.tf-head .card-title { display: flex; align-items: center; gap: 7px; }
+
+.tf-nums { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; }
+.tf-eaten { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tf-of { font-size: 0.8rem; color: var(--muted); }
+.tf-left {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tf-bar {
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--chip-bg, rgba(127, 127, 127, 0.18));
+}
+.tf-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent, currentColor);
+}
+.tf-fill.is-over { background: var(--warn-fg, var(--accent, currentColor)); }
+
+/* Same wrapping rule as the pre-meal card's own actions: two buttons that do
+   not share a line at 375px wrap rather than widen the page. */
+.tf-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.tf-actions .btn { flex: 1 1 auto; min-width: 0; justify-content: center; }
+
+/* Opened in place, so it needs a rule off the buttons above it rather than
+   the card padding it no longer has. */
+.pmc-inline { padding-top: 10px; border-top: 1px solid var(--line); }

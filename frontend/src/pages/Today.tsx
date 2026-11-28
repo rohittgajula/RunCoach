@@ -23,6 +23,7 @@ import { WeatherTile } from '../components/today/WeatherCard'
 import { WeeklyReportCard } from '../components/today/WeeklyReportCard'
 import { ComebackCard } from '../components/comeback/ComebackCard'
 import { WeighIn } from '../components/weight/WeighIn'
+import { TodayFood } from '../components/today/TodayFood'
 import { WeatherSwapChips } from '../components/weather/WeatherSwapChip'
 import { useAuth } from '../lib/AuthContext'
 import { parseDate, todayISO } from '../lib/format'
@@ -86,6 +87,7 @@ export default function Today() {
   const cards: Record<TodayCardKey, ReactNode> = {
     comeback: <ComebackCard />,
     weight: <WeighIn />,
+    food: <TodayFood />,
     weather_swap: <WeatherSwapChips />,
     checkins: <PendingCheckins />,
     injury: <TodayInjury />,
