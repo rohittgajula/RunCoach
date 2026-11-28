@@ -208,7 +208,8 @@ def apply_lactate_threshold(athlete: Athlete) -> bool:
         return False
     pace = pace_row.pace_s_per_km if pace_row else None
     unchanged = (athlete.lt_hr == latest.heart_rate and athlete.lt_pace_s == pace
-                 and athlete.zones_source == Athlete.ZonesSource.LT)
+                 and athlete.zones_source in (Athlete.ZonesSource.LT,
+                                              Athlete.ZonesSource.PERCENT_MAX))
     if unchanged:
         if athlete.lt_date != latest.measured_on:
             athlete.lt_date = latest.measured_on
@@ -217,7 +218,9 @@ def apply_lactate_threshold(athlete: Athlete) -> bool:
     athlete.lt_hr = latest.heart_rate
     athlete.lt_pace_s = pace
     athlete.lt_date = latest.measured_on
-    athlete.zones_source = Athlete.ZonesSource.LT
+    # The athlete picked "same as Garmin": keep it, store the LT for reference only.
+    if athlete.zones_source != Athlete.ZonesSource.PERCENT_MAX:
+        athlete.zones_source = Athlete.ZonesSource.LT
     athlete.zones_updated_at = timezone.now()
     athlete.save(update_fields=["lt_hr", "lt_pace_s", "lt_date", "zones_source",
                                 "zones_updated_at", "updated_at"])

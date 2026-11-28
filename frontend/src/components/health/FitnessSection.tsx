@@ -177,7 +177,7 @@ function ThresholdCard({ f }: { f: HealthFitness | null | undefined }) {
       <CardHead
         title={lt ? <span className="title-info">Lactate threshold<InfoButton k="lactate_threshold" /></span> : 'Heart-rate zones'}
         aside={lt?.zones_updated ? <Pill topic="run">Zones updated</Pill> : undefined}
-        sub={lt?.date ? `Garmin, ${dayMonth(lt.date)}` : zones?.source === 'heart_rate_reserve' ? 'From your resting and max HR' : undefined}
+        sub={lt?.date ? `Garmin, ${dayMonth(lt.date)}` : zones?.source === 'heart_rate_reserve' ? 'From your resting and max HR' : zones?.source === 'percent_of_max' ? 'Same as your Garmin watch (% of max HR)' : undefined}
       />
       {lt && (
         <div className="stat-pair">

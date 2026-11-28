@@ -155,7 +155,7 @@ class AthleteSerializer(serializers.ModelSerializer):
             "resting_hr", "max_hr",
             "sex", "height_cm", "diet_goal", "diet_rate_kg_per_week", "threshold_pace_s",
             "easy_pace_min", "easy_pace_max",
-            "hr_easy_min", "hr_easy_max", "hr_ceiling",
+            "hr_easy_min", "hr_easy_max", "hr_ceiling", "hr_easy_custom", "zones_source",
             "run_cadence_threshold", "available_days", "long_run_day",
             "training_days_per_week", "onboarding_complete", "zones",
             "garmin_connected", "garmin_last_sync", "created_at", "updated_at",

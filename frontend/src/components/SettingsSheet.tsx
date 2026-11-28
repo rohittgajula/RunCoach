@@ -15,9 +15,10 @@ import { HabitSettings } from './settings/HabitSettings'
 import { LocationSettings } from './settings/LocationSettings'
 import { RunsPerWeek } from './settings/RunsPerWeek'
 import { TrainingExtras } from './settings/TrainingExtras'
+import { HeartRateSettings } from './settings/HeartRateSettings'
 import { GymDays } from './settings/GymDays'
 import { TrainingDays } from './settings/TrainingDays'
-import { reflowText, toDraft, toPatch, type Draft } from './settings/settingsDraft'
+import { hrRebandText, reflowText, toDraft, toPatch, type Draft } from './settings/settingsDraft'
 
 function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
   const { deleteAccount } = useAuth()
@@ -200,9 +201,9 @@ export function SettingsSheet({ open, onClose, focus }: { open: boolean; onClose
       const strengthNote = strength && (strength.created || strength.removed)
         ? ` Strength: ${[strength.created ? `${strength.created} added` : '', strength.removed ? `${strength.removed} removed` : ''].filter(Boolean).join(', ')}.`
         : ''
-      setReflowNote((reflowText(updated.plan_reflow) + strengthNote).trim())
+      setReflowNote([reflowText(updated.plan_reflow) + strengthNote, hrRebandText(updated.hr_reband)].map((t) => t.trim()).filter(Boolean).join(' '))
       setReflowNotes(updated.plan_reflow?.notes ?? [])
-      if (updated.plan_reflow) {
+      if (updated.plan_reflow || updated.hr_reband?.updated) {
         invalidatePlanData(client)
         client.invalidateQueries({ queryKey: ['today'] })
       }
@@ -285,6 +286,10 @@ export function SettingsSheet({ open, onClose, focus }: { open: boolean; onClose
             </Field>
           </div>
           <p className="muted small">Weight and threshold pace live in Profile, with their history.</p>
+        </Section>
+
+        <Section title="Heart rate" sub="Zones and your easy-run range" forceOpen={hasErrors}>
+          <HeartRateSettings draft={draft} set={set} errors={errors} />
         </Section>
 
         <Section title="Training days" sub="Run days, gym days, long run, and how many of each" forceOpen={hasErrors}>

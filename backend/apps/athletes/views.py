@@ -206,6 +206,28 @@ class MeView(APIView):
         return Response(_session_payload(athlete))
 
 
+#: Profile fields that change the HR targets inside planned workouts.
+HR_SETTING_FIELDS = ("hr_easy_custom", "hr_easy_min", "hr_easy_max", "hr_ceiling",
+                     "zones_source", "max_hr", "resting_hr")
+
+#: The subset that changes the zones themselves (not just the easy-run range).
+ZONE_FIELDS = ("zones_source", "max_hr", "resting_hr")
+
+
+def _queue_rezone(athlete_id: int) -> None:
+    from django.db import transaction
+
+    def send():
+        try:
+            from apps.activities.tasks import rezone_athlete
+
+            rezone_athlete.delay(athlete_id)
+        except Exception:  # noqa: BLE001 — no broker in a one-off script
+            pass
+
+    transaction.on_commit(send)
+
+
 class AthleteDetailView(generics.RetrieveUpdateAPIView):
     """The requesting athlete's own profile. There is no lookup by id, by design."""
 
@@ -237,6 +259,9 @@ class AthleteDetailView(generics.RetrieveUpdateAPIView):
         from .profile_params import SETTING_KEYS, _column, record_setting_change
 
         settings_before = {k: _column(athlete, k) for k in SETTING_KEYS}
+        hr_before = tuple(getattr(athlete, k) for k in HR_SETTING_FIELDS)
+        zones_before = tuple(getattr(athlete, k) for k in ZONE_FIELDS)
+        rebanded = None
         with transaction.atomic():
             response = super().update(request, *args, **kwargs)
             athlete.refresh_from_db()
@@ -254,6 +279,16 @@ class AthleteDetailView(generics.RetrieveUpdateAPIView):
             relaid = None
             if runs_changed or (days_changed and athlete.runs_per_week):
                 relaid = relayout_active_plan(athlete)
+            # HR settings changed: future workouts (and the watch) get the new targets.
+            if tuple(getattr(athlete, k) for k in HR_SETTING_FIELDS) != hr_before:
+                from apps.planning.reband import reband_future_workouts
+
+                rebanded = reband_future_workouts(athlete)
+            # Zones themselves moved: recount time-in-zone on past runs so history
+            # is measured with the same zones as today.
+            if tuple(getattr(athlete, k) for k in ZONE_FIELDS) != zones_before:
+                _queue_rezone(athlete.pk)
+        response.data["hr_reband"] = rebanded
         if athlete.location_source != "city":
             refresh_location(athlete)
             response.data.update({k: getattr(athlete, k) for k in (

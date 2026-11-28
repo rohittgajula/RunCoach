@@ -1,4 +1,4 @@
-import type { Athlete, PlanReflow } from '../../lib/auth'
+import type { Athlete, PlanReflow, ZonesSource } from '../../lib/auth'
 
 /** Everything the Settings form edits, as strings where it is a text input. */
 export type Draft = {
@@ -36,6 +36,12 @@ export type Draft = {
   gym_equipment: string
   caffeine_on_today: boolean
   pain_daily_check: boolean
+  // Heart rate: zones method and the athlete's own easy-run range.
+  zones_source: ZonesSource
+  hr_easy_custom: boolean
+  hr_easy_min: string
+  hr_easy_max: string
+  hr_ceiling: string
 }
 
 export type SetDraft = <K extends keyof Draft>(key: K, value: Draft[K]) => void
@@ -72,6 +78,11 @@ export const toDraft = (a: Athlete): Draft => ({
   gym_equipment: a.gym_equipment ?? 'bodyweight',
   caffeine_on_today: !!a.caffeine_on_today,
   pain_daily_check: !!a.pain_daily_check,
+  zones_source: a.zones_source ?? 'heart_rate_reserve',
+  hr_easy_custom: !!a.hr_easy_custom,
+  hr_easy_min: str(a.hr_easy_min),
+  hr_easy_max: str(a.hr_easy_max),
+  hr_ceiling: str(a.hr_ceiling),
 })
 
 const num = (text: string) => (text.trim() === '' ? null : Number(text))
@@ -108,6 +119,13 @@ export function toPatch(draft: Draft, athlete: Athlete): Partial<Athlete> & { lo
   if (draft.strength_per_week !== before.strength_per_week) patch.strength_per_week = draft.strength_per_week
   if (JSON.stringify(draft.gym_days) !== JSON.stringify(before.gym_days)) patch.gym_days = draft.gym_days
   if (draft.gym_equipment !== before.gym_equipment) patch.gym_equipment = draft.gym_equipment
+  // Heart rate — only once touched.
+  if (draft.zones_source !== before.zones_source) patch.zones_source = draft.zones_source
+  if (draft.hr_easy_custom !== before.hr_easy_custom) patch.hr_easy_custom = draft.hr_easy_custom
+  for (const key of ['hr_easy_min', 'hr_easy_max', 'hr_ceiling'] as const) {
+    const value = num(draft[key])
+    if (draft[key] !== before[key] && value != null) patch[key] = value
+  }
   if (draft.caffeine_on_today !== before.caffeine_on_today) patch.caffeine_on_today = draft.caffeine_on_today
   if (draft.pain_daily_check !== before.pain_daily_check) patch.pain_daily_check = draft.pain_daily_check
   if (draft.location_source !== before.location_source || draft.location_city.trim() !== before.location_city.trim()) {
@@ -132,4 +150,13 @@ export function reflowText(reflow: PlanReflow | null | undefined): string {
       ? 'Upcoming workouts moved to your new days'
       : 'Your plan now fits your new days'
   return `${head}${extras.length ? ` (${extras.join(', ')})` : ''}.`
+}
+
+/** "3 upcoming workouts now use your new heart-rate targets (3 updated on your watch)." */
+export function hrRebandText(reband: { updated: number; watch_updated: number } | null | undefined): string {
+  if (!reband) return ''
+  if (!reband.updated) return 'Heart-rate settings saved. Upcoming workouts already matched.'
+  const n = reband.updated
+  const watch = reband.watch_updated ? ` (${reband.watch_updated} updated on your watch)` : ''
+  return `${n} upcoming workout${n === 1 ? '' : 's'} now use your new heart-rate targets${watch}.`
 }

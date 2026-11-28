@@ -852,7 +852,7 @@ export type AthleteZones = {
   max_hr?: number | null
   max_source?: string
   zones: Array<{ name: string; label: string; low: number; high: number; purpose: string }>
-  source?: 'heart_rate_reserve' | 'lactate_threshold'
+  source?: 'heart_rate_reserve' | 'lactate_threshold' | 'percent_of_max'
   lt_hr?: number | null
   lt_date?: ISODate | null
   updated_at?: ISODateTime | null

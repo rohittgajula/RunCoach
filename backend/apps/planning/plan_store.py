@@ -94,7 +94,14 @@ def bands_for(athlete: Athlete) -> Bands:
         hard = (athlete.easy_pace_min - 120, athlete.easy_pace_min - 90)
 
     zones = athlete.zones()
-    if zones:
+    if athlete.hr_easy_custom:
+        # The athlete's own easy range wins; harder bands start where it stops.
+        hr_easy = (athlete.hr_easy_min, athlete.hr_easy_max)
+        z3_top = zones.band("Z3").high if zones else 0
+        hr_moderate = (athlete.hr_easy_max, max(z3_top, athlete.hr_ceiling))
+        z4 = zones.band("Z4") if zones else None
+        hr_hard = (max(z4.low, hr_moderate[1]), max(z4.high, hr_moderate[1] + 1)) if z4 else None
+    elif zones:
         z2, z3, z4 = zones.band("Z2"), zones.band("Z3"), zones.band("Z4")
         hr_easy, hr_moderate, hr_hard = (z2.low, z2.high), (z3.low, z3.high), (z4.low, z4.high)
     else:

@@ -75,8 +75,8 @@ def limits_for(athlete) -> rules.Limits:
 
 
 def easy_top(athlete) -> int | None:
-    zones = athlete.zones()
-    return zones.band("Z2").high if zones else athlete.hr_easy_max
+    band = athlete.easy_hr_band()
+    return band[1] if band else athlete.hr_easy_max
 
 
 def snapshot(workout: PlannedWorkout) -> dict:

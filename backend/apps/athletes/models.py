@@ -125,6 +125,14 @@ class Athlete(models.Model):
     class ZonesSource(models.TextChoices):
         RESERVE = "heart_rate_reserve", "Heart-rate reserve"
         LT = "lactate_threshold", "Lactate threshold"
+        # Chosen by the athlete: % of max HR, the same zones a Garmin watch shows.
+        # An incoming lactate threshold never overrides this choice.
+        PERCENT_MAX = "percent_of_max", "Percent of max HR (same as Garmin)"
+
+    # The athlete's own easy-run range. When on, hr_easy_min/hr_easy_max are the HR
+    # target for every easy, long and run/walk running step (instead of zone 2), and
+    # hr_ceiling is where they walk. Off: zone 2 decides, as before.
+    hr_easy_custom = models.BooleanField(default=False)
 
     lt_hr = models.PositiveSmallIntegerField(null=True, blank=True)
     lt_pace_s = models.PositiveSmallIntegerField(null=True, blank=True,
@@ -326,6 +334,13 @@ class Athlete(models.Model):
             )["peak"]
             source = "observed"
 
+        if self.zones_source == self.ZonesSource.PERCENT_MAX and maximum:
+            from analysis.zones import build_percent_max
+
+            percent = build_percent_max(maximum, resting, max_source=source)
+            if percent is not None:
+                return percent
+
         reserve = build(resting, maximum, max_source=source) if resting and maximum else None
         if self.zones_source == self.ZonesSource.LT and self.lt_hr:
             from analysis.zones import from_lactate_threshold
@@ -335,6 +350,17 @@ class Athlete(models.Model):
             if lt is not None:
                 return lt
         return reserve
+
+    def easy_hr_band(self, zones=None) -> tuple[int, int] | None:
+        """(low, high) bpm for easy running: the athlete's own range when they set one,
+        else zone 2, else the profile defaults. The one place that decides "easy"."""
+        if self.hr_easy_custom:
+            return self.hr_easy_min, self.hr_easy_max
+        zones = zones if zones is not None else self.zones()
+        if zones is not None:
+            z2 = zones.band("Z2")
+            return z2.low, z2.high
+        return self.hr_easy_min, self.hr_easy_max
 
     @property
     def token_dir(self) -> str:

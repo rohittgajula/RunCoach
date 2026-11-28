@@ -70,3 +70,29 @@ def derive_stale(limit: int = 200) -> dict:
     for activity in stale:
         derive_one.delay(activity.pk)
     return {"queued": len(stale)}
+
+
+@shared_task(name="activities.rezone_athlete")
+def rezone_athlete(athlete_id: int) -> dict:
+    """Recount time-in-zone on every activity after the athlete's zones changed
+    (zones method, max or resting HR). Only time_in_zone is rewritten: segments and
+    every other metric stay as they are, and no after-run work is triggered — so the
+    zone history stays comparable without re-running the coach on old runs."""
+    from analysis import zones as zone_maths
+    from apps.athletes.models import Athlete
+
+    from .models import ActivityMetrics
+    from .services import load_samples
+
+    athlete = Athlete.objects.filter(pk=athlete_id).first()
+    zones = athlete.zones() if athlete else None
+    if zones is None:
+        return {"rezoned": 0}
+    done = 0
+    for metrics in ActivityMetrics.objects.filter(activity__athlete=athlete).select_related("activity"):
+        samples = load_samples(metrics.activity)
+        metrics.time_in_zone = zone_maths.time_in_zones(
+            ((s.offset_s, s.heart_rate) for s in samples), zones)
+        metrics.save(update_fields=["time_in_zone"])
+        done += 1
+    return {"rezoned": done}

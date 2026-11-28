@@ -100,6 +100,30 @@ def build(resting_hr: int, max_hr: int, max_source: str = "measured") -> Zones |
     return Zones(resting_hr=resting_hr, max_hr=max_hr, max_source=max_source, zones=zones)
 
 
+# --- Percent of maximum: the same method and numbers a Garmin watch shows -----------
+# Garmin's default running zones are 50/60/70/80/90 % of max HR, each zone starting
+# where the previous one stops (zone 2 = 116-134 at a max of 193). Offered so the
+# app and the watch never show the athlete two different "zone 2"s.
+PERCENT_MAX_FLOORS: dict[ZoneName, float] = {
+    "Z1": 0.50, "Z2": 0.60, "Z3": 0.70, "Z4": 0.80, "Z5": 0.90,
+}
+
+
+def build_percent_max(max_hr: int, resting_hr: int | None = None,
+                      max_source: str = "measured") -> Zones | None:
+    """Zones as % of max HR, Garmin-style: each zone's top is one below the next floor."""
+    if not max_hr or max_hr < 120:
+        return None
+    floors = [int(max_hr * f + 0.5) for f in PERCENT_MAX_FLOORS.values()]  # half up, as Garmin
+    zones = []
+    for i, name in enumerate(PERCENT_MAX_FLOORS):
+        high = floors[i + 1] - 1 if i + 1 < len(floors) else max_hr
+        zones.append(Zone(name=name, label=ZONE_LABEL[name], low=floors[i], high=high,
+                          purpose=ZONE_PURPOSE[name]))
+    return Zones(resting_hr=resting_hr, max_hr=max_hr, max_source=max_source,
+                 zones=zones, source="percent_of_max")
+
+
 def time_in_zones(
     samples: Iterable[tuple[float, int | None]], zones: Zones
 ) -> dict[str, float]:

@@ -23,7 +23,10 @@ def guard_base(athlete) -> dict:
     """The athlete-level inputs of the easy-day guard (R7 §3). One zones() lookup;
     pass the result to workout_json when presenting many workouts."""
     zones = athlete.zones()
-    return {"z2_high": zones.band("Z2").high if zones else None,
+    # "z2_high" is the easy cap: the athlete's own easy top when they set one.
+    easy_top = athlete.hr_easy_max if athlete.hr_easy_custom else (
+        zones.band("Z2").high if zones else None)
+    return {"z2_high": easy_top,
             "hr_ceiling": athlete.hr_ceiling,
             "easy_pace": (athlete.easy_pace_min, athlete.easy_pace_max)}
 

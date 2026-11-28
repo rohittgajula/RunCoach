@@ -61,6 +61,8 @@ def _walk_s(steps) -> int:
 def _zone_top(athlete, zone: str | None, zones=None) -> int | None:
     zones = zones if zones is not None else athlete.zones()
     name = zone if zone in ("Z1", "Z2", "Z3", "Z4", "Z5") else "Z2"
+    if athlete.hr_easy_custom and name in ("Z1", "Z2"):
+        return athlete.hr_easy_max
     if zones is not None:
         return zones.band(name).high
     return athlete.hr_easy_max if name in ("Z1", "Z2") else athlete.hr_ceiling

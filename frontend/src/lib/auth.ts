@@ -190,6 +190,9 @@ export type Athlete = {
   hr_easy_min: number
   hr_easy_max: number
   hr_ceiling: number
+  /** Own easy-run range on: hr_easy_min/max are the easy target, hr_ceiling = walk. */
+  hr_easy_custom?: boolean
+  zones_source?: ZonesSource
   run_cadence_threshold: number
   available_days: Record<string, boolean>
   long_run_day: number
@@ -251,6 +254,8 @@ export type Athlete = {
   strength_reflow?: { created: number; removed: number }
   // Only on a PATCH response: what changing the training days did to the active plan.
   plan_reflow?: PlanReflow | null
+  /** Future workouts that got new HR targets after an HR-settings change. */
+  hr_reband?: { updated: number; watch_updated: number } | null
   // R18 §B — the athlete's own values win over Garmin's (null = use Garmin's / default).
   sleep_need_minutes?: number | null
   /** Read-only: the effective need used everywhere. */
@@ -260,6 +265,8 @@ export type Athlete = {
   loop_distance_km?: number | null
   data_version?: number | string
 }
+
+export type ZonesSource = 'heart_rate_reserve' | 'lactate_threshold' | 'percent_of_max'
 
 export type PlanReflow = {
   moved: number
