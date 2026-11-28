@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FuelRows } from '../components/DetailSheets'
-import { ChevronLeft, ChevronRight, DietIcon, MoreVIcon, PlusIcon, RunIcon } from '../components/Icons'
+import { ChevronLeft, ChevronRight, DietIcon, GearIcon, MoreVIcon, PlusIcon, RunIcon } from '../components/Icons'
 import { KcalRing } from '../components/KcalRing'
 import { LogMealSheet, MEAL_TYPES } from '../components/LogMealSheet'
 import { MacroBar } from '../components/MacroBar'
@@ -8,8 +8,11 @@ import { MealSummary } from '../components/MealCard'
 import { BodyCard } from '../components/BodyCard'
 import { BalanceCard } from '../components/diet/BalanceCard'
 import { PreMealCheck } from '../components/diet/PreMealCheck'
+import { DayPlan } from '../components/diet/DayPlan'
+import { MissingCard } from '../components/diet/MissingCard'
+import { FoodPreferences } from '../components/diet/FoodPreferences'
 import { PageHeader } from '../components/PageHeader'
-import { Disclosure, SeeDetails } from '../components/Disclose'
+import { SeeDetails } from '../components/Disclose'
 import { useShell } from '../components/Shell'
 import { WaterTarget } from '../components/weather/WaterTarget'
 import { Empty, ErrorState, Skeleton } from '../components/States'
@@ -35,6 +38,13 @@ function dayLabel(date: string) {
 export default function Diet() {
   const { openSettings } = useShell()
   const [date, setDate] = useState(todayISO())
+  /**
+   * Three questions, three views, rather than one scroll that answers all of
+   * them at once: what should I eat, what have I eaten, and what keeps going
+   * wrong. They are read at different moments and only one of them is ever the
+   * reason the tab was opened.
+   */
+  const [view, setView] = useState<'eat' | 'log' | 'patterns' | 'prefs'>('eat')
   const day = useDietDay(date)
   const [logOpen, setLogOpen] = useState(false)
   const [editing, setEditing] = useState<Meal | null>(null)
@@ -45,8 +55,55 @@ export default function Diet() {
 
   return (
     <div className="page">
-      <PageHeader title="Food" back="/health/more" />
+      <PageHeader
+        title="Food"
+        right={
+          <button
+            type="button" className="icon-btn" aria-label="Food preferences"
+            aria-pressed={view === 'prefs'}
+            onClick={() => setView((v) => (v === 'prefs' ? 'eat' : 'prefs'))}
+          >
+            <GearIcon size={20} />
+          </button>
+        }
+      />
 
+      {view !== 'prefs' && (
+        <nav className="segmented segmented-full" aria-label="Food views">
+          {([['eat', 'Eat'], ['log', 'Logged'], ['patterns', 'Patterns']] as const).map(([key, label]) => (
+            <button
+              key={key} type="button"
+              className={`segmented-option${view === key ? ' is-active' : ''}`}
+              aria-current={view === key ? 'page' : undefined}
+              onClick={() => setView(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {view === 'prefs' && <FoodPreferences />}
+
+      {view === 'patterns' && (
+        <>
+          <MissingCard />
+          <BodyCard />
+          <BalanceCard />
+        </>
+      )}
+
+      {view === 'eat' && (
+        <>
+          {data && <TargetsCard day={data} />}
+          <DayPlan />
+          <PreMealCheck date={todayISO()} onOpen={setChecking} />
+          {data && data.fueling.length > 0 && <FuelCard day={data} />}
+        </>
+      )}
+
+      {view === 'log' && (
+      <>
       <div className="date-switch">
         <button type="button" className="icon-btn" aria-label="Previous day" onClick={() => setDate(addDays(date, -1))}>
           <ChevronLeft />
@@ -88,11 +145,6 @@ export default function Diet() {
             </button>
           )}
           <TargetsCard day={data} />
-          {/* Before the log, because it is a question asked before the meal and the
-              log is a record of meals already eaten. Today only: there is no point
-              asking whether to eat something last Tuesday. */}
-          {date === todayISO() && <PreMealCheck date={date} onOpen={setChecking} />}
-          {data.fueling.length > 0 && <FuelCard day={data} />}
           <MealsCard
             meals={data.meals}
             onAdd={() => setLogOpen(true)}
@@ -101,13 +153,10 @@ export default function Diet() {
         </>
       )}
 
-      {/* R14 §1: weight and the calorie balance live behind "Trends". */}
-      <Disclosure id="diet-trends" title="Trends" sub="Weight, body fat and calories vs your weight">
-        <BodyCard />
-        <BalanceCard />
-      </Disclosure>
+      </>
+      )}
 
-      {!checking && (
+      {view === 'log' && !checking && (
         <button type="button" className="fab" onClick={() => setLogOpen(true)} aria-label="Log meal">
           <PlusIcon size={22} /> Log meal
         </button>

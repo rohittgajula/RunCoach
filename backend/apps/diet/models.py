@@ -102,3 +102,51 @@ class WaterLog(OwnedByAthlete):
 
     def __str__(self):
         return f"{self.local_date} {self.ml} ml"
+
+
+class FoodProfile(OwnedByAthlete):
+    """What he eats, and what he can actually produce where he lives.
+
+    Separate from the diet *goal* on Athlete (lose/maintain/gain), which is about
+    numbers. This is about food: a 116 g protein target means one thing with a
+    stove and eggs and quite another on a PG plate you have no say over, and a
+    plan that ignores the difference is a plan that gets ignored back.
+
+    `prep` is a ceiling, not a preference — "stove" means a stove is available,
+    and the planner still prefers the no-cook option when it does the job.
+    """
+
+    class Pattern(models.TextChoices):
+        VEG = "veg", "Vegetarian"
+        EGG = "egg", "Vegetarian, plus egg"
+        NONVEG = "nonveg", "Non-vegetarian"
+
+    class Prep(models.TextChoices):
+        NONE = "none", "Nothing — ready-to-eat only"
+        KETTLE = "kettle", "Kettle"
+        STOVE = "stove", "Stove or induction"
+
+    pattern = models.CharField(max_length=6, choices=Pattern.choices, default=Pattern.VEG)
+    prep = models.CharField(max_length=6, choices=Prep.choices, default=Prep.NONE)
+    #: Which meals arrive without him doing anything. A PG usually covers
+    #: breakfast and dinner and sometimes lunch, and that changes where in the
+    #: day there is any room to fix a shortfall at all.
+    provided = models.JSONField(default=list, blank=True)
+    #: Food keys from nutrition.foods he does not want suggested. Validated on
+    #: write against the table, so a renamed key cannot rot into a silent filter.
+    dislikes = models.JSONField(default=list, blank=True)
+    #: Food keys he has said he eats most days — his own anchors, kept in every
+    #: plan rather than re-proposed. Rohit's are oats and eggs.
+    staples = models.JSONField(default=list, blank=True)
+    #: Free text, for the things no field anticipates ("no beef", "PG dinner is
+    #: always rice and one sabzi"). Shown to the model, never parsed.
+    notes = models.CharField(max_length=400, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["athlete"], name="one_food_profile_per_athlete"),
+        ]
+
+    def __str__(self):
+        return f"{self.athlete_id}: {self.pattern}/{self.prep}"

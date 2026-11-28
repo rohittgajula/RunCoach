@@ -432,6 +432,9 @@ AI_MODEL_TIERS = {
     # R25: the pre-meal check. The coach's voice, and the one place a food answer
     # has to hold his bloods, his training load and his weight goal at once.
     "meal_precheck": "coach",
+    # R25: arranging a day of food. The coach's voice, and it has to hold his
+    # targets, his PG menu, his training and his bloods at once.
+    "day_plan": "coach",
     # R6: the per-workout review and the Insights overview are the coach's voice.
     "workout_review": "coach",
     "insights_summary": "coach",

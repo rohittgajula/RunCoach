@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .food_views import food_list, missing, plan_today, profile
 from .media import serve_signed
 from .views import (
     MealCreate, MealDetail, day_view, estimate_view, precheck_view, trend_view,
@@ -13,6 +14,11 @@ urlpatterns = [
     path("diet/meals/estimate/", estimate_view, name="diet-meal-estimate"),
     # R25: "should I eat this?" — asked before the meal, never saved.
     path("diet/precheck/", precheck_view, name="diet-precheck"),
+    # R25: what to eat today, and what has been missing.
+    path("diet/profile/", profile, name="diet-profile"),
+    path("diet/foods/", food_list, name="diet-foods"),
+    path("diet/plan/", plan_today, name="diet-plan"),
+    path("diet/missing/", missing, name="diet-missing"),
     path("diet/meals/<int:pk>/", MealDetail.as_view(), name="diet-meal"),
     # R11 §D
     path("diet/water/", water, name="diet-water"),

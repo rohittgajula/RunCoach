@@ -338,3 +338,194 @@
 /* Opened in place, so it needs a rule off the buttons above it rather than
    the card padding it no longer has. */
 .pmc-inline { padding-top: 10px; border-top: 1px solid var(--line); }
+
+/* ===========================================================================
+   R25 — the Food tab: what to eat, what is missing, and the preferences
+   behind both.
+   ===========================================================================*/
+
+/* --- the invitation, before a model call has been spent ------------------ */
+
+.dp-invite { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dp-invite > div { min-width: 0; }
+.dp-invite .card-title { margin-bottom: 2px; }
+.dp-invite .btn { flex: 0 0 auto; }
+
+@media (max-width: 420px) {
+  .dp-invite { flex-direction: column; align-items: stretch; }
+  .dp-invite .btn { width: 100%; }
+}
+
+/* --- the plan ------------------------------------------------------------ */
+
+.dp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dp-headline { margin: 0; font-size: 0.95rem; font-weight: 700; line-height: 1.45; }
+
+/* Four numbers across two rows on a phone. Each is "got / wanted", because a
+   number on its own is not a judgement and these all need one. */
+.dp-totals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.dp-totals li {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+.dp-total { font-size: 1.1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.dp-total-of { font-size: 0.7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dp-total-lbl { font-size: 0.68rem; color: var(--muted); width: 100%; }
+.dp-pct {
+  margin-left: auto;
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--chip-bg, rgba(127, 127, 127, 0.15));
+  color: var(--muted);
+}
+.dp-pct.is-on { background: var(--good-bg); color: var(--good-fg); }
+.dp-pct.is-over { background: var(--warn-bg); color: var(--warn); }
+
+/* --- one meal ------------------------------------------------------------ */
+
+.dp-meal { padding: 11px 0; border-top: 1px solid var(--line); }
+.dp-meal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.dp-slot {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dp-meal-nums { font-size: 0.74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.dp-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.dp-items li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.dp-item-text { font-size: 0.86rem; font-weight: 600; }
+
+/* The two tags that carry the meaning: already on your plate, versus yours. */
+.dp-tag {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.dp-tag.is-pg { border-color: transparent; background: var(--accent); color: #fff; }
+.dp-tag.is-staple { border-color: transparent; background: var(--good-bg); color: var(--good-fg); }
+.dp-tag.is-iron { border-color: transparent; background: var(--bad-bg); color: var(--bad-fg); }
+
+.dp-why {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+}
+.dp-why svg { flex: 0 0 auto; margin-top: 3px; transition: transform 0.15s ease; }
+.dp-why svg.is-open { transform: rotate(180deg); }
+
+.dp-iron {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--chip-bg, rgba(127, 127, 127, 0.1));
+}
+.dp-focus { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.dp-focus li { font-size: 0.82rem; line-height: 1.5; }
+
+/* --- what has been missing ---------------------------------------------- */
+
+.ms-row { display: flex; flex-direction: column; gap: 4px; }
+.ms-row + .ms-row { padding-top: 10px; border-top: 1px solid var(--line); }
+.ms-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.ms-label { font-size: 0.86rem; font-weight: 700; text-transform: capitalize; }
+.ms-nums { font-size: 0.9rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ms-of { font-size: 0.72rem; font-weight: 600; color: var(--muted); }
+.ms-bar { height: 7px; border-radius: 999px; background: var(--chip-bg, rgba(127, 127, 127, 0.18)); overflow: hidden; }
+.ms-fill { display: block; height: 100%; border-radius: 999px; background: var(--warn); }
+.ms-gap { margin: 0; font-size: 0.75rem; color: var(--muted); }
+
+/* --- preferences --------------------------------------------------------- */
+
+.fp-choices { display: flex; flex-direction: column; gap: 6px; }
+.fp-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+.fp-choice.is-active { border-color: var(--accent); background: var(--card-2); }
+.fp-dot {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+}
+.fp-choice.is-active .fp-dot { border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--accent); }
+
+.fp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* The selected state for every chip-button in this release.
+   pages.css styles `.chip-btn.on`, and `.is-active` — which the pre-meal meal
+   picker and both food pickers use — had no rule at all, so a selected chip
+   rendered pixel-identical to an unselected one. The meal type on "Before you
+   eat it" shipped to production that way: tappable, stateful, and completely
+   invisible. Accent rather than the subtler `.on` treatment, because these are
+   choices that change what the app then tells you. */
+.chip-btn.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+.chip-btn.is-active svg { stroke: currentColor; }
+
+/* Excluded, not selected — so it reads as a removal rather than a choice. */
+.fp-chips .chip-btn.is-off {
+  opacity: 0.6;
+  text-decoration: line-through;
+  border-style: dashed;
+}
+
+/* A forty-second wait needs words, not a spinner. */
+.dp-building { margin: 0; font-size: 0.82rem; color: var(--muted); }
