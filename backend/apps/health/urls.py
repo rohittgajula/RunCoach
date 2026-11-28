@@ -1,5 +1,5 @@
 from django.urls import path
-from . import hr_views, labs
+from . import hr_views, improving_views, labs
 
 from . import (
     achievements, briefing, compare_views, day_views, forecast_views, garmin_views, injury,
@@ -51,6 +51,7 @@ urlpatterns = [
     path("mood/", mood.moods, name="mood"),
     path("mood/today/", mood.mood_today, name="mood-today"),
     path("mood/<str:day>/", mood.mood_delete, name="mood-day"),
+    path("reports/improving/", improving_views.improving, name="improving-report"),
     path("reports/monthly/", monthly.monthly, name="monthly-report"),
     path("reports/monthly/list/", monthly.monthly_list, name="monthly-report-list"),
     path("reports/monthly/ai/", monthly.monthly_ai, name="monthly-report-ai"),

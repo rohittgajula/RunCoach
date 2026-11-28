@@ -30,6 +30,7 @@ const HeartRateSection = lazy(() => sections.hr().then((m) => ({ default: m.Hear
 // Restored: 7cf332e dropped these routes but left the More rows linking to them.
 const ReportsSection = lazy(() => sections.reports().then((m) => ({ default: m.ReportsSection })))
 const MonthlyReportsPage = lazy(() => sections.reports().then((m) => ({ default: m.MonthlyReportsPage })))
+const ImprovingReportPage = lazy(() => sections.reports().then((m) => ({ default: m.ImprovingReportPage })))
 const ExperimentsSection = lazy(() => sections.experiments().then((m) => ({ default: m.ExperimentsSection })))
 const CompareSection = lazy(() => sections.compare().then((m) => ({ default: m.CompareSection })))
 
@@ -152,6 +153,7 @@ export default function Health() {
           <Route path="experiments" element={<ExperimentsSection />} />
           <Route path="compare" element={<CompareSection />} />
           <Route path="reports" element={<ReportsSection />} />
+          <Route path="reports/improving" element={<ImprovingReportPage />} />
           <Route path="reports/monthly" element={<MonthlyReportsPage />} />
           <Route path="reports/monthly/:month" element={<MonthlyReportsPage />} />
           <Route path="reports/:week" element={<ReportsSection />} />

@@ -47,7 +47,7 @@ const BY_PATH: Record<string, Loader> = {
   fitness: sections.fitness, sleep: sections.sleep, progress: sections.progress,
   more: sections.more, goals: sections.goals, heart: sections.heart,
   labs: sections.labs, body: sections.body, hr: sections.hr,
-  reports: sections.reports, 'reports/monthly': sections.reports,
+  reports: sections.reports, 'reports/monthly': sections.reports, 'reports/improving': sections.reports,
   experiments: sections.experiments, compare: sections.compare,
 }
 

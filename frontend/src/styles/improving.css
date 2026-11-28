@@ -1,0 +1,25 @@
+/* Health → Reports → Improving ("Am I improving?"). */
+.imp-verdict { display: grid; gap: 8px; }
+.imp-verdict h2 { margin: 0; font-size: 20px; line-height: 1.2; text-wrap: balance; }
+.imp-verdict p { margin: 0; color: var(--muted); }
+.imp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 340px) { .imp-tiles { grid-template-columns: minmax(0, 1fr); } }
+.imp-tile { display: grid; gap: 4px; align-content: start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); min-width: 0; }
+.imp-tile .imp-label { font-size: 13px; color: var(--muted); }
+.imp-tile .imp-nums { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.imp-tile .imp-nums small { font-size: 13px; font-weight: 500; color: var(--muted); }
+.imp-tile .imp-arrow { color: var(--muted); font-weight: 500; }
+.imp-tile p { margin: 0; font-size: 12.5px; color: var(--muted); }
+.imp-tile .pill { justify-self: start; }
+.imp-chart { overflow-x: auto; }
+.imp-chart svg { display: block; width: 100%; min-width: 300px; height: auto; }
+.imp-chart text { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.imp-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.imp-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.imp-table { overflow-x: auto; }
+.imp-table table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.imp-table th, .imp-table td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.imp-table th { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.imp-table th:first-child, .imp-table td:first-child { text-align: left; }
+.imp-table tr.is-short td { color: var(--muted); }
+.imp-next { margin: 0; padding-left: 18px; display: grid; gap: 6px; }

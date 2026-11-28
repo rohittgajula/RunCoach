@@ -9,6 +9,7 @@ import { Markdown } from '../Markdown'
 import { Empty, ErrorState, Skeleton } from '../States'
 import { ShareButton } from '../share/ShareButton'
 import { InfoButton } from './InfoButton'
+import { ImprovingReport } from './ImprovingReport'
 import { MonthlyReportsSection } from './MonthlyReport'
 
 const ZONE_COLOR: Record<string, string> = {
@@ -24,12 +25,24 @@ const fmtNum = (v: number | null | undefined, unit: string) => {
 /** R13 §11: Weekly | Monthly tabs above the reports. */
 export function ReportTabs() {
   const { pathname } = useLocation()
-  const weekly = !pathname.includes('/reports/monthly')
+  const tab = pathname.includes('/reports/monthly') ? 'monthly' : pathname.includes('/reports/improving') ? 'improving' : 'weekly'
+  const opt = (key: string) => ({ className: `segmented-option ${tab === key ? 'is-active' : ''}`, 'aria-current': tab === key ? ('page' as const) : undefined })
   return (
     <nav className="segmented segmented-full report-tabs" aria-label="Report period">
-      <NavLink to="/health/reports" end className={`segmented-option ${weekly ? 'is-active' : ''}`} aria-current={weekly ? 'page' : undefined}>Weekly</NavLink>
-      <NavLink to="/health/reports/monthly" className={`segmented-option ${!weekly ? 'is-active' : ''}`} aria-current={!weekly ? 'page' : undefined}>Monthly</NavLink>
+      <NavLink to="/health/reports" end {...opt('weekly')}>Weekly</NavLink>
+      <NavLink to="/health/reports/monthly" {...opt('monthly')}>Monthly</NavLink>
+      <NavLink to="/health/reports/improving" {...opt('improving')}>Improving?</NavLink>
     </nav>
+  )
+}
+
+/** "Am I improving?": every outdoor run, first month against latest. */
+export function ImprovingReportPage() {
+  return (
+    <div className="stack">
+      <ReportTabs />
+      <ImprovingReport />
+    </div>
   )
 }
 
