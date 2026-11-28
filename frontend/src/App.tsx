@@ -19,6 +19,9 @@ const Health = lazy(pages.insights)
 const Me = lazy(pages.me)
 // R14: weather report and the staff-only admin panel, each its own chunk.
 const Weather = lazy(pages.weather)
+// Food: reachable from Health → More and from Today's food card. Its own chunk —
+// most days are not food-logging days.
+const Diet = lazy(() => import('./pages/Diet'))
 const AdminPanel = lazy(() => import('./pages/AdminPanel'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Login = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Login })))
@@ -83,7 +86,7 @@ export default function App() {
                 <Route path="/activities/:id" element={<ActivityDetail />} />
                 <Route path="/chat/:threadId" element={<Chat />} />
                 {/* Removed from the tab bar; kept as a redirect for old links. */}
-                <Route path="/diet" element={<Navigate to="/today" replace />} />
+                <Route path="/diet" element={<Diet />} />
                 <Route path="/health/*" element={<Health />} />
                 <Route path="/me/*" element={<Me />} />
                 <Route path="/weather" element={<Weather />} />

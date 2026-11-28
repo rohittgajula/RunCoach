@@ -14,6 +14,8 @@ urlpatterns = [
     path("health/heart-rate/", hr_views.heart_rate, name="health-heart-rate"),
     path("labs/", labs.panels, name="labs"),
     path("labs/markers/", labs.markers, name="lab-markers"),
+    # R25: a report he uploads, read into a draft he then confirms. Nothing saved here.
+    path("labs/extract/", labs.extract, name="lab-extract"),
     path("labs/<int:pk>/", labs.panel_detail, name="lab-panel"),
     path("health/fitness/", garmin_views.fitness, name="health-fitness"),
     path("health/training-status/", garmin_views.training_status,

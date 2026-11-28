@@ -12,10 +12,14 @@ Three endpoints:
     POST /labs/          one panel and its readings
     DELETE /labs/{id}/   remove one
 
-Entry is manual and structured. Reading numbers off a photograph with a model
-is the obvious next step and deliberately not this step: a mis-OCR'd decimal
-point on a ferritin result is a number somebody might act on, and "the app read
-it wrong" is not a failure mode worth shipping for the sake of saving typing.
+    POST /labs/extract/   read an uploaded PDF or photo into an unsaved draft
+
+Entry is manual and structured, and the upload does not change that: it fills the
+same form in, and he still presses save. The reason the earlier version refused to
+read a report at all — a mis-OCR'd decimal point on a ferritin result is a number
+somebody might act on — is answered by never saving what the model produced.
+`lab_extract` returns a draft carrying, for each row, the text it read the number
+from, so confirming it is a glance at the report rather than a second typing of it.
 """
 
 from __future__ import annotations
@@ -23,12 +27,18 @@ from __future__ import annotations
 import datetime as dt
 
 from rest_framework import serializers, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import (
+    api_view, parser_classes, permission_classes, throttle_classes,
+)
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from analysis import bloodwork
+from apps.coaching.client import AIUnavailable
+from apps.coaching.throttles import ChatThrottle
 
+from .lab_extract import MAX_BYTES, extract_panel
 from .models import LabPanel, LabReading
 
 
@@ -156,3 +166,40 @@ def panel_detail(request, pk: int):
     if not deleted:
         return Response({"detail": "No such panel."}, status=status.HTTP_404_NOT_FOUND)
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([ChatThrottle])
+@parser_classes([MultiPartParser, FormParser])
+def extract(request):
+    """Read an uploaded report into a draft. Saves nothing, here or anywhere.
+
+    The response is the shape the review screen needs: rows that passed every
+    check, rows that did not and why, markers the app does not track, and what
+    the report did not say. 503 when the model is unavailable, so the UI can
+    offer the typed form instead of showing a failure.
+    """
+    upload = request.FILES.get("file")
+    if upload is None:
+        return Response({"detail": "Attach the report as a PDF or a photo."}, status=400)
+    if upload.size > MAX_BYTES:
+        return Response(
+            {"detail": f"The file must be under {MAX_BYTES // (1024 * 1024)} MB."}, status=400
+        )
+    try:
+        draft = extract_panel(
+            request.user.athlete,
+            data=upload.read(),
+            content_type=getattr(upload, "content_type", None),
+            filename=getattr(upload, "name", "") or "",
+        )
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=400)
+    except AIUnavailable as exc:
+        return Response(
+            {"detail": f"I could not read the report right now ({exc}). "
+                       "You can still type the results in."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return Response(draft)

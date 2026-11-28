@@ -35,6 +35,11 @@ export const sections = {
   labs: once(() => import('../components/labs/LabsSection')),
   hr: once(() => import('../components/hr/HeartRateSection')),
   body: once(() => import('../components/weight/BodySection')),
+  // Restored after 7cf332e: the strip commit dropped these three routes but left
+  // the More rows pointing at them, so every tap bounced back to Overview.
+  reports: once(() => import('../components/health/ReportsSection')),
+  experiments: once(() => import('../components/experiments/ExperimentsSection')),
+  compare: once(() => import('../components/health/CompareSection')),
 }
 
 const BY_PATH: Record<string, Loader> = {
@@ -42,6 +47,8 @@ const BY_PATH: Record<string, Loader> = {
   fitness: sections.fitness, sleep: sections.sleep, progress: sections.progress,
   more: sections.more, goals: sections.goals, heart: sections.heart,
   labs: sections.labs, body: sections.body, hr: sections.hr,
+  reports: sections.reports, 'reports/monthly': sections.reports,
+  experiments: sections.experiments, compare: sections.compare,
 }
 
 /** `rest` = the path segments after /health. Overview ships with the Health chunk. */

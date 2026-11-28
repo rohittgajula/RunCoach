@@ -9,11 +9,14 @@ import { IllnessLauncher } from '../components/illness/IllnessLauncher'
 import { ReviewLauncher } from '../components/quality/ReviewEntry'
 import { Row, RowGroup } from '../components/Disclose'
 import {
-  BandageIcon, CalendarIcon, ChevronRight, GearIcon, HealthIcon, HelpIcon, LockIcon, MedalIcon, RefreshIcon, SparkIcon, TodayIcon, TrashIcon, WatchIcon,
+  BandageIcon, BellIcon, CalendarIcon, ChevronRight, GearIcon, HealthIcon, HelpIcon, LockIcon,
+  MedalIcon, RefreshIcon, ShoeIcon, SparkIcon, TodayIcon, TrashIcon, WatchIcon,
 } from '../components/Icons'
 import { initialOf } from '../components/Kit'
 import { PageHeader } from '../components/PageHeader'
 import { RacesCard } from '../components/profile/RacesCard'
+import { RemindersSection } from '../components/me/Reminders'
+import { ShoesSection } from '../components/me/Shoes'
 import { useShell } from '../components/Shell'
 import { Skeleton } from '../components/States'
 import { useAuth } from '../lib/AuthContext'
@@ -39,6 +42,11 @@ export default function Me() {
       <Route path="deleted" element={<SubPage title="Deleted activities"><DeletedActivities /></SubPage>} />
       <Route path="reset" element={<SubPage title="Clear data"><ResetPlanning /></SubPage>} />
       <Route path="goal" element={<SubPage title="Set a goal"><SetGoal /></SubPage>} />
+      {/* Restored: both sections existed with nothing routing to them, so every
+          link to them — the briefing's "remind me", the alarm card's Edit, both
+          teasers — bounced back to Me. */}
+      <Route path="reminders" element={<SubPage title="Reminders"><RemindersSection /></SubPage>} />
+      <Route path="shoes" element={<SubPage title="Shoes"><ShoesSection /></SubPage>} />
       <Route path="*" element={<Navigate to="/me" replace />} />
     </Routes>
   )
@@ -94,6 +102,8 @@ function MeHome() {
       <RowGroup title="Gear & reminders">
         <Row to="/me/alarms" icon={<WatchIcon size={20} />} title="Watch alarms" sub={alarmSub} />
         <Row to="/me/calendar" icon={<CalendarIcon size={20} />} title="Calendar sync" sub="See planned runs in Google or Apple Calendar" />
+        <Row to="/me/reminders" icon={<BellIcon size={20} />} title="Reminders" sub="A nudge before a run, and the evening wake-up" />
+        <Row to="/me/shoes" icon={<ShoeIcon size={20} />} title="Shoes" sub="Mileage per pair, and when a pair is done" />
         <Row
           to="/me/badges"
           icon={<MedalIcon size={20} />}

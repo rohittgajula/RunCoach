@@ -426,6 +426,12 @@ AI_MODEL_TIERS = {
     # R18: structured parameters from a memory fact the parser could not read.
     "memory_params": "lite",
     "meal_estimate": "fast",
+    # R25: transcribing a lab report. On `fast` for its vision, not for reasoning —
+    # it is a transcription job, and the numbers are validated in Python afterwards.
+    "lab_extract": "fast",
+    # R25: the pre-meal check. The coach's voice, and the one place a food answer
+    # has to hold his bloods, his training load and his weight goal at once.
+    "meal_precheck": "coach",
     # R6: the per-workout review and the Insights overview are the coach's voice.
     "workout_review": "coach",
     "insights_summary": "coach",

@@ -17,6 +17,7 @@ from apps.coaching.client import AIUnavailable
 from apps.coaching.throttles import ChatThrottle
 
 from .estimate import estimate_meal
+from .precheck import precheck_meal
 from .models import Meal
 from .services import diet_day, meal_json, trend
 
@@ -116,6 +117,32 @@ def estimate_view(request):
     except AIUnavailable as exc:
         return Response(
             {"detail": f"Meal estimates are unavailable right now ({exc}). Enter it manually."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return Response(result)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([ChatThrottle])
+def precheck_view(request):
+    """R25: before he eats it. Saves nothing — this is a question, not a log entry.
+
+    503 when the model is unavailable: the fit numbers would still be worth
+    showing, but a verdict card with no verdict on it is worse than the typed
+    estimate flow he already has.
+    """
+    try:
+        result = precheck_meal(
+            request.user.athlete,
+            text=request.data.get("text") or "",
+            meal_type=request.data.get("meal_type") or None,
+        )
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=400)
+    except AIUnavailable as exc:
+        return Response(
+            {"detail": f"I could not look at that right now ({exc})."},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
     return Response(result)

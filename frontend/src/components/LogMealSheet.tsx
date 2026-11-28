@@ -53,14 +53,27 @@ const NUM_FIELDS: Array<{ key: 'kcal' | 'carbs_g' | 'protein_g' | 'fat_g'; label
  * never saved on its own; the athlete always confirms. If the estimator is down
  * (503) they fill the items in by hand.
  */
+/**
+ * R25: an estimate produced elsewhere (the pre-meal check), opened straight at
+ * the review step. It is the same confirmation he has always done — the only
+ * thing saved is what he presses save on — minus describing the plate twice.
+ */
+export type MealPrefill = {
+  description: string
+  items: { name: string; quantity: string; kcal: number; carbs_g: number; protein_g: number; fat_g: number }[]
+  confidence: Confidence | null
+  meal_type: string
+}
+
 export function LogMealSheet({
-  open, onClose, date = todayISO(), meal, onSaved,
+  open, onClose, date = todayISO(), meal, onSaved, prefill,
 }: {
   open: boolean
   onClose: () => void
   date?: string
   meal?: Meal | null
   onSaved?: (meal: Meal) => void
+  prefill?: MealPrefill
 }) {
   const save = useSaveMeal()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -93,6 +106,18 @@ export function LogMealSheet({
       setItems(meal.items.length ? meal.items.map(toEdit) : [blankItem()])
       setSource(meal.source)
       setConfidence(meal.ai_confidence)
+    } else if (prefill) {
+      // Straight to review: the items are already estimated, and he confirms
+      // or edits them exactly as he would after an in-sheet estimate.
+      setStep('review')
+      setPhoto(null)
+      setText('')
+      setEatenAt(defaultTime(date))
+      setMealType((prefill.meal_type as MealType) || guessMealType())
+      setDescription(prefill.description)
+      setItems(prefill.items.length ? prefill.items.map(toEdit) : [blankItem()])
+      setSource('ai_text')
+      setConfidence(prefill.confidence)
     } else {
       setStep('input')
       setPhoto(null)
@@ -105,7 +130,7 @@ export function LogMealSheet({
       setSource('manual')
       setConfidence(null)
     }
-  }, [open, meal, date])
+  }, [open, meal, date, prefill])
 
   const preview = useMemo(() => (photo ? URL.createObjectURL(photo) : null), [photo])
   useEffect(() => () => {

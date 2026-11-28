@@ -15,9 +15,12 @@
  * against the wrong range is worse than no flag. Which range was used is shown
  * on every row.
  *
- * Entry is typed, not photographed. Reading a decimal point off a photo with a
- * model is the obvious next step and a bad first one: a mis-read ferritin is a
- * number somebody might act on.
+ * Entry is typed or uploaded, and the upload does not skip the typing so much
+ * as pre-fill it: a PDF or photo comes back as a draft with every value in an
+ * editable box and the text it was read from printed underneath (UploadReport).
+ * The reason a photo was refused for a release and a half — a mis-read ferritin
+ * is a number somebody might act on — is answered by never saving what the model
+ * produced without him confirming it row by row.
  */
 
 import { useState } from 'react'
@@ -25,6 +28,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, json } from '../../lib/auth'
 import { errorText } from '../../lib/queries'
 import { Empty, ErrorState, Skeleton } from '../States'
+import { UploadReport } from './UploadReport'
 
 type Marker = {
   key: string; label: string; unit: string
@@ -166,29 +170,40 @@ function AddPanel({ markers, onDone }: { markers: Marker[]; onDone: () => void }
   )
 }
 
+type Mode = null | 'type' | 'upload'
+
 export function LabsSection() {
-  const [adding, setAdding] = useState(false)
+  const [mode, setMode] = useState<Mode>(null)
+  const adding = mode === 'type'
   const panels = useQuery({ queryKey: ['labs'], queryFn: () => api<Panels>('/labs/') })
   const markers = useQuery({
     queryKey: ['lab-markers'],
     queryFn: () => api<{ markers: Marker[] }>('/labs/markers/'),
     enabled: adding,
   })
+  const toggle = (next: Exclude<Mode, null>) => setMode((m) => (m === next ? null : next))
 
   return (
     <div className="stack labs">
       <section className="card stack">
-        <div className="row">
+        <div className="lab-head">
           <strong>Blood &amp; urine</strong>
-          <button type="button" className="btn btn-secondary btn-sm"
-                  onClick={() => setAdding((a) => !a)}>
-            {adding ? 'Cancel' : '+ Add a panel'}
-          </button>
+          <span className="lab-add-btns">
+            <button type="button" className="btn btn-primary btn-sm"
+                    onClick={() => toggle('upload')}>
+              {mode === 'upload' ? 'Cancel' : 'Upload a report'}
+            </button>
+            <button type="button" className="btn btn-secondary btn-sm"
+                    onClick={() => toggle('type')}>
+              {adding ? 'Cancel' : 'Type it in'}
+            </button>
+          </span>
         </div>
         {/* On the page, not behind an info button. */}
         <p className="lab-standing">{panels.data?.standing_note}</p>
+        {mode === 'upload' && <UploadReport onSaved={() => setMode(null)} />}
         {adding && (markers.data
-          ? <AddPanel markers={markers.data.markers} onDone={() => setAdding(false)} />
+          ? <AddPanel markers={markers.data.markers} onDone={() => setMode(null)} />
           : <Skeleton lines={6} />)}
       </section>
 
@@ -197,7 +212,7 @@ export function LabsSection() {
         <ErrorState message="Your panels did not load." onRetry={() => panels.refetch()} />
       )}
 
-      {panels.data?.panels.length === 0 && !adding && (
+      {panels.data?.panels.length === 0 && mode === null && (
         <Empty title="No results yet">
           Add your first panel when you have one.
         </Empty>

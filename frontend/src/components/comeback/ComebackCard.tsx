@@ -19,7 +19,7 @@
 
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { IllnessLauncher } from '../illness/IllnessLauncher'
 import { api, json } from '../../lib/auth'
 import { errorText, invalidatePlanData } from '../../lib/queries'
 
@@ -33,6 +33,9 @@ type Card = {
 export function ComebackCard() {
   const client = useQueryClient()
   const [done, setDone] = useState<{ action: string; label: string } | null>(null)
+  // Answering "I was hurt" opens the injury sheet here. It used to link to
+  // /health/illness, a page that never existed in any version of this app.
+  const [hurt, setHurt] = useState(false)
 
   const card = useQuery({
     queryKey: ['comeback'],
@@ -90,7 +93,11 @@ export function ComebackCard() {
       {done && (
         <p className="cmb-done" role="status">
           {done.action === 'illness'
-            ? <>Noted. <Link to="/health/illness">Tell me what is hurting</Link> and the plan waits for you.</>
+            ? <>Noted — the plan waits for you.{' '}
+                <button type="button" className="link-button" onClick={() => setHurt(true)}>
+                  Tell me what is hurting
+                </button>
+              </>
             : done.action === 'shrink'
               ? 'Done — the weeks ahead now start from what you were actually managing.'
               : done.action === 'restart'
@@ -105,6 +112,8 @@ export function ComebackCard() {
           <p className="cmb-return-say">{c.return.framing}</p>
         </div>
       )}
+
+      <IllnessLauncher mode="start" open={hurt} onClose={() => setHurt(false)} />
     </section>
   )
 }

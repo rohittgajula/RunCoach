@@ -106,3 +106,189 @@
    `better` rather than the sign of the number. */
 .hrx-trend.is-better .hrx-change { color: var(--good-fg); }
 .hrx-trend.is-worse .hrx-change { color: var(--warn-fg, var(--bad-fg)); }
+
+/* ===========================================================================
+   R25 — uploading a lab report, and the pre-meal check.
+   ===========================================================================*/
+
+/* --- Blood & urine: the upload review ----------------------------------- */
+
+/* Title and the two entry buttons. At 375px the title and both buttons do not
+   share a line, so the buttons drop to their own row together rather than the
+   title wrapping to two lines around them. */
+.lab-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.lab-head > strong { white-space: nowrap; }
+.lab-add-btns { display: flex; gap: 6px; flex: 1 1 auto; justify-content: flex-end; }
+.lab-add-btns .btn { flex: 0 1 auto; }
+
+@media (max-width: 420px) {
+  .lab-add-btns { justify-content: stretch; }
+  .lab-add-btns .btn { flex: 1 1 0; }
+}
+.lab-up { padding-top: 4px; border-top: 1px solid var(--line); }
+
+/* The value as the report printed it, under the box he can edit. The whole
+   review rests on these two being easy to compare at a glance. */
+.lab-asprinted {
+  margin: 3px 0 0;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.lab-printed-val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--fg);
+  background: var(--chip-bg, rgba(127, 127, 127, 0.12));
+  border-radius: 5px;
+  padding: 0 5px;
+}
+
+/* A converted unit, a missing unit, a date that could not be read: each is
+   something to look at before saving, and none of them is an error. */
+.lab-note-warn {
+  margin: 3px 0 0;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--warn-fg, var(--fg));
+}
+
+.lab-up-row { padding: 10px 0; border-top: 1px solid var(--line); }
+.lab-up-row:first-of-type { border-top: 0; }
+.lab-up-row.is-off { opacity: 0.45; }
+.lab-skip {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Rows that failed a check. Deliberately prominent: a panel that is quietly
+   four rows short is the worst outcome on this screen. */
+.lab-cant {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--card-2, transparent);
+}
+.lab-cant-head { margin: 0 0 6px; font-size: 0.8rem; font-weight: 700; }
+.lab-cant ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.lab-cant li { font-size: 0.76rem; line-height: 1.5; color: var(--muted); }
+.lab-up-actions { gap: 8px; }
+
+/* --- The pre-meal check ------------------------------------------------- */
+
+.pmc-input {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input-bg, transparent);
+  color: var(--fg);
+}
+.pmc-types { display: flex; gap: 6px; flex-wrap: wrap; }
+.pmc-out { padding-top: 10px; border-top: 1px solid var(--line); }
+
+/* Python's verdict. Four states, each its own colour, the same plate always
+   landing on the same one. */
+.pmc-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border-left: 3px solid currentColor;
+  background: var(--chip-bg, rgba(127, 127, 127, 0.1));
+}
+.pmc-verdict strong { font-size: 0.86rem; }
+.pmc-verdict span { font-size: 0.76rem; color: var(--muted); }
+.pmc-verdict.is-good { color: var(--good-fg, var(--fg)); }
+.pmc-verdict.is-ok { color: var(--fg); }
+.pmc-verdict.is-warn { color: var(--warn-fg, var(--fg)); }
+.pmc-verdict.is-bad { color: var(--bad-fg, var(--fg)); }
+
+.pmc-headline { margin: 0; font-size: 0.92rem; font-weight: 700; line-height: 1.45; }
+
+/* The numbers, and only the numbers. Two across on a phone. */
+.pmc-nums {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.pmc-nums li {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.pmc-num { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pmc-lbl { font-size: 0.68rem; line-height: 1.35; color: var(--muted); }
+
+.pmc-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.pmc-list li { font-size: 0.8rem; line-height: 1.5; }
+.pmc-list.is-good li::marker { color: var(--good-fg, var(--muted)); }
+.pmc-list.is-watch li::marker { color: var(--warn-fg, var(--muted)); }
+
+.pmc-swap {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--chip-bg, rgba(127, 127, 127, 0.1));
+}
+.pmc-timing {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.pmc-next { font-weight: 700; color: var(--fg); }
+
+/* Two buttons that do not fit one line at 375px. They wrap rather than push the
+   page wider — a horizontal scrollbar on the whole app is the usual way a single
+   over-wide button announces itself. */
+.pmc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pmc-actions .btn { flex: 1 1 auto; min-width: 0; justify-content: center; }
+
+.pmc-items summary { font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+.pmc-items ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.pmc-items li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.78rem;
+}
+.pmc-items li:first-child { border-top: 0; }

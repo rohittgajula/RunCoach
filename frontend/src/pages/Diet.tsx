@@ -7,6 +7,7 @@ import { MacroBar } from '../components/MacroBar'
 import { MealSummary } from '../components/MealCard'
 import { BodyCard } from '../components/BodyCard'
 import { BalanceCard } from '../components/diet/BalanceCard'
+import { PreMealCheck } from '../components/diet/PreMealCheck'
 import { PageHeader } from '../components/PageHeader'
 import { Disclosure, SeeDetails } from '../components/Disclose'
 import { useShell } from '../components/Shell'
@@ -37,12 +38,14 @@ export default function Diet() {
   const day = useDietDay(date)
   const [logOpen, setLogOpen] = useState(false)
   const [editing, setEditing] = useState<Meal | null>(null)
+  // The pre-meal verdict carries its own log button; the FAB would cover it.
+  const [checking, setChecking] = useState(false)
   const maxDate = addDays(todayISO(), 7)
   const data = day.data?.date === date ? day.data : undefined
 
   return (
     <div className="page">
-      <PageHeader title="Diet" />
+      <PageHeader title="Food" back="/health/more" />
 
       <div className="date-switch">
         <button type="button" className="icon-btn" aria-label="Previous day" onClick={() => setDate(addDays(date, -1))}>
@@ -85,6 +88,10 @@ export default function Diet() {
             </button>
           )}
           <TargetsCard day={data} />
+          {/* Before the log, because it is a question asked before the meal and the
+              log is a record of meals already eaten. Today only: there is no point
+              asking whether to eat something last Tuesday. */}
+          {date === todayISO() && <PreMealCheck date={date} onOpen={setChecking} />}
           {data.fueling.length > 0 && <FuelCard day={data} />}
           <MealsCard
             meals={data.meals}
@@ -100,9 +107,11 @@ export default function Diet() {
         <BalanceCard />
       </Disclosure>
 
-      <button type="button" className="fab" onClick={() => setLogOpen(true)} aria-label="Log meal">
-        <PlusIcon size={22} /> Log meal
-      </button>
+      {!checking && (
+        <button type="button" className="fab" onClick={() => setLogOpen(true)} aria-label="Log meal">
+          <PlusIcon size={22} /> Log meal
+        </button>
+      )}
 
       <LogMealSheet open={logOpen} onClose={() => setLogOpen(false)} date={date} />
       <LogMealSheet open={!!editing} onClose={() => setEditing(null)} meal={editing} date={date} />

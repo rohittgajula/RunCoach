@@ -27,6 +27,11 @@ const HeartSection = lazy(() => sections.heart().then((m) => ({ default: m.Heart
 const LabsSection = lazy(() => sections.labs().then((m) => ({ default: m.LabsSection })))
 const BodySection = lazy(() => sections.body().then((m) => ({ default: m.BodySection })))
 const HeartRateSection = lazy(() => sections.hr().then((m) => ({ default: m.HeartRateSection })))
+// Restored: 7cf332e dropped these routes but left the More rows linking to them.
+const ReportsSection = lazy(() => sections.reports().then((m) => ({ default: m.ReportsSection })))
+const MonthlyReportsPage = lazy(() => sections.reports().then((m) => ({ default: m.MonthlyReportsPage })))
+const ExperimentsSection = lazy(() => sections.experiments().then((m) => ({ default: m.ExperimentsSection })))
+const CompareSection = lazy(() => sections.compare().then((m) => ({ default: m.CompareSection })))
 
 /**
  * Section chips, in order. `range` = that section's default for the shared range
@@ -51,6 +56,9 @@ const SECTIONS: Array<{ key: string; to: string; label: string; end?: boolean; r
   { key: 'goals', to: '/health/goals', label: 'Goals', chip: false, more: true },
   { key: 'body', to: '/health/body', label: 'Weight', chip: false, more: true },
   { key: 'labs', to: '/health/labs', label: 'Blood & urine', chip: false, more: true },
+  { key: 'reports', to: '/health/reports', label: 'Reports', chip: false, more: true },
+  { key: 'experiments', to: '/health/experiments', label: 'Experiments', chip: false, more: true },
+  { key: 'compare', to: '/health/compare', label: 'Compare any two', chip: false, more: true, range: '3m' },
 ]
 
 function sectionOf(pathname: string) {
@@ -141,6 +149,12 @@ export default function Health() {
           <Route path="hr" element={<HeartRateSection />} />
           <Route path="body" element={<BodySection />} />
           <Route path="labs" element={<LabsSection />} />
+          <Route path="experiments" element={<ExperimentsSection />} />
+          <Route path="compare" element={<CompareSection />} />
+          <Route path="reports" element={<ReportsSection />} />
+          <Route path="reports/monthly" element={<MonthlyReportsPage />} />
+          <Route path="reports/monthly/:month" element={<MonthlyReportsPage />} />
+          <Route path="reports/:week" element={<ReportsSection />} />
           <Route path="*" element={<Navigate to="/health" replace />} />
         </Routes>
         </Suspense>

@@ -42,6 +42,13 @@ httpx>=0.27,<1
 # Meal photos. ImageField validates uploads are real images, which needs Pillow.
 Pillow>=10.4,<12
 
+# R25: reading an uploaded lab report. pypdf pulls the text out of a digital
+# report; pypdfium2 rasterises a scanned one so it can be read as an image.
+# Both ship prebuilt manylinux x86_64 wheels (the platform the image builds for)
+# and need no system packages — pdfium is bundled, so no poppler, no ImageMagick.
+pypdf>=5,<7
+pypdfium2>=4,<6
+
 # R10 §C12: web push (VAPID). Optional at runtime: with no VAPID_* env the
 # reminders feature hides itself and this is never imported.
 pywebpush>=2.0,<3

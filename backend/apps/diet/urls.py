@@ -1,7 +1,9 @@
 from django.urls import path
 
 from .media import serve_signed
-from .views import MealCreate, MealDetail, day_view, estimate_view, trend_view
+from .views import (
+    MealCreate, MealDetail, day_view, estimate_view, precheck_view, trend_view,
+)
 from .water import water, water_delete
 
 urlpatterns = [
@@ -9,6 +11,8 @@ urlpatterns = [
     path("diet/trend/", trend_view, name="diet-trend"),
     path("diet/meals/", MealCreate.as_view(), name="diet-meals"),
     path("diet/meals/estimate/", estimate_view, name="diet-meal-estimate"),
+    # R25: "should I eat this?" — asked before the meal, never saved.
+    path("diet/precheck/", precheck_view, name="diet-precheck"),
     path("diet/meals/<int:pk>/", MealDetail.as_view(), name="diet-meal"),
     # R11 §D
     path("diet/water/", water, name="diet-water"),
