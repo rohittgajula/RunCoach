@@ -522,3 +522,41 @@ class DataExport(OwnedByAthlete):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+
+
+class ScreenView(OwnedByAthlete):
+    """R26 §3: one screen or card opened, so "what do I actually use" is answerable.
+
+    The app has thirteen pages, five tabs and sixteen optional Today cards. Deciding
+    which of those are worth keeping is currently guesswork, and guessing wrong
+    deletes something that was being used. This table is the evidence for that
+    decision and nothing else.
+
+    What is stored is a key and a timestamp. Not what was on the screen, not what
+    was typed, not where he was — the keys are the same short strings that already
+    appear in the source (`today_layout` keys, Health section keys, tab paths), so
+    this says which screens were opened and when, and literally cannot say more.
+
+    Rows older than `RETAIN_DAYS` are deleted on write. A usage log that grows
+    forever would eventually be the largest table in the database, to answer a
+    question that is only ever about the last few weeks.
+    """
+
+    class Kind(models.TextChoices):
+        TAB = "tab", "Bottom tab"
+        SECTION = "section", "Section or page"
+        CARD = "card", "Card on a page"
+        ACTION = "action", "Thing he did"
+
+    key = models.CharField(max_length=64, db_index=True)
+    kind = models.CharField(max_length=8, choices=Kind.choices, default=Kind.SECTION)
+    at = models.DateTimeField(db_index=True)
+    #: The athlete's own date, so "days seen" counts his days and not UTC's.
+    local_date = models.DateField(db_index=True)
+
+    class Meta:
+        ordering = ["-at", "-id"]
+        indexes = [models.Index(fields=["athlete", "key", "local_date"])]
+
+    def __str__(self) -> str:
+        return f"{self.kind}:{self.key} {self.at:%Y-%m-%d %H:%M}"

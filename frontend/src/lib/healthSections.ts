@@ -35,6 +35,8 @@ export const sections = {
   labs: once(() => import('../components/labs/LabsSection')),
   hr: once(() => import('../components/hr/HeartRateSection')),
   body: once(() => import('../components/weight/BodySection')),
+  sweat: once(() => import('../components/sweat/SweatSection')),
+  mirror: once(() => import('../components/mirror/MirrorSection')),
   // Restored after 7cf332e: the strip commit dropped these three routes but left
   // the More rows pointing at them, so every tap bounced back to Overview.
   reports: once(() => import('../components/health/ReportsSection')),

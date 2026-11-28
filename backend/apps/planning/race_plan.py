@@ -15,6 +15,20 @@ RIEGEL = 1.06
 FORECAST_DAYS = 7
 
 
+
+def _race_sweat_rate(athlete, hour: dict | None) -> float | None:
+    """His measured sweat rate for the weather forecast at the start, when he has
+    done a sweat test. Decides how much he carries and how often he stops, so the
+    band average is the one number here most worth replacing with a real one."""
+    try:
+        from analysis.weather_advice import _base, heat_band
+        from apps.health.sweat_service import measured_rate
+
+        band = _base(heat_band((hour or {}).get("feels_like"), (hour or {}).get("dew_point")))
+        return measured_rate(athlete, band)
+    except Exception:  # noqa: BLE001
+        return None
+
 def garmin_prediction(athlete, distance_km: float) -> float | None:
     """Garmin's own race prediction for this distance (Riegel from the nearest one)."""
     from apps.ingest.models import DailyMetrics
@@ -80,7 +94,8 @@ def race_plan(athlete, race: Race, strategy: str) -> dict:
     duration = target["time_s"] if target else None
     fueling = maths.fueling(duration, target["pace_s_per_km"] if target else None,
                             hour.get("feels_like") if hour else None,
-                            hour.get("dew_point") if hour else None, race.distance_km)
+                            hour.get("dew_point") if hour else None, race.distance_km,
+                            _race_sweat_rate(athlete, hour))
     return {
         "race": RaceSerializer(race).data, "strategy": strategy,
         "available": target is not None, "reason": None if target else "no_target",

@@ -20,7 +20,8 @@ def test_hydration_during_scales_with_heat(band, during):
     out = w.hydration(band, 60)
     assert out["during_ml_per_h"] == during
     assert 300 <= during <= 900 and 400 <= out["before_ml"] <= 600
-    assert set(out) == {"before_ml", "during_ml_per_h", "after_note", "electrolytes"}
+    assert set(out) == {"before_ml", "during_ml_per_h", "after_note", "electrolytes",
+                            "sweat_l_h", "measured"}
 
 
 def test_hydration_short_runs_and_electrolytes():

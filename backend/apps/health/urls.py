@@ -6,6 +6,7 @@ from . import (
     monthly, mood, reports, wake_views,
 )
 from . import data_review, experiments, goals, heart, illness
+from . import mirror_views, sweat_views
 
 urlpatterns = [
     # R23: blood and urine panels. Numbers against their ranges, never a
@@ -17,6 +18,12 @@ urlpatterns = [
     # R25: a report he uploads, read into a draft he then confirms. Nothing saved here.
     path("labs/extract/", labs.extract, name="lab-extract"),
     path("labs/<int:pk>/", labs.panel_detail, name="lab-panel"),
+    # R26: sweat tests. Two weigh-ins either side of a run beat the population
+    # sweat table permanently — see analysis/sweat.py.
+    path("health/sweat/", sweat_views.sweat_tests, name="health-sweat"),
+    path("health/sweat/<int:pk>/", sweat_views.sweat_test_detail, name="health-sweat-detail"),
+    # R26 §2: planned vs done across runs, strength, food, sleep and water.
+    path("health/mirror/", mirror_views.weekly_mirror, name="health-mirror"),
     path("health/fitness/", garmin_views.fitness, name="health-fitness"),
     path("health/training-status/", garmin_views.training_status,
          name="health-training-status"),

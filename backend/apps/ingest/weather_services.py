@@ -136,7 +136,9 @@ def weather_today(athlete, *, run_minutes: float | None = None,
     max_feels = _series(daily, "apparent_temperature_max").get(today_key)
     if run_minutes is None and include_run:
         run_minutes = _today_run_minutes(athlete)
-    advice = advise(now, hourly, local_now, max_feels_like=max_feels, run_minutes=run_minutes)
+    advice = advise(now, hourly, local_now, max_feels_like=max_feels,
+                    run_minutes=run_minutes,
+                    measured_l_h=_measured_sweat_rate(athlete, now))
     advice.pop("checkin")
     return {"available": True, "reason": None, "location_name": athlete.location_name or None,
             "source": athlete.location_source, "now": now, "hourly": hourly,
@@ -163,6 +165,23 @@ def checkin_weather(athlete) -> dict:
     except Exception:  # noqa: BLE001 — weather must never break the check-in
         return {}
 
+
+
+def _measured_sweat_rate(athlete, now: dict) -> float | None:
+    """His own litres per hour for the band it is now, when he has tested. None
+    falls the hydration figures back to the population table, exactly as before.
+
+    Imported late and guarded: hydration advice is not worth a 500 if the health
+    app moves, and no sweat test is the normal case, not an error.
+    """
+    try:
+        from analysis.weather_advice import _base, heat_band
+        from apps.health.sweat_service import measured_rate
+
+        band = _base(heat_band(now.get("feels_like"), now.get("dew_point")))
+        return measured_rate(athlete, band)
+    except Exception:  # noqa: BLE001
+        return None
 
 def water_bonus_ml(athlete, day: dt.date | None = None) -> tuple[int, list[str]]:
     """(+ml for the daily water target, hot-day food tips) — today only, else (0, [])."""

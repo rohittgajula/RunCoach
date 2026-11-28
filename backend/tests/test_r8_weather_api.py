@@ -83,7 +83,8 @@ def test_location_auto_from_latest_run_gps_rounded(api, athlete, meteo):
                                 "condition"}
     assert body["now"]["aqi"] == 60 and body["now"]["condition"] == "Partly cloudy"
     assert 1 <= len(body["hourly"]) <= 24
-    assert set(body["hydration"]) == {"before_ml", "during_ml_per_h", "after_note", "electrolytes"}
+    assert set(body["hydration"]) == {"before_ml", "during_ml_per_h", "after_note", "electrolytes",
+                                    "sweat_l_h", "measured"}
     assert body["daily_water_bonus_ml"] == 500 and body["food"]
     params = meteo.calls[0][1]
     assert params["latitude"] == 17.38 and params["longitude"] == 78.46   # never finer

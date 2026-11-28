@@ -121,10 +121,15 @@ def carbs_per_hour(duration_s: float | None) -> int:
 
 
 def fueling(duration_s: int | None, pace_s_per_km: int | None, feels_like: float | None,
-            dew_point: float | None, distance_km: float) -> dict:
+            dew_point: float | None, distance_km: float,
+            measured_l_h: float | None = None) -> dict:
+    """`measured_l_h` is his own sweat rate from a sweat test, when he has one. On
+    race day the band average is the weakest number in the whole plan: it decides
+    how much he carries and how often he stops, and it is the one figure here that
+    a single weigh-in replaces outright."""
     band = heat_band(feels_like, dew_point)
     minutes = duration_s / 60 if duration_s else None
-    water = hydration(band, minutes)
+    water = hydration(band, minutes, measured_l_h)
     carbs = carbs_per_hour(duration_s)
     items = [{"at_s": -180 * 60, "at_km": None, "what": "Breakfast you have tried before",
               "amount": "Mostly carbs, 2–3 h before the start (e.g. toast, banana, rice)"},

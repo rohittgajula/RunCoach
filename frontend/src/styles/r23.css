@@ -529,3 +529,119 @@
 
 /* A forty-second wait needs words, not a spinner. */
 .dp-building { margin: 0; font-size: 0.82rem; color: var(--muted); }
+
+/* ---------- R26 sweat tests ------------------------------------------------
+   The screen is a comparison, so the measured number is the one that gets the
+   size and the colour, and the table value it replaced sits beside it small. */
+
+.sweat-bands { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.sweat-band {
+  border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+  display: grid; gap: 4px; min-width: 0;
+}
+.sweat-band.is-measured { border-color: var(--accent); background: var(--run-tint); }
+.sweat-band-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sweat-band-nums { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.sweat-rate { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+.sweat-unit { font-size: .85rem; color: var(--muted); }
+.sweat-was { margin-left: auto; }
+
+.sweat-steps { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; font-size: .92rem; }
+
+.sweat-lead { margin: 0; font-size: 1rem; }
+
+.sweat-compare { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.sweat-compare > li {
+  display: grid; grid-template-columns: 1fr auto; align-items: baseline;
+  gap: 4px 10px; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--line); min-width: 0;
+}
+/* The label and the percentage on row one, the explanation underneath across
+   both columns — so a long "reason to stop, not to push" wraps instead of
+   squeezing the number. */
+.sweat-compare > li .muted { grid-column: 1 / -1; }
+.sweat-compare > li .num { font-size: 1.25rem; font-weight: 700; }
+.sweat-compare > li.is-bad { border-color: var(--bad); background: var(--bad-bg); }
+.sweat-compare > li.is-good { border-color: var(--ok); background: var(--good-bg); }
+.sweat-lbl { font-weight: 600; min-width: 0; }
+
+.sweat-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.sweat-row {
+  display: grid; gap: 4px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 12px; min-width: 0;
+}
+.sweat-row-main { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sweat-row-nums { display: flex; flex-direction: column; gap: 2px; }
+.sweat-row .btn-ghost { justify-self: start; }
+
+.sweat-form { gap: 10px; }
+/* Two per row on a phone is fine for short numeric fields, and keeping
+   before/after side by side is the point — they are read as a pair. */
+.sweat-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sweat-pair > .field { min-width: 0; }
+.sweat-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- R26 the weekly mirror -----------------------------------------
+   Only a real miss gets colour. Absence — nothing planned, nothing logged, no
+   target yet — is grey, because a red row for something that did not happen is
+   the one way this screen could make things worse. */
+
+.mirror-nav { display: flex; gap: 4px; flex-shrink: 0; }
+.mirror-headline { margin: 0; font-size: 1.05rem; font-weight: 700; }
+
+.mirror-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.mirror-row {
+  display: grid; gap: 6px; padding: 10px 12px; min-width: 0;
+  border: 1px solid var(--line); border-left-width: 3px; border-radius: 12px;
+}
+.mirror-row.is-hit { border-left-color: var(--ok); }
+.mirror-row.is-miss { border-left-color: var(--bad); }
+.mirror-row.is-quiet { border-left-color: var(--line); background: var(--flat-bg); }
+.mirror-row.is-worst { box-shadow: inset 0 0 0 1px var(--bad); }
+
+.mirror-row-top {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap; min-width: 0;
+}
+.mirror-label { font-weight: 600; min-width: 0; }
+.mirror-pair { display: flex; align-items: baseline; gap: 6px; }
+.mirror-pair .num { font-size: 1.15rem; font-weight: 700; }
+.mirror-of { font-size: .82rem; color: var(--muted); }
+
+.mirror-bar {
+  height: 6px; border-radius: 999px; background: var(--line-soft);
+  overflow: hidden;
+}
+.mirror-fill { display: block; height: 100%; border-radius: 999px; background: var(--ok); }
+.mirror-row.is-miss .mirror-fill { background: var(--bad); }
+
+.mirror-note { margin: 0; font-size: .82rem; color: var(--muted); }
+
+/* R26 §3: the Today card wrapper exists only to hold a ref for the usage
+   observer. `contents` keeps it out of the layout entirely, so the page is
+   laid out exactly as it was when this was a bare fragment — an empty box per
+   null card would otherwise read as a phantom gap in the stack. */
+.today-slot { display: contents; }
+
+/* ---------- R26 §3 what you actually use ----------------------------------- */
+
+.usage-windows { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.usage-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.usage-row {
+  display: grid; gap: 4px; padding: 9px 12px; min-width: 0;
+  border: 1px solid var(--line); border-radius: 12px;
+}
+.usage-row-main { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.usage-key { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.usage-row-nums { display: flex; flex-direction: column; gap: 1px; font-size: .84rem; }
+.usage-bar { height: 5px; border-radius: 999px; background: var(--line-soft); overflow: hidden; }
+.usage-fill { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+
+.usage-unopened { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.usage-unopened > li {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; padding: 8px 12px; min-width: 0;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--flat-bg);
+}
+.usage-unopened > li > span:first-child { min-width: 0; overflow-wrap: anywhere; }

@@ -23,6 +23,7 @@ export function MoreSection() {
         <Row to="/health/labs" icon={<DropIcon size={20} />} title="Blood & urine" sub="Ferritin, vitamin D, B12 — type them in or upload the report" />
         <Row to="/health/body" icon={<ProfileIcon size={20} />} title="Weight" sub="Your weigh-ins, and where the trend is going" />
         <Row to="/diet" icon={<DietIcon size={20} />} title="Food" sub="What you ate, what to eat, and what to eat before a run" />
+        <Row to="/health/sweat" icon={<DropIcon size={20} />} title="Sweat & hydration" sub="Weigh in either side of a run and every drinking figure becomes yours" />
       </RowGroup>
       <RowGroup title="Your heart & goals">
         <Row to="/health/heart" icon={<HealthIcon size={20} />} title="Heart" sub="How your heart adapts, run by run" />
@@ -30,6 +31,7 @@ export function MoreSection() {
         <Row to="/health/experiments" icon={<SparkIcon size={20} />} title="Experiments" sub={e?.chip || 'Try a change for 1–6 weeks and see what moves'} />
       </RowGroup>
       <RowGroup title="Look deeper">
+        <Row to="/health/mirror" icon={<ScatterIcon size={20} />} title="Planned vs done" sub="This week's plan against what actually happened — runs, food, sleep, water" />
         <Row to="/health/reports" icon={<ReportIcon size={20} />} title="Reports" sub="Weekly and monthly reports" />
         <Row to="/health/compare" icon={<ScatterIcon size={20} />} title="Compare any two" sub="Sleep vs easy-run HR, drinks vs HRV…" />
         <Row to="/health/guides" icon={<HelpIcon size={20} />} title="Guides" sub="Form, breathing, strength, fuelling, warm-up" />

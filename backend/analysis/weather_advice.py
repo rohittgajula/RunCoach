@@ -9,12 +9,16 @@ from __future__ import annotations
 
 import datetime as dt
 
+from .sweat import DRINK_FROM_MIN, drink_plan
+
 HOT_FEELS_C, HOT_DEW_C = 32.0, 24.0
 WARM_FEELS_C, WARM_DEW_C = 24.0, 18.0
 VERY_HOT_FEELS_C, VERY_HOT_DEW_C = 38.0, 26.0
 WINDOW_HOURS = (5, 6, 7, 8, 17, 18, 19)          # start hours: 05-09 and 17-20 local
 AQI_CAUTION, AQI_SHORTEN, AQI_BAD = 100, 150, 200
-LONG_RUN_FOR_DRINKING_MIN = 45
+# One definition, shared with analysis/sweat.py so a plan built from his own
+# measured rate cannot disagree with the weather advice about the same run.
+LONG_RUN_FOR_DRINKING_MIN = DRINK_FROM_MIN
 ELECTROLYTE_MIN = 60
 # ml per hour while running, by band: cool 300-400, warm 500-700, hot 700-900.
 DURING_ML_H = {"cool": 350, "warm": 600, "hot": 800}
@@ -57,22 +61,35 @@ def _base(band: str) -> str:
     return "hot" if band == "very_hot" else band
 
 
-def hydration(band: str, run_minutes: float | None = None) -> dict:
+def hydration(band: str, run_minutes: float | None = None,
+              measured_l_h: float | None = None) -> dict:
     """Before / during / after. During applies to runs >= 45 min (0 below that);
-    electrolytes when hot or the run is over an hour."""
+    electrolytes when hot or the run is over an hour.
+
+    `measured_l_h` is his own sweat rate from a weigh-in either side of a run
+    (`analysis/sweat.py`). Given one, every figure here is computed from it instead
+    of from the DURING_ML_H / SWEAT_L_H tables, which are population averages and
+    wrong by a factor of two or more for plenty of real runners. Without one the
+    answer is unchanged, down to the rounding.
+    """
     b = _base(band)
     long_enough = run_minutes is None or run_minutes >= LONG_RUN_FOR_DRINKING_MIN
-    during = DURING_ML_H[b] if long_enough else 0
+    if measured_l_h:
+        during = drink_plan(measured_l_h, None)["during_ml_per_h"] if long_enough else 0
+    else:
+        during = DURING_ML_H[b] if long_enough else 0
     electrolytes = b == "hot" or (run_minutes is not None and run_minutes > ELECTROLYTE_MIN)
+    rate_l_h = measured_l_h or SWEAT_L_H[b]
     if run_minutes:
-        loss = SWEAT_L_H[b] * run_minutes / 60 * 1000
+        loss = rate_l_h * run_minutes / 60 * 1000
         after = (f"Afterwards drink about {round(loss * 1.5 / 50) * 50:.0f} ml over the next "
                  "few hours — roughly 1.5× what you sweat out.")
     else:
         after = ("Afterwards replace about 1.5× what you lost: every kg lighter after the "
                  "run is about 1.5 L to drink over the next few hours.")
     return {"before_ml": BEFORE_ML[b], "during_ml_per_h": during, "after_note": after,
-            "electrolytes": electrolytes}
+            "electrolytes": electrolytes, "sweat_l_h": round(rate_l_h, 2),
+            "measured": measured_l_h is not None}
 
 
 def daily_water_bonus_ml(max_feels_like) -> int:
@@ -190,8 +207,13 @@ def checkin_signals(now: dict, window: dict | None) -> dict:
 
 
 def advise(now: dict, hourly: list[dict], local_now: dt.datetime, *,
-           max_feels_like=None, run_minutes: float | None = None) -> dict:
-    """Everything `/weather/today/` shows besides location and raw numbers."""
+           max_feels_like=None, run_minutes: float | None = None,
+           measured_l_h: float | None = None) -> dict:
+    """Everything `/weather/today/` shows besides location and raw numbers.
+
+    `measured_l_h` is his measured sweat rate when he has done a sweat test; the
+    hydration block is then his own numbers rather than the band's averages.
+    """
     window = best_window(hourly, local_now)
     window_entry = None
     if window:
@@ -208,7 +230,7 @@ def advise(now: dict, hourly: list[dict], local_now: dt.datetime, *,
         "pace_slowdown_pct": SLOWDOWN_PCT[band],
         "advisories": advisories(now, hourly, heat_band(now.get("feels_like"),
                                                          now.get("dew_point"))),
-        "hydration": hydration(band, run_minutes),
+        "hydration": hydration(band, run_minutes, measured_l_h),
         "food": food_tips(heat_band(max_feels_like, None)),
         "daily_water_bonus_ml": daily_water_bonus_ml(max_feels_like),
         "checkin": checkin_signals(now, window_entry),

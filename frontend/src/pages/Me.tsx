@@ -10,13 +10,14 @@ import { ReviewLauncher } from '../components/quality/ReviewEntry'
 import { Row, RowGroup } from '../components/Disclose'
 import {
   BandageIcon, BellIcon, CalendarIcon, ChevronRight, GearIcon, HealthIcon, HelpIcon, LockIcon,
-  MedalIcon, RefreshIcon, ShoeIcon, SparkIcon, TodayIcon, TrashIcon, WatchIcon,
+  MedalIcon, RefreshIcon, ScatterIcon, ShoeIcon, SparkIcon, TodayIcon, TrashIcon, WatchIcon,
 } from '../components/Icons'
 import { initialOf } from '../components/Kit'
 import { PageHeader } from '../components/PageHeader'
 import { RacesCard } from '../components/profile/RacesCard'
 import { RemindersSection } from '../components/me/Reminders'
 import { ShoesSection } from '../components/me/Shoes'
+import { UsageSection } from '../components/me/UsageSection'
 import { useShell } from '../components/Shell'
 import { Skeleton } from '../components/States'
 import { useAuth } from '../lib/AuthContext'
@@ -47,6 +48,8 @@ export default function Me() {
           teasers — bounced back to Me. */}
       <Route path="reminders" element={<SubPage title="Reminders"><RemindersSection /></SubPage>} />
       <Route path="shoes" element={<SubPage title="Shoes"><ShoesSection /></SubPage>} />
+      {/* R26 §3: the evidence for what to remove. */}
+      <Route path="usage" element={<SubPage title="What you actually use"><UsageSection /></SubPage>} />
       <Route path="*" element={<Navigate to="/me" replace />} />
     </Routes>
   )
@@ -143,6 +146,7 @@ function MeHome() {
       <RowGroup title="App">
         <Row onClick={() => openSettings()} icon={<GearIcon size={20} />} title="Settings" sub="Garmin, training days, diet, habits, Customise Today" />
         <Row onClick={() => openSettings('today')} icon={<TodayIcon size={20} />} title="Customise Today" sub="Choose which cards show under the top card" />
+        <Row to="/me/usage" icon={<ScatterIcon size={20} />} title="What you actually use" sub="Which screens you open, and which you never do — the list of what could go" />
         <Row to="/me/account" icon={<LockIcon size={20} />} title="Account" sub="Export my data, log out, delete account" />
         <Row to="/health/guides" icon={<HelpIcon size={20} />} title="Guides" sub="Form, breathing, strength, fuelling, warm-up" />
         {isStaff && <Row to="/admin-panel" icon={<LockIcon size={20} />} title="Admin" sub="Users, AI models & costs, system" />}

@@ -7,6 +7,7 @@ import { prefetchTab } from '../lib/queries'
 import { SyncingPill, useAutoSync } from '../lib/r16'
 import { UpdateBanner } from '../lib/r18'
 import { useAuth } from '../lib/AuthContext'
+import { routeKey, startUsage, track } from '../lib/usage'
 import { CoachIcon, DietIcon, HealthIcon, ListIcon, PlanIcon, TodayIcon } from './Icons'
 import { BadgeToast } from './me/Badges'
 import { GlobalToast } from './GlobalToast'
@@ -58,8 +59,14 @@ export function Shell({ children }: { children: ReactNode }) {
     setFocus(typeof f === 'string' ? f : undefined)
     setSettingsOpen(true)
   }, [])
+
+  // R26 §3: which screens actually get opened. One effect here rather than a
+  // handler on each NavLink — this also catches arriving by back button, deep
+  // link or redirect, which a click handler never would.
+  useEffect(() => { startUsage() }, [])
   const value = useMemo(() => ({ openSettings }), [openSettings])
   const location = useLocation()
+  useEffect(() => { track('section', routeKey(location.pathname)) }, [location.pathname])
   const { pathname } = location
   const navigate = useNavigate()
   const tab = pathname.split('/')[1]

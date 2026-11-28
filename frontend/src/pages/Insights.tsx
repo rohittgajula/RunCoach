@@ -26,6 +26,10 @@ const GoalsSection = lazy(() => sections.goals().then((m) => ({ default: m.Goals
 const HeartSection = lazy(() => sections.heart().then((m) => ({ default: m.HeartSection })))
 const LabsSection = lazy(() => sections.labs().then((m) => ({ default: m.LabsSection })))
 const BodySection = lazy(() => sections.body().then((m) => ({ default: m.BodySection })))
+// R26: sweat tests — his own litres per hour in place of the population table.
+const SweatSection = lazy(() => sections.sweat().then((m) => ({ default: m.SweatSection })))
+// R26 §2: planned vs done, every domain on one screen.
+const MirrorSection = lazy(() => sections.mirror().then((m) => ({ default: m.MirrorSection })))
 const HeartRateSection = lazy(() => sections.hr().then((m) => ({ default: m.HeartRateSection })))
 // Restored: 7cf332e dropped these routes but left the More rows linking to them.
 const ReportsSection = lazy(() => sections.reports().then((m) => ({ default: m.ReportsSection })))
@@ -57,6 +61,8 @@ const SECTIONS: Array<{ key: string; to: string; label: string; end?: boolean; r
   { key: 'goals', to: '/health/goals', label: 'Goals', chip: false, more: true },
   { key: 'body', to: '/health/body', label: 'Weight', chip: false, more: true },
   { key: 'labs', to: '/health/labs', label: 'Blood & urine', chip: false, more: true },
+  { key: 'sweat', to: '/health/sweat', label: 'Sweat & hydration', chip: false, more: true },
+  { key: 'mirror', to: '/health/mirror', label: 'Planned vs done', chip: false, more: true },
   { key: 'reports', to: '/health/reports', label: 'Reports', chip: false, more: true },
   { key: 'experiments', to: '/health/experiments', label: 'Experiments', chip: false, more: true },
   { key: 'compare', to: '/health/compare', label: 'Compare any two', chip: false, more: true, range: '3m' },
@@ -150,6 +156,8 @@ export default function Health() {
           <Route path="hr" element={<HeartRateSection />} />
           <Route path="body" element={<BodySection />} />
           <Route path="labs" element={<LabsSection />} />
+          <Route path="sweat" element={<SweatSection />} />
+          <Route path="mirror" element={<MirrorSection />} />
           <Route path="experiments" element={<ExperimentsSection />} />
           <Route path="compare" element={<CompareSection />} />
           <Route path="reports" element={<ReportsSection />} />

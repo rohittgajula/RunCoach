@@ -17,6 +17,7 @@ import { TodayHero } from '../components/today/TodayHero'
 import { StaleNotice } from '../components/today/StaleNotice'
 import { SyncBanner } from '../components/today/SyncBanner'
 import { resolveLayout, type TodayCardKey } from '../components/today/todayLayout'
+import { useSeen } from '../lib/usage'
 import { TodaySoFar } from '../components/today/TodaySoFar'
 import { ThisWeek } from '../components/today/ThisWeek'
 import { WeatherTile } from '../components/today/WeatherCard'
@@ -134,12 +135,23 @@ export default function Today() {
       <StaleNotice onSync={runSync} />
       {illness ? <IllnessHero illness={illness} /> : <TodayHero day={day} loading={week.isPending} />}
       <RecoveryCard />
-      {layout.map((key) => <TodaySlot key={key}>{cards[key]}</TodaySlot>)}
+      {layout.map((key) => <TodaySlot key={key} cardKey={key}>{cards[key]}</TodaySlot>)}
     </div>
   )
 }
 
-/** Keeps keys stable while each card decides for itself whether to render. */
-function TodaySlot({ children }: { children: ReactNode }) {
-  return <>{children}</>
+/**
+ * Keeps keys stable while each card decides for itself whether to render, and
+ * records the card as used once it is genuinely on screen (R26 §3).
+ *
+ * The wrapper is `display: contents`, so it has no box of its own and the layout
+ * is byte-identical to the fragment this replaced — a real div would leave an
+ * empty box behind every card that renders null, which in the page's `gap`
+ * layout shows up as a phantom gap. `useSeen(..., { child: true })` therefore
+ * watches the card's own first element instead, and a card that rendered nothing
+ * has no first element and is correctly never counted as seen.
+ */
+function TodaySlot({ cardKey, children }: { cardKey: TodayCardKey; children: ReactNode }) {
+  const ref = useSeen<HTMLDivElement>('card', cardKey, { child: true })
+  return <div ref={ref} className="today-slot">{children}</div>
 }

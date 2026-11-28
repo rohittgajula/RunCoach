@@ -281,3 +281,35 @@ class DayDataDecision(OwnedByAthlete):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["athlete", "date"],
                                                name="uniq_day_data_decision")]
+
+
+class SweatTest(OwnedByAthlete):
+    """R26 §1: two weigh-ins either side of one run.
+
+    Stored raw. The rate, the percentage lost and the drinking plan are all derived
+    in `analysis/sweat.py` rather than written here, so a change to the arithmetic
+    re-reads his old tests instead of stranding them at an old answer.
+
+    `band` is the heat band the run was in (`analysis.weather_advice.heat_band`),
+    cached at save because the weather for a past hour stops being fetchable. Null
+    when there was no temperature to be had — the test still gives a rate, it just
+    cannot be matched to a band.
+    """
+
+    done_on = models.DateField(db_index=True)
+    activity = models.ForeignKey("activities.Activity", null=True, blank=True,
+                                on_delete=models.SET_NULL, related_name="sweat_tests")
+    weight_before_kg = models.FloatField()
+    weight_after_kg = models.FloatField()
+    drank_ml = models.PositiveIntegerField(default=0)
+    minutes = models.PositiveIntegerField()
+    feels_like_c = models.FloatField(null=True, blank=True)
+    band = models.CharField(max_length=8, blank=True, default="")
+    note = models.CharField(max_length=200, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-done_on", "-id"]
+
+    def __str__(self) -> str:
+        return f"sweat test {self.done_on} ({self.minutes} min)"
